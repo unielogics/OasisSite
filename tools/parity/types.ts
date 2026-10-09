@@ -63,6 +63,8 @@ export interface Snapshot {
   /** requests aborted by the network block (anything other than the two local origins) */
   blocked: string[]
   fullStyle: boolean
+  /** document scroll size (full-page screenshots cover it) */
+  docSize: { width: number; height: number }
 }
 
 export interface CheckResult {

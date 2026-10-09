@@ -19,7 +19,7 @@
     "dc:check": "tsx tools/dc-compile/index.ts --check",
     "build": "pnpm assert:react && pnpm design:verify && tsx tools/prerender/build.ts",
     "build:html": "tsx tools/prerender/build.ts --html-only",
-    "build:parity": "tsx tools/prerender/build.ts --variant=parity --out dist-parity",
+    "build:parity": "PRERENDER_NOW=2026-06-13T10:36:00-04:00 tsx tools/prerender/build.ts --variant=parity --out dist-parity",
     "check:dist": "tsx scripts/check-dist.ts",
     "serve:dist": "tsx tools/parity/serve-dist.ts",
     "parity": "tsx tools/parity/cli.ts",

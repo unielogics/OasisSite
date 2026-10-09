@@ -221,6 +221,11 @@ export function decodeElements(json: string, curated: readonly string[]): Elemen
 
 export const PSEUDO_PROP_LIST: readonly string[] = PSEUDO_PROPS
 
+export function readDocSize(): { width: number; height: number } {
+  const d = document.documentElement
+  return { width: Math.max(d.scrollWidth, d.clientWidth), height: Math.max(d.scrollHeight, d.clientHeight) }
+}
+
 export function readRootHtml(): string {
   const root = document.getElementById('dc-root')
   return root ? root.outerHTML : ''

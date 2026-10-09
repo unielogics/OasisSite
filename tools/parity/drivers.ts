@@ -5,6 +5,7 @@ import {
   CURATED_PROPS,
   decodeElements,
   PSEUDO_PROP_LIST,
+  readDocSize,
   readRootHtml,
   settleInPage,
 } from './collect'
@@ -143,10 +144,13 @@ export abstract class PageDriver implements Driver {
       CURATED_PROPS,
     )
     const vals = await this.readVals()
+    const docSize = await page.evaluate(readDocSize)
+    // full-page: a marketing page is taller than the viewport; the dashboard fixtures are exactly one viewport
     const png = await page.screenshot({
       animations: 'disabled',
       caret: 'hide',
       scale: 'css',
+      fullPage: true,
       timeout: 30_000,
     })
     return {
@@ -158,6 +162,7 @@ export abstract class PageDriver implements Driver {
       console: this.pc.takeConsole(),
       blocked: this.pc.takeBlocked(),
       fullStyle: full,
+      docSize,
     }
   }
 

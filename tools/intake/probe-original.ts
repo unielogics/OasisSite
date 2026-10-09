@@ -8,6 +8,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { launchBrowser, newParityContext } from '../parity/browser'
+import { settleInPage } from '../parity/collect'
 import { ROOT, THEME_KEY, type Theme } from '../parity/config'
 import { startOriginalServer } from '../parity/serve-original'
 import { loadPages } from '../dc-compile/pages'
@@ -99,8 +100,10 @@ export async function probePages(
       })
       await pc.page.goto(server.url(p.slug), { waitUntil: 'load', timeout: 45_000 })
       await pc.page.waitForSelector('#dc-root .sc-host', { state: 'attached', timeout: 30_000 })
-      await pc.page.evaluate(`document.fonts.ready.then(() => new Promise((r) => setTimeout(r, 0)))`)
+      // the clock is paused: never wait on setTimeout here; MessageChannel ticks are not under the fake clock
+      await pc.page.evaluate(settleInPage)
       await pc.ctx.clock.runFor(50)
+      await pc.page.evaluate(settleInPage)
       const raw = JSON.parse((await pc.page.evaluate(IN_PAGE_COLLECT)) as string) as {
         head: (HeadEntry & { text?: string })[]
         pseudoRules: string[]

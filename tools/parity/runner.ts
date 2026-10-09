@@ -102,9 +102,19 @@ export function compareSnapshots(
     })
   }
 
-  // (b) computed style + rects
+  // (b) computed style + rects (+ the document scroll size: a full-page screenshot covers it)
   {
     const raw = diffElements(a.elements, b.elements)
+    if (a.docSize.width !== b.docSize.width || a.docSize.height !== b.docSize.height) {
+      raw.unshift({
+        check: 'style',
+        kind: 'rect',
+        loc: 'document',
+        name: 'scrollSize',
+        orig: `${a.docSize.width}x${a.docSize.height}`,
+        port: `${b.docSize.width}x${b.docSize.height}`,
+      })
+    }
     const r = applyAllowlist(raw, ctx.allowlist, unit)
     addCounts(r.counts)
     const artifacts: string[] = []

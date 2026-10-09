@@ -39,6 +39,7 @@ const snap = (side: 'orig' | 'port', over: Partial<Snapshot> = {}): Snapshot => 
   console: [],
   blocked: [],
   fullStyle: false,
+  docSize: { width: 32, height: 32 },
   ...over,
 })
 
