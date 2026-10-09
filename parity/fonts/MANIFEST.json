@@ -1,0 +1,44 @@
+{
+  "files": {
+    "DejaVuSans.ttf": {
+      "sha256": "4383d51405d8ed99ff404fe546182aee4438781d16d6580e4a2e4eac95ba0db6",
+      "bytes": 757076,
+      "source": "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf"
+    },
+    "DejaVuSans-Bold.ttf": {
+      "sha256": "cbc4e86991abfb014febe5b27c9172b4ac0aa4ec14e5fa68189d1521d67ea299",
+      "bytes": 705684,
+      "source": "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf"
+    },
+    "NotoSans-Regular.ttf": {
+      "sha256": "61b72eacd39533f0e5916cbb458abd7b3cf870667f63f3069dac2a75aa0317a2",
+      "bytes": 610392,
+      "source": "/usr/share/fonts/google-noto/NotoSans-Regular.ttf"
+    },
+    "NotoSans-Bold.ttf": {
+      "sha256": "8e6da60154ae06e5e860777c4ccf8c7338d9b96ba34c1222db40a367d79b35dc",
+      "bytes": 616112,
+      "source": "/usr/share/fonts/google-noto/NotoSans-Bold.ttf"
+    },
+    "NotoSansSymbols-Regular.ttf": {
+      "sha256": "d0e98e9a2c046594c5021437273943be7e79e0fd980fde125279e22302212595",
+      "bytes": 226980,
+      "source": "/usr/share/fonts/google-noto/NotoSansSymbols-Regular.ttf"
+    },
+    "NotoSansSymbols-Bold.ttf": {
+      "sha256": "af83250e7c5bdd37d542187a724ac6b33453a6550e741cebcacf7a771891f75e",
+      "bytes": 228028,
+      "source": "/usr/share/fonts/google-noto/NotoSansSymbols-Bold.ttf"
+    },
+    "NotoSansSymbols2-Regular.ttf": {
+      "sha256": "c4a0a80f0041ce4be81e2478faad22776d23edb98ae3f0d19bd37044820ecf9d",
+      "bytes": 671568,
+      "source": "/usr/share/fonts/google-noto/NotoSansSymbols2-Regular.ttf"
+    },
+    "NotoEmoji-Regular.ttf": {
+      "sha256": "415dc6290378574135b64c808dc640c1df7531973290c4970c51fdeb849cb0c5",
+      "bytes": 418804,
+      "source": "/usr/share/fonts/google-noto-emoji/NotoEmoji-Regular.ttf"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+[
+  { "slug": "operations", "route": "/operations", "file": "fixtures/operations.bundle.html", "name": "Oasis Command Center" },
+  { "slug": "payments", "route": "/payments", "file": "fixtures/payments.bundle.html", "name": "Oasis Payments" },
+  { "slug": "settings", "route": "/settings", "file": "fixtures/settings.bundle.html", "name": "Oasis Settings" }
+]

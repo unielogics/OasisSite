@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-parity/
+.generated/
+parity-reports/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.tsbuildinfo
+.tmp-snippets/
+.DS_Store

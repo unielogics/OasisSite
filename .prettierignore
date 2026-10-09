@@ -1,0 +1,8 @@
+node_modules
+dist
+dist-parity
+.generated
+parity-reports
+design
+pnpm-lock.yaml
+docs/intake-report.md

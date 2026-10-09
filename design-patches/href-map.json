@@ -1,0 +1,8 @@
+{
+  "map": {
+    "Oasis%20Command%20Center.dc.html": "/",
+    "Oasis%20Payments.dc.html": "/payments",
+    "Oasis%20Settings.dc.html": "/",
+    "Oasis%20Settings.dc.html#emergency": "/#emergency"
+  }
+}

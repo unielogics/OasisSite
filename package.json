@@ -1,0 +1,72 @@
+{
+  "name": "oasis-site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Oasis Auto Spa public website (oasisautospanj.com): Claude Design bundle -> static HTML + hydration",
+  "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "assert:react": "node scripts/assert-react.mjs",
+    "design:verify": "node scripts/verify-design.mjs",
+    "design:checksums": "node scripts/verify-design.mjs --write",
+    "intake": "tsx tools/intake/unpack.ts",
+    "intake:inventory": "tsx tools/intake/inventory.ts",
+    "intake:probe": "tsx tools/intake/probe-original.ts",
+    "dc:compile": "tsx tools/dc-compile/index.ts",
+    "dc:check": "tsx tools/dc-compile/index.ts --check",
+    "build": "pnpm assert:react && pnpm design:verify && tsx tools/prerender/build.ts",
+    "build:html": "tsx tools/prerender/build.ts --html-only",
+    "build:parity": "tsx tools/prerender/build.ts --variant=parity --out dist-parity",
+    "check:dist": "tsx scripts/check-dist.ts",
+    "serve:dist": "tsx tools/parity/serve-dist.ts",
+    "parity": "tsx tools/parity/cli.ts",
+    "parity:all": "tsx tools/parity/cli.ts --all",
+    "parity:selftest": "tsx tools/parity/selftest.ts",
+    "parity:phone": "tsx tools/parity/phone.ts",
+    "parity:fonts": "node scripts/parity-fonts.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run --passWithNoTests",
+    "check": "pnpm assert:react && pnpm design:verify && pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "overrides": {
+      "react": "18.3.1",
+      "react-dom": "18.3.1",
+      "@types/react": "18.3.31",
+      "@types/react-dom": "18.3.7"
+    }
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.5",
+    "@types/pngjs": "6.0.5",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "esbuild": "0.28.2",
+    "eslint": "9.39.5",
+    "globals": "16.5.0",
+    "jsdom": "26.1.0",
+    "parse5": "7.3.0",
+    "pixelmatch": "5.3.0",
+    "pngjs": "7.0.0",
+    "prettier": "3.9.9",
+    "tsx": "4.23.15",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "3.2.7"
+  }
+}

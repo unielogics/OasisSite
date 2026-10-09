@@ -1,0 +1,11 @@
+{
+  "default": {
+    "title": "Oasis Auto Spa",
+    "description": "Oasis Auto Spa — fixture build of the website pipeline; the real copy arrives with the Oasis Site v2 design.",
+    "image": null
+  },
+  "pages": {
+    "settings": { "title": "Oasis Auto Spa — Settings (dashboard fixture)" },
+    "payments": { "title": "Oasis Auto Spa — Payments (dashboard fixture)" }
+  }
+}

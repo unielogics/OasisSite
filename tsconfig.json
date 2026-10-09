@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowJs": false,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["scripts/**/*", "tools/**/*", "src/**/*", "*.ts", "*.mjs"],
+  "exclude": ["node_modules", "dist", "dist-parity", ".generated", "parity-reports", "design", "**/.tmp-snippets"]
+}
