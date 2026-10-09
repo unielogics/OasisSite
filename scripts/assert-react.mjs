@@ -32,11 +32,13 @@ function installedCopies(name) {
 for (const name of ['react', 'react-dom']) {
   const copies = installedCopies(name)
   if (copies.length === 0) problems.push(`${name} is not installed`)
-  if (copies.length > 1) problems.push(`${copies.length} copies of ${name} installed:\n    ${copies.join('\n    ')}`)
+  if (copies.length > 1)
+    problems.push(`${copies.length} copies of ${name} installed:\n    ${copies.join('\n    ')}`)
   for (const dir of copies) {
     const v = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version
     if (v !== WANT) problems.push(`${name} is ${v}, expected exactly ${WANT} (${dir})`)
-    if (/canary|experimental|rc|beta|alpha|nightly/i.test(v)) problems.push(`${name} ${v} is a pre-release build`)
+    if (/canary|experimental|rc|beta|alpha|nightly/i.test(v))
+      problems.push(`${name} ${v} is a pre-release build`)
   }
 }
 
@@ -59,7 +61,9 @@ if (distArg > 0) {
       if (text.includes(`"${WANT}"`)) sawVersion = true
     }
     if (hydrated.length && !sawVersion)
-      problems.push(`${hydrated.length} hydrated page(s) but no bundle under assets/ carries the React ${WANT} version string`)
+      problems.push(
+        `${hydrated.length} hydrated page(s) but no bundle under assets/ carries the React ${WANT} version string`,
+      )
   }
 }
 

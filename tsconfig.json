@@ -21,5 +21,13 @@
     }
   },
   "include": ["scripts/**/*", "tools/**/*", "src/**/*", "*.ts", "*.mjs"],
-  "exclude": ["node_modules", "dist", "dist-parity", ".generated", "parity-reports", "design", "**/.tmp-snippets"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-parity",
+    ".generated",
+    "parity-reports",
+    "design",
+    "**/.tmp-snippets"
+  ]
 }

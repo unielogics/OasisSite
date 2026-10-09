@@ -1,0 +1,236 @@
+{
+  "slug": "payments",
+  "name": "Oasis Payments",
+  "route": "/payments",
+  "elements": 242,
+  "constructs": {
+    "scIf": 19,
+    "scFor": 22,
+    "textInterpolations": 58,
+    "wholeAttrBindings": 128,
+    "mixedAttrBindings": 4,
+    "eventHandlers": 30,
+    "refs": 0,
+    "complexExpressions": []
+  },
+  "pseudo": {},
+  "classAttrs": {
+    "static": 0,
+    "bound": 0
+  },
+  "xImports": [],
+  "helmet": {
+    "sheets": [
+      {
+        "file": "helmet.0.css",
+        "fontFace": true,
+        "chars": 14581,
+        "mediaQueries": 0,
+        "fontFaces": 42
+      },
+      {
+        "file": "helmet.1.css",
+        "fontFace": false,
+        "chars": 1566,
+        "mediaQueries": 0,
+        "fontFaces": 0
+      }
+    ],
+    "links": [
+      {
+        "tag": "link",
+        "attrs": {
+          "rel": "preconnect",
+          "href": "https://fonts.googleapis.com"
+        }
+      },
+      {
+        "tag": "link",
+        "attrs": {
+          "rel": "preconnect",
+          "href": "https://fonts.gstatic.com",
+          "crossorigin": ""
+        }
+      }
+    ],
+    "scripts": 0,
+    "atomics": false
+  },
+  "mediaQueries": [],
+  "root": {
+    "tag": "div",
+    "style": "height:100vh;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);color:var(--ink);font-family:'Manrope',system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-feature-settings:'tnum';letter-spacing:-0.01em;",
+    "width": null,
+    "height": "100vh",
+    "label": "Oasis Payments"
+  },
+  "theme": {
+    "attributeBinding": "theme",
+    "storageKey": "oasis-theme",
+    "values": [
+      "dark",
+      "light"
+    ]
+  },
+  "logic": {
+    "localStorage": 3,
+    "new Date": 2,
+    "setTimeout": 1,
+    "setState": 22
+  },
+  "hrefs": {
+    ".dc.html": [
+      "Oasis%20Command%20Center.dc.html",
+      "Oasis%20Payments.dc.html",
+      "Oasis%20Settings.dc.html"
+    ]
+  },
+  "ctas": [
+    {
+      "tag": "a",
+      "tpl": 17,
+      "text": "Operations",
+      "href": "Oasis%20Command%20Center.dc.html"
+    },
+    {
+      "tag": "a",
+      "tpl": 18,
+      "text": "Payments",
+      "href": "Oasis%20Payments.dc.html"
+    },
+    {
+      "tag": "a",
+      "tpl": 19,
+      "text": "Settings",
+      "href": "Oasis%20Settings.dc.html"
+    },
+    {
+      "tag": "button",
+      "tpl": 22,
+      "text": "Preview as {{ roleName }}",
+      "handler": "{{ toggleRoleMenu }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 29,
+      "text": "{{ r.name }}{{ r.lim }}",
+      "handler": "{{ r.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 49,
+      "text": "{{ r.label }}",
+      "handler": "{{ r.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 52,
+      "text": "Export CSV",
+      "handler": "{{ exportCsv }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 65,
+      "text": "Review",
+      "handler": "{{ openPending }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 96,
+      "text": "{{ f.label }}{{ f.count }}",
+      "handler": "{{ f.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 108,
+      "text": "{{ r.date }}{{ r.id }} {{ r.client }}{{ r.vehicle }} {{ r.it",
+      "handler": "{{ r.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 142,
+      "text": "{{ a.label }}",
+      "handler": "{{ a.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 156,
+      "text": "Approve",
+      "handler": "{{ e.approve }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 157,
+      "text": "Deny",
+      "handler": "{{ e.deny }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 173,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 177,
+      "text": "{{ it.label }}{{ it.value }}",
+      "handler": "{{ it.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 193,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 198,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 201,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 210,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 219,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 223,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 229,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 238,
+      "text": "Cancel",
+      "handler": "{{ closeSheet }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 239,
+      "text": "{{ sh.submitLabel }}",
+      "handler": "{{ sh.submit }}"
+    }
+  ],
+  "hoursLike": [],
+  "unreferencedResources": 0
+}

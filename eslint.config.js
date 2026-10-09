@@ -4,7 +4,16 @@ import globals from 'globals'
 
 export default tseslint.config(
   {
-    ignores: ['node_modules', 'dist', 'dist-parity', '.generated', 'parity-reports', 'design', 'coverage', '**/.tmp-snippets'],
+    ignores: [
+      'node_modules',
+      'dist',
+      'dist-parity',
+      '.generated',
+      'parity-reports',
+      'design',
+      'coverage',
+      '**/.tmp-snippets',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

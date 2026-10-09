@@ -1,0 +1,551 @@
+{
+  "slug": "settings",
+  "name": "Oasis Settings",
+  "route": "/",
+  "elements": 551,
+  "constructs": {
+    "scIf": 38,
+    "scFor": 39,
+    "textInterpolations": 108,
+    "wholeAttrBindings": 287,
+    "mixedAttrBindings": 2,
+    "eventHandlers": 102,
+    "refs": 0,
+    "complexExpressions": []
+  },
+  "pseudo": {},
+  "classAttrs": {
+    "static": 0,
+    "bound": 0
+  },
+  "xImports": [],
+  "helmet": {
+    "sheets": [
+      {
+        "file": "helmet.0.css",
+        "fontFace": true,
+        "chars": 14581,
+        "mediaQueries": 0,
+        "fontFaces": 42
+      },
+      {
+        "file": "helmet.1.css",
+        "fontFace": false,
+        "chars": 1412,
+        "mediaQueries": 0,
+        "fontFaces": 0
+      }
+    ],
+    "links": [
+      {
+        "tag": "link",
+        "attrs": {
+          "rel": "preconnect",
+          "href": "https://fonts.googleapis.com"
+        }
+      },
+      {
+        "tag": "link",
+        "attrs": {
+          "rel": "preconnect",
+          "href": "https://fonts.gstatic.com",
+          "crossorigin": ""
+        }
+      }
+    ],
+    "scripts": 0,
+    "atomics": false
+  },
+  "mediaQueries": [],
+  "root": {
+    "tag": "div",
+    "style": "height:100vh;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);color:var(--ink);font-family:'Manrope',system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-feature-settings:'tnum';letter-spacing:-0.01em;",
+    "width": null,
+    "height": "100vh",
+    "label": "Oasis Settings"
+  },
+  "theme": {
+    "attributeBinding": "theme",
+    "storageKey": "oasis-theme",
+    "values": [
+      "dark",
+      "light"
+    ]
+  },
+  "logic": {
+    "localStorage": 4,
+    "new Date": 2,
+    "Date.now": 3,
+    "location": 1,
+    "setTimeout": 1,
+    "setState": 57,
+    "componentDidMount": 1
+  },
+  "hrefs": {
+    ".dc.html": [
+      "Oasis%20Command%20Center.dc.html",
+      "Oasis%20Payments.dc.html",
+      "Oasis%20Settings.dc.html"
+    ]
+  },
+  "ctas": [
+    {
+      "tag": "a",
+      "tpl": 17,
+      "text": "Operations",
+      "href": "Oasis%20Command%20Center.dc.html"
+    },
+    {
+      "tag": "a",
+      "tpl": 18,
+      "text": "Payments",
+      "href": "Oasis%20Payments.dc.html"
+    },
+    {
+      "tag": "a",
+      "tpl": 19,
+      "text": "Settings",
+      "href": "Oasis%20Settings.dc.html"
+    },
+    {
+      "tag": "button",
+      "tpl": 32,
+      "text": "Working hours",
+      "handler": "{{ goHours }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 37,
+      "text": "Holidays & closures",
+      "handler": "{{ goClosures }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 42,
+      "text": "Emergency closingACTIVE",
+      "handler": "{{ goEmergency }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 50,
+      "text": "Employees{{ empCount }}",
+      "handler": "{{ goEmployees }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 56,
+      "text": "Roles & permissions",
+      "handler": "{{ goRoles }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 62,
+      "text": "VIP program",
+      "handler": "{{ goVip }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 66,
+      "text": "Arrival & check-in",
+      "handler": "{{ goArrival }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 72,
+      "text": "Packages & checklists",
+      "handler": "{{ goServices }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 82,
+      "text": "{{ headBtnLabel }}",
+      "handler": "{{ headBtn }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 91,
+      "text": "Copy Monday to weekdays",
+      "handler": "{{ copyWeekdays }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 126,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 144,
+      "text": "Closed all day",
+      "handler": "{{ ncClosed }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 145,
+      "text": "Reduced hours",
+      "handler": "{{ ncReduced }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 148,
+      "text": "‹",
+      "handler": "{{ ncFromDec }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 150,
+      "text": "›",
+      "handler": "{{ ncFromInc }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 152,
+      "text": "‹",
+      "handler": "{{ ncToDec }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 154,
+      "text": "›",
+      "handler": "{{ ncToInc }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 160,
+      "text": "Cancel",
+      "handler": "{{ cancelClosure }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 161,
+      "text": "Add closure",
+      "handler": "{{ addClosure }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 209,
+      "text": "Reopen now",
+      "handler": "{{ reopen }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 220,
+      "text": "{{ r.label }}",
+      "handler": "{{ r.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 224,
+      "text": "{{ d.label }}",
+      "handler": "{{ d.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 227,
+      "text": "‹",
+      "handler": "{{ emUntilDec }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 229,
+      "text": "›",
+      "handler": "{{ emUntilInc }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 257,
+      "text": "Close the shop now",
+      "handler": "{{ askClose }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 270,
+      "text": "{{ f.label }}",
+      "handler": "{{ f.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 273,
+      "text": "{{ e.initials }} {{ e.name }}{{ e.title }} · {{ e.type }} {{",
+      "handler": "{{ e.open }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 313,
+      "text": "REMOVE",
+      "handler": "{{ r.remove }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 326,
+      "text": "{{ c.limitLabel }}",
+      "handler": "{{ c.cycle }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 338,
+      "text": "✕",
+      "handler": "{{ h.remove }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 340,
+      "text": "‹",
+      "handler": "{{ holdDayDec }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 342,
+      "text": "›",
+      "handler": "{{ holdDayInc }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 343,
+      "text": "‹",
+      "handler": "{{ holdTimeDec }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 345,
+      "text": "›",
+      "handler": "{{ holdTimeInc }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 346,
+      "text": "Add hold",
+      "handler": "{{ addHold }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 350,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 358,
+      "text": "Remove",
+      "handler": "{{ c.remove }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 361,
+      "text": "Make VIP",
+      "handler": "{{ addVip }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 369,
+      "text": "−",
+      "handler": "{{ x.dec }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 371,
+      "text": "+",
+      "handler": "{{ x.inc }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 383,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 387,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 402,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 406,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 419,
+      "text": "Packages",
+      "handler": "{{ kindPkg }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 420,
+      "text": "Add-ons",
+      "handler": "{{ kindAddon }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 423,
+      "text": "{{ v.name }}{{ v.count }}",
+      "handler": "{{ v.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 438,
+      "text": "↑",
+      "handler": "{{ t.up }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 439,
+      "text": "↓",
+      "handler": "{{ t.down }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 440,
+      "text": "✕",
+      "handler": "{{ t.remove }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 443,
+      "text": "Add task",
+      "handler": "{{ addTask }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 447,
+      "text": "Discard",
+      "handler": "{{ discardHours }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 448,
+      "text": "Save changes",
+      "handler": "{{ saveHours }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 462,
+      "text": "Profile",
+      "handler": "{{ tabProfile }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 463,
+      "text": "Roles & access",
+      "handler": "{{ tabAccess }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 464,
+      "text": "Schedule",
+      "handler": "{{ tabSched }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 475,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 480,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 485,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 491,
+      "text": "{{ r.name }}{{ r.desc }}",
+      "handler": "{{ r.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 512,
+      "text": "Role",
+      "handler": "{{ p.inherit }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 513,
+      "text": "Allow",
+      "handler": "{{ p.allow }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 514,
+      "text": "Deny",
+      "handler": "{{ p.deny }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 523,
+      "text": "‹",
+      "handler": "{{ h.fromDec }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 525,
+      "text": "›",
+      "handler": "{{ h.fromInc }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 527,
+      "text": "‹",
+      "handler": "{{ h.toDec }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 529,
+      "text": "›",
+      "handler": "{{ h.toInc }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 537,
+      "text": "{{ dr.activeLabel }}",
+      "handler": "{{ toggleActive }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 539,
+      "text": "Cancel",
+      "handler": "{{ closeDrawer }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 540,
+      "text": "{{ dr.saveLabel }}",
+      "handler": "{{ saveEmp }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 547,
+      "text": "Cancel",
+      "handler": "{{ cancelClose }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 548,
+      "text": "Confirm closure",
+      "handler": "{{ doClose }}"
+    }
+  ],
+  "hoursLike": [
+    "Closed",
+    "Closed all day",
+    "Added as closed days each January. Edit or remove any of them below.",
+    "Open now · Saturday 8:00 AM – 5:00 PM · 6 appointments left today, 3 vehicles on site",
+    "Closed through"
+  ],
+  "unreferencedResources": 0
+}

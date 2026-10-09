@@ -1,0 +1,82 @@
+{
+  "files": {
+    "bricolage-grotesque-latin-ext.woff2": {
+      "sha256": "776f6dcaf03636cd69a5802c94808cc8896c0a66c8e9ce0fe147231b6ee01957",
+      "family": "Bricolage Grotesque",
+      "subset": "latin-ext",
+      "bytes": 30736
+    },
+    "bricolage-grotesque-latin.woff2": {
+      "sha256": "a79fdb52d4a5c76552452f69202add96e287401fff03d3e8c0e38b4dcb5a99cd",
+      "family": "Bricolage Grotesque",
+      "subset": "latin",
+      "bytes": 76888
+    },
+    "bricolage-grotesque-vietnamese.woff2": {
+      "sha256": "b50a9d90a5264f20d1e45be0b948fe947ddb3644557f1e85ef5d3bd06427c944",
+      "family": "Bricolage Grotesque",
+      "subset": "vietnamese",
+      "bytes": 12984
+    },
+    "manrope-cyrillic-ext.woff2": {
+      "sha256": "de37de877dc17e4577341fa68bb5cb526b53d54cb29721e674208546a3c7849d",
+      "family": "Manrope",
+      "subset": "cyrillic-ext",
+      "bytes": 2552
+    },
+    "manrope-cyrillic.woff2": {
+      "sha256": "c268b459a9329e59fecf39a17618efd44c71735532048d60b12aab76a8c14914",
+      "family": "Manrope",
+      "subset": "cyrillic",
+      "bytes": 14500
+    },
+    "manrope-greek.woff2": {
+      "sha256": "2fb2e8cbfd52ae46179a8b6024eb162f1f9c6de3d22d6e3a30d8f395de7220be",
+      "family": "Manrope",
+      "subset": "greek",
+      "bytes": 9444
+    },
+    "manrope-latin-ext.woff2": {
+      "sha256": "3911b66d9f2e005a4b989223405d0e5032619c668597ba467cc76a23c8fffcfb",
+      "family": "Manrope",
+      "subset": "latin-ext",
+      "bytes": 15120
+    },
+    "manrope-latin.woff2": {
+      "sha256": "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972",
+      "family": "Manrope",
+      "subset": "latin",
+      "bytes": 24836
+    },
+    "manrope-vietnamese.woff2": {
+      "sha256": "6bbb044ab420e07edb0a3042d2eb314b85e83a0182e945a15ab3b9092668dfd5",
+      "family": "Manrope",
+      "subset": "vietnamese",
+      "bytes": 8520
+    }
+  },
+  "uuidToFilePerPage": {
+    "settings": {
+      "6e26ff20-2ee8-4766-8c6f-85f6ecbe789c": "bricolage-grotesque-vietnamese.woff2",
+      "45044423-1a6e-4862-ae2c-62f10cb4a164": "bricolage-grotesque-latin-ext.woff2",
+      "9b126e06-f49b-41e1-b2bd-6f7b1e122646": "bricolage-grotesque-latin.woff2",
+      "46780587-293a-4084-9bd1-ef006b929357": "manrope-cyrillic-ext.woff2",
+      "beb9621c-5e6a-476b-8e41-d9431bcc25e1": "manrope-cyrillic.woff2",
+      "d25384f0-0b11-44a4-a8cd-bd91452119b5": "manrope-greek.woff2",
+      "2b43a10d-6e84-4c03-95eb-27c94d7bdd38": "manrope-vietnamese.woff2",
+      "45858bcd-639c-4bb4-b374-09ff6e34bc40": "manrope-latin-ext.woff2",
+      "94c2befd-12f4-498a-b19d-9e6ce5636b36": "manrope-latin.woff2"
+    },
+    "payments": {
+      "c9615f4b-c268-4346-aeef-e1189cf9d8c5": "bricolage-grotesque-vietnamese.woff2",
+      "4b6b4944-9dc3-4f69-8c8f-d6086f513858": "bricolage-grotesque-latin-ext.woff2",
+      "749e736d-400f-4835-8f1f-438d394564d0": "bricolage-grotesque-latin.woff2",
+      "70152ca1-2b0d-48fc-83fe-b1ac71f00834": "manrope-cyrillic-ext.woff2",
+      "975984de-7780-417c-adc9-149a3b09ad52": "manrope-cyrillic.woff2",
+      "7405bb98-15cd-471f-908a-5f5943260997": "manrope-greek.woff2",
+      "33892667-4d57-4ce6-887f-a8e92afb8428": "manrope-vietnamese.woff2",
+      "262dfc1e-72c3-47c6-9864-de1c8e66611f": "manrope-latin-ext.woff2",
+      "cad32f89-9201-4ea0-bea6-398030c7c012": "manrope-latin.woff2"
+    }
+  }
+}

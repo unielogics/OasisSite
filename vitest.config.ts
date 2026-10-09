@@ -9,6 +9,13 @@ export default defineConfig({
   resolve: { alias: { '@': path.resolve(dir, 'src') } },
   test: {
     testTimeout: 30_000,
-    exclude: ['**/node_modules/**', 'dist/**', 'dist-parity/**', '.generated/**', 'design/**', 'parity-reports/**'],
+    exclude: [
+      '**/node_modules/**',
+      'dist/**',
+      'dist-parity/**',
+      '.generated/**',
+      'design/**',
+      'parity-reports/**',
+    ],
   },
 })

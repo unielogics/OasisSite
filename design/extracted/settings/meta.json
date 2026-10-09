@@ -1,0 +1,48 @@
+{
+  "slug": "settings",
+  "route": "/",
+  "name": "Oasis Settings",
+  "sourceFile": "fixtures/settings.bundle.html",
+  "sourceSha256": "137e0a6dca2c578db24bcb9a7f5e529e52e886e8c498b012602e3c2cd64ad6c7",
+  "dataProps": null,
+  "preview": null,
+  "label": "Oasis Settings",
+  "templateChars": 81771,
+  "logicChars": 41243,
+  "helmets": [
+    {
+      "index": 0,
+      "file": "helmet.0.css",
+      "fontFace": true,
+      "chars": 14581
+    },
+    {
+      "index": 1,
+      "file": "helmet.1.css",
+      "fontFace": false,
+      "chars": 1412
+    }
+  ],
+  "helmetLinks": [
+    {
+      "tag": "link",
+      "attrs": {
+        "rel": "preconnect",
+        "href": "https://fonts.googleapis.com"
+      }
+    },
+    {
+      "tag": "link",
+      "attrs": {
+        "rel": "preconnect",
+        "href": "https://fonts.gstatic.com",
+        "crossorigin": ""
+      }
+    }
+  ],
+  "helmetScripts": 0,
+  "helmetAtomics": false,
+  "xImports": 0,
+  "frames": [],
+  "runtimeSha256": "8fe7df74405f3c55f49b7249c74ea1397e65d07dea2b1bd3b4a489bec2e28cbe"
+}
