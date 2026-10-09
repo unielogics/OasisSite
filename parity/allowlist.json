@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "DV-F1-href-settings-cc",
+      "page": "settings",
+      "kind": "attr",
+      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
+      "swap": { "attr": "href", "find": "Oasis%20Command%20Center.dc.html", "replace": "/", "count": 1 }
+    },
+    {
+      "id": "DV-F1-href-settings-pay",
+      "page": "settings",
+      "kind": "attr",
+      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
+      "swap": { "attr": "href", "find": "Oasis%20Payments.dc.html", "replace": "/payments", "count": 1 }
+    },
+    {
+      "id": "DV-F1-href-settings-set",
+      "page": "settings",
+      "kind": "attr",
+      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
+      "swap": { "attr": "href", "find": "Oasis%20Settings.dc.html", "replace": "/", "count": 1 }
+    },
+    {
+      "id": "DV-F1-href-payments-cc",
+      "page": "payments",
+      "kind": "attr",
+      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
+      "swap": { "attr": "href", "find": "Oasis%20Command%20Center.dc.html", "replace": "/", "count": 1 }
+    },
+    {
+      "id": "DV-F1-href-payments-pay",
+      "page": "payments",
+      "kind": "attr",
+      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
+      "swap": { "attr": "href", "find": "Oasis%20Payments.dc.html", "replace": "/payments", "count": 1 }
+    },
+    {
+      "id": "DV-F1-href-payments-set",
+      "page": "payments",
+      "kind": "attr",
+      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
+      "swap": { "attr": "href", "find": "Oasis%20Settings.dc.html", "replace": "/", "count": 1 }
+    }
+  ]
+}

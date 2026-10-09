@@ -14,14 +14,18 @@ declare global {
   }
 }
 
-/** True in parity builds (esbuild defines the literal, so production code drops the branch). */
+/**
+ * True in parity builds. The guards below repeat the `process.env.OASIS_PARITY === '1'` test literally instead of
+ * reading this constant: esbuild substitutes the define and folds the branch away, but does not propagate an
+ * imported constant, so only the literal form keeps the hook out of the production bundle (a test checks it).
+ */
 export const PARITY = process.env.OASIS_PARITY === '1'
 
 let resolveReady: () => void = () => {}
 let currentVals: (() => Record<string, unknown>) | null = null
 let currentPage: string | null = null
 
-if (PARITY && typeof window !== 'undefined' && !window.__oasisParity) {
+function installHook(): void {
   const ready = new Promise<void>((r) => {
     resolveReady = r
   })
@@ -37,14 +41,22 @@ if (PARITY && typeof window !== 'undefined' && !window.__oasisParity) {
   }
 }
 
-export function registerParityHost(page: string, vals: () => Record<string, unknown>): void {
-  if (!PARITY) return
+function doRegister(page: string, vals: () => Record<string, unknown>): void {
   currentPage = page
   currentVals = vals
 }
 
-export function markParityReady(root: HTMLElement | null): void {
-  if (!PARITY) return
+function doMark(root: HTMLElement | null): void {
   root?.setAttribute('data-oasis-ready', '1')
   resolveReady()
+}
+
+if (process.env.OASIS_PARITY === '1' && typeof window !== 'undefined' && !window.__oasisParity) installHook()
+
+export function registerParityHost(page: string, vals: () => Record<string, unknown>): void {
+  if (process.env.OASIS_PARITY === '1') doRegister(page, vals)
+}
+
+export function markParityReady(root: HTMLElement | null): void {
+  if (process.env.OASIS_PARITY === '1') doMark(root)
 }

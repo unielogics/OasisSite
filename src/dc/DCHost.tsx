@@ -3,7 +3,7 @@ import { Component } from 'react'
 import type { ReactNode } from 'react'
 import { DCLogic } from './DCLogic'
 import type { DCHostLike } from './DCLogic'
-import { PARITY, markParityReady, registerParityHost } from './parity'
+import { markParityReady, registerParityHost } from './parity'
 import type { DCLogicCtor, DCRender, DCRenderCtx, PageMeta } from './types'
 
 export interface DCHostProps {
@@ -50,7 +50,7 @@ export class DCHost extends Component<DCHostProps, DCHostState> implements DCHos
       this.logic = new DCLogic(props.userProps ?? EMPTY)
     }
     this.logic.__host = this
-    if (PARITY) {
+    if (process.env.OASIS_PARITY === '1') {
       registerParityHost(props.meta.slug, () => ({
         ...(this.props.userProps ?? EMPTY),
         ...(this.logic.renderVals() || {}),
@@ -76,7 +76,8 @@ export class DCHost extends Component<DCHostProps, DCHostState> implements DCHos
     } catch (e) {
       console.error(e)
     }
-    if (PARITY && typeof document !== 'undefined') markParityReady(document.getElementById('dc-root'))
+    if (process.env.OASIS_PARITY === '1' && typeof document !== 'undefined')
+      markParityReady(document.getElementById('dc-root'))
   }
 
   componentDidUpdate(prevProps: DCHostProps): void {

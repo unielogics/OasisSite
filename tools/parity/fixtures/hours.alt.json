@@ -1,0 +1,26 @@
+{
+  "tz": "America/New_York",
+  "today": {
+    "date": "2026-06-13",
+    "day": "Saturday",
+    "closed": false,
+    "openNow": true,
+    "state": "open",
+    "opensAt": "09:00",
+    "closesAt": "16:00",
+    "reason": null
+  },
+  "next": { "date": "2026-06-15", "day": "Monday", "closed": false, "opensAt": "07:30", "closesAt": "19:00" },
+  "week": [
+    { "weekday": 0, "day": "Sunday", "open": false, "from": null, "to": null },
+    { "weekday": 1, "day": "Monday", "open": true, "from": "07:30", "to": "19:00" },
+    { "weekday": 2, "day": "Tuesday", "open": true, "from": "07:30", "to": "19:00" },
+    { "weekday": 3, "day": "Wednesday", "open": true, "from": "07:30", "to": "19:00" },
+    { "weekday": 4, "day": "Thursday", "open": true, "from": "07:30", "to": "19:00" },
+    { "weekday": 5, "day": "Friday", "open": true, "from": "07:30", "to": "19:00" },
+    { "weekday": 6, "day": "Saturday", "open": true, "from": "09:00", "to": "16:00" }
+  ],
+  "closures": [
+    { "date": "2026-07-04", "name": "Independence Day", "type": "closed", "from": null, "to": null }
+  ]
+}

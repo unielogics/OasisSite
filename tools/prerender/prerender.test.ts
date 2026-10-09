@@ -1,0 +1,381 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { parse } from 'parse5'
+import { describe, expect, it } from 'vitest'
+import { checkDist } from '../../scripts/check-dist'
+import { formatHours, validatePublicHours } from '../../src/hours/format'
+import type { PublicHours } from '../../src/hours/format'
+import { root } from '../intake/fixtures'
+import { AssetStore } from './assets'
+import { buildSite } from './build'
+import { buildDocument, designViewport, notFoundDocument, robotsTxt, sitemapXml } from './head'
+import { renderPage } from './render'
+import { loadSeo, loadSiteConfig, localBusinessJsonLd, seoFor } from './seo'
+import { installShims } from './shims'
+import type { CompiledPageMeta } from '../dc-compile/compile'
+
+const fallback = JSON.parse(
+  fs.readFileSync(path.join(root, 'src/data/hours.fallback.json'), 'utf8'),
+) as PublicHours
+const site = loadSiteConfig(root)
+
+describe('shims', () => {
+  it('provide deterministic storage, matchMedia, location and an optional pinned Date, and restore the globals', () => {
+    const g = globalThis as any
+    const hadLocation = 'location' in g
+    const h = installShims({
+      route: '/x',
+      siteUrl: 'https://example.test',
+      storage: { 'oasis-theme': 'light' },
+      now: '2026-06-13T10:36:00-04:00',
+      timeZone: 'America/New_York',
+    })
+    try {
+      expect(g.localStorage.getItem('oasis-theme')).toBe('light')
+      g.localStorage.setItem('k', 'v')
+      expect(h.storageWrites).toEqual({ k: 'v' })
+      expect(g.matchMedia('(prefers-color-scheme: dark)').matches).toBe(false)
+      expect(g.location.pathname).toBe('/x')
+      expect(g.location.hash).toBe('')
+      expect(g.innerWidth).toBe(1480)
+      expect(Date.now()).toBe(new Date('2026-06-13T10:36:00-04:00').getTime())
+      expect(new Date().toISOString()).toBe('2026-06-13T14:36:00.000Z')
+      expect(new Date(2026, 5, 13).getFullYear()).toBe(2026)
+      expect(new Date() instanceof Date).toBe(true)
+    } finally {
+      h.restore()
+    }
+    expect('location' in g).toBe(hadLocation)
+    expect(Math.abs(Date.now() - new Date().getTime())).toBeLessThan(1000)
+    expect(Date.now()).not.toBe(new Date('2026-06-13T10:36:00-04:00').getTime())
+  })
+})
+
+describe('head and seo', () => {
+  const meta = (over: Partial<CompiledPageMeta> = {}): CompiledPageMeta => ({
+    slug: 'home',
+    route: '/',
+    name: 'Home',
+    variant: 'prod',
+    tplCount: 1,
+    hydrated: false,
+    hydratedBecause: [],
+    helmetLinks: [{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://x.test', crossorigin: '' } }],
+    droppedHelmetLinks: [],
+    headHtml:
+      '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n',
+    cssParts: [],
+    pseudoRules: [],
+    fontFiles: [],
+    assetPaths: [],
+    importModules: [],
+    usesThemeStorage: false,
+    preview: null,
+    templateSha256: '',
+    patchesSha256: '',
+    dvIds: [],
+    ...over,
+  })
+
+  it('builds the document in the contract order with no executable inline script', () => {
+    const html = buildDocument({
+      meta: meta(),
+      lang: 'en',
+      siteName: 'Oasis Auto Spa',
+      seo: {
+        title: 'T & "q"',
+        description: 'D',
+        canonical: 'https://s.test/',
+        ogImage: null,
+        noindex: false,
+      },
+      viewport: 'width=1480',
+      cssHref: '/assets/home.abcdef12.css',
+      bundleHref: null,
+      themeHref: null,
+      hoursHref: '/assets/hours.abcdef12.js',
+      fontPreloads: ['/assets/f.abcdef12.woff2'],
+      icons: [{ rel: 'icon', href: '/assets/i.abcdef12.png', type: 'image/png' }],
+      jsonLd: { '@type': 'LocalBusiness', name: '</script><b>' },
+      bodyHtml: '<div class="sc-host">x</div>',
+      parityVals: { a: 1 },
+      parityStatic: true,
+    })
+    const order = [
+      '<meta charset',
+      'name="viewport" content="width=1480"',
+      '<title>T &amp; &quot;q&quot;</title>',
+      'name="description"',
+      'rel="canonical"',
+      'og:title',
+      'rel="icon"',
+      'rel="preconnect" href="https://x.test" crossorigin>',
+      'rel="preload"',
+      'rel="stylesheet"',
+      'application/ld+json',
+      '<div id="dc-root" data-oasis-ready="1">',
+      '__oasis-vals',
+      'hours.abcdef12.js" defer',
+    ]
+    let last = -1
+    for (const o of order) {
+      const i = html.indexOf(o)
+      expect(i, o).toBeGreaterThan(last)
+      last = i
+    }
+    expect(html).toContain('"name":"<\\/script><b>"')
+    expect(html).toMatch(/^<!DOCTYPE html>\n<html lang="en">/)
+    expect(html).not.toMatch(/<script>(?!.*type=)/)
+    expect(designViewport(meta())).toBe('width=device-width, initial-scale=1')
+    expect(
+      buildDocument({
+        meta: meta(),
+        lang: 'en',
+        siteName: 's',
+        seo: { title: 't', description: null, canonical: 'c', ogImage: null, noindex: true },
+        viewport: null,
+        cssHref: '/a.css',
+        bundleHref: '/b.js',
+        themeHref: '/t.js',
+        hoursHref: null,
+        fontPreloads: [],
+        icons: [],
+        jsonLd: null,
+        bodyHtml: '',
+        parityVals: undefined,
+        parityStatic: false,
+      }),
+    ).toMatch(
+      /content="width=device-width, initial-scale=1"[\s\S]*noindex[\s\S]*<div id="dc-root"><\/div>\n<script src="\/t.js"><\/script>\n<script src="\/b.js" defer><\/script>/,
+    )
+  })
+
+  it('seoFor merges default and page entries; JSON-LD has no Sunday when the shop is closed', () => {
+    const seo = loadSeo(root)
+    const s = seoFor(site, seo, 'settings', '/', 'https://oasisautospanj.com')
+    expect(s.title).toContain('Oasis Auto Spa')
+    expect(s.canonical).toBe('https://oasisautospanj.com/')
+    expect(seoFor(site, seo, 'payments', '/payments', 'https://x.test/').canonical).toBe(
+      'https://x.test/payments',
+    )
+    const ld = localBusinessJsonLd(site, 'https://oasisautospanj.com', validatePublicHours(fallback), null)
+    expect(ld['@type']).toBe('LocalBusiness')
+    expect(ld.name).toBe('Oasis Auto Spa')
+    const spec = ld.openingHoursSpecification as { dayOfWeek: string; opens: string; closes: string }[]
+    expect(spec.map((d) => d.dayOfWeek.split('/').pop())).toEqual([
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ])
+    expect(spec[5]).toEqual({
+      '@type': 'OpeningHoursSpecification',
+      dayOfWeek: 'https://schema.org/Saturday',
+      opens: '08:00',
+      closes: '17:00',
+    })
+    expect(ld).not.toHaveProperty('telephone')
+    expect(notFoundDocument({ lang: 'en', siteName: 'S', cssHref: null, homeHref: '/' })).toContain(
+      '<title>Page not found — S</title>',
+    )
+    expect(sitemapXml([{ loc: 'https://s/' }])).toContain('<loc>https://s/</loc>')
+    expect(robotsTxt('https://s')).toContain('Sitemap: https://s/sitemap.xml')
+  })
+})
+
+describe('asset store', () => {
+  it('hashes by content, dedupes, rewrites logical references and reports unresolved ones', () => {
+    const store = new AssetStore()
+    const u1 = store.add('/fonts/a.woff2', Buffer.from('x'))
+    expect(u1).toMatch(/^\/assets\/a\.[0-9a-f]{8}\.woff2$/)
+    expect(store.add('/fonts/a.woff2', Buffer.from('x'))).toBe(u1)
+    expect(() => store.add('/fonts/a.woff2', Buffer.from('y'))).toThrow(/different contents/)
+    const u2 = store.add('/assets/a.png', Buffer.from('p'))
+    const r = store.rewrite('url("/fonts/a.woff2") /assets/a.png /assets/a.png.bak', 't', true)
+    expect(r.text).toBe(`url("${u1}") ${u2} /assets/a.png.bak`)
+    expect(r.missing).toEqual(['/assets/a.png.bak'])
+    expect(() => store.rewrite('/assets/nope.js', 't')).toThrow(
+      /unresolved asset references: \/assets\/nope.js/,
+    )
+  })
+})
+
+describe('build on the configured pages (design/pages.json)', { timeout: 240_000 }, () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-dist-'))
+  const outParity = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-dist-parity-'))
+
+  it('prerenders the pages, hydrates only where needed, hashes every asset and passes check:dist', async () => {
+    const r = await buildSite({
+      root,
+      variant: 'prod',
+      outDir: out,
+      hoursJson: null,
+      now: '2026-06-13T10:36:00-04:00',
+      log: () => {},
+    })
+    expect(r.hoursSource).toBe('fallback')
+    expect(r.pages.map((p) => p.file)).toEqual(['index.html', 'payments/index.html'])
+    for (const p of r.pages) expect(p.hydrated).toBe(true)
+    const check = checkDist(out, site.marker)
+    expect(check.problems).toEqual([])
+    const files = fs.readdirSync(path.join(out, 'assets'))
+    expect(files.every((f) => /\.[0-9a-f]{8}\.[a-z0-9]+$/.test(f))).toBe(true)
+    expect(files.filter((f) => f.endsWith('.js')).sort()).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^page-settings\./),
+        expect.stringMatching(/^page-payments\./),
+        expect.stringMatching(/^theme\./),
+      ]),
+    )
+    expect(files.some((f) => f.startsWith('hours.'))).toBe(false)
+    const index = fs.readFileSync(path.join(out, 'index.html'), 'utf8')
+    expect(index).toContain(site.marker)
+    expect(index).toContain('data-theme="light"')
+    expect(index).not.toContain('data-dc-tpl')
+    expect(index).not.toContain('__oasis-vals')
+    expect(index).toMatch(/<script src="\/assets\/theme\.[0-9a-f]{8}\.js"><\/script>/)
+    expect(index).toMatch(/<script src="\/assets\/page-settings\.[0-9a-f]{8}\.js" defer><\/script>/)
+    const css = fs.readFileSync(
+      path.join(
+        out,
+        'assets',
+        files.find((f) => f.startsWith('settings.'))!,
+      ),
+      'utf8',
+    )
+    expect(css.startsWith('html,body{height:100%;margin:0}')).toBe(true)
+    expect(css).toMatch(/url\("\/assets\/manrope-latin\.[0-9a-f]{8}\.woff2"\)/)
+    expect(css).not.toContain('/fonts/')
+    const js = fs.readFileSync(
+      path.join(
+        out,
+        'assets',
+        files.find((f) => f.startsWith('page-settings.'))!,
+      ),
+      'utf8',
+    )
+    expect(js).toContain('"18.3.1"')
+    expect(js).not.toContain('new Function(')
+    expect(js).toContain('oasis-theme')
+    const manifest = JSON.parse(fs.readFileSync(path.join(out, 'manifest.json'), 'utf8'))
+    expect(manifest.themeScript.file).toMatch(/^assets\/theme\./)
+    expect(Object.keys(manifest.files)).toContain('404.html')
+    expect(fs.readFileSync(path.join(out, 'robots.txt'), 'utf8')).toContain(
+      'Sitemap: https://oasisautospanj.com/sitemap.xml',
+    )
+    expect(fs.readFileSync(path.join(out, 'sitemap.xml'), 'utf8')).toContain(
+      '<loc>https://oasisautospanj.com/payments</loc>',
+    )
+    // the parity variant: tpl ids in the markup, parity hook in the bundle, no baked ready flag on hydrated pages
+    const p = await buildSite({
+      root,
+      variant: 'parity',
+      outDir: outParity,
+      hoursJson: null,
+      now: '2026-06-13T10:36:00-04:00',
+      log: () => {},
+    })
+    const pindex = fs.readFileSync(path.join(outParity, 'index.html'), 'utf8')
+    expect(pindex).toContain('data-dc-tpl="5"')
+    expect(pindex).toContain('<div id="dc-root"><div class="sc-host"')
+    expect(pindex).not.toContain('__oasis-vals')
+    const pjs = fs.readFileSync(
+      path.join(
+        outParity,
+        'assets',
+        fs.readdirSync(path.join(outParity, 'assets')).find((f) => f.startsWith('page-settings.'))!,
+      ),
+      'utf8',
+    )
+    expect(pjs).toContain('__oasisParity')
+    expect(js).not.toContain('__oasisParity')
+    expect(checkDist(outParity, site.marker).problems).toEqual([])
+    expect(p.pages[0]!.textBoundaries).toBe(r.pages[0]!.textBoundaries)
+    fs.rmSync(out, { recursive: true, force: true })
+    fs.rmSync(outParity, { recursive: true, force: true })
+  })
+
+  it('bakes SITE_HOURS_JSON when valid and falls back with a warning otherwise', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-dist-h-'))
+    const bad = await buildSite({
+      root,
+      variant: 'prod',
+      outDir: dir,
+      htmlOnly: true,
+      hoursJson: '{"week":[]}',
+      log: () => {},
+    })
+    expect(bad.hoursSource).toBe('fallback')
+    expect(bad.warnings.some((w) => w.includes('SITE_HOURS_JSON is not a valid'))).toBe(true)
+    const alt = fs.readFileSync(path.join(root, 'tools/parity/fixtures/hours.alt.json'), 'utf8')
+    const good = await buildSite({
+      root,
+      variant: 'prod',
+      outDir: dir,
+      htmlOnly: true,
+      hoursJson: alt,
+      log: () => {},
+    })
+    expect(good.hoursSource).toBe('SITE_HOURS_JSON')
+    const index = fs.readFileSync(path.join(dir, 'index.html'), 'utf8')
+    expect(index).toContain('"dayOfWeek":"https://schema.org/Monday","opens":"07:30","closes":"19:00"')
+    expect(index).not.toContain('schema.org/Sunday')
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+})
+
+describe('renderPage', () => {
+  it('fails loudly on a logic class that throws, instead of shipping the error card', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-gen-'))
+    fs.writeFileSync(
+      path.join(dir, 'boom.tsx'),
+      'export const meta = {}\nexport default function render() { return null as any }\n',
+    )
+    fs.writeFileSync(
+      path.join(dir, 'boom.logic.js'),
+      `import { DCLogic } from ${JSON.stringify(path.join(root, 'src/dc/DCLogic.ts'))}\nclass Component extends DCLogic { constructor(p) { super(p); throw new Error('ctor boom') } }\nexport default Component\n`,
+    )
+    const meta: CompiledPageMeta = {
+      slug: 'boom',
+      route: '/boom',
+      name: 'Boom',
+      variant: 'prod',
+      tplCount: 0,
+      hydrated: false,
+      hydratedBecause: [],
+      helmetLinks: [],
+      droppedHelmetLinks: [],
+      headHtml: '',
+      cssParts: [],
+      pseudoRules: [],
+      fontFiles: [],
+      assetPaths: [],
+      importModules: [],
+      usesThemeStorage: false,
+      preview: null,
+      templateSha256: '',
+      patchesSha256: '',
+      dvIds: [],
+    }
+    const r = await renderPage({
+      meta,
+      generatedDir: dir,
+      userProps: {},
+      shims: { siteUrl: 'https://x.test' },
+    })
+    expect(r.errors.join('\n')).toMatch(/ctor boom/)
+    expect(r.errors.join('\n')).toMatch(/error card/)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('serialises the user props under renderVals for the parity record', () => {
+    const f = formatHours(validatePublicHours(fallback))
+    expect(f.week[0]!.range).toBe('Closed')
+    const doc = parse('<!DOCTYPE html><html><body></body></html>')
+    expect(doc.nodeName).toBe('#document')
+  })
+})

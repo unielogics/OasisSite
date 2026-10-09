@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check-build-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      SITE_URL: https://oasisautospanj.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm build
+      - run: pnpm check:dist
+      - run: node scripts/assert-react.mjs --dist dist
+      - run: pnpm exec playwright install chromium --with-deps
+      - run: pnpm build:parity
+      - run: pnpm parity:selftest -- --quick
+      - run: pnpm parity:all
+      - run: pnpm parity:phone
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parity-reports
+          path: |
+            parity-reports/summary.json
+            parity-reports/**/result.json
+            parity-reports/**/*.diff.json
+            parity-reports/**/diff.png
+            parity-reports/phone/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
