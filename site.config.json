@@ -4,18 +4,105 @@
   "siteUrl": "https://oasisautospanj.com",
   "marker": "Oasis Auto Spa",
   "viewport": null,
-  "theme": {
-    "storageKey": "oasis-theme",
-    "attribute": "data-theme",
-    "default": "light",
-    "values": ["light", "dark"]
+  "theme": null,
+  "icon": "/assets/oasis-logo.png",
+  "hours": {
+    "endpoint": "/api/v1/public/hours",
+    "timeoutMs": 3000
   },
-  "hours": { "endpoint": "/api/v1/public/hours", "timeoutMs": 3000 },
+  "availability": {
+    "endpoint": "/api/v1/public/availability",
+    "timeoutMs": 4000,
+    "days": 5
+  },
+  "booking": {
+    "endpoints": {
+      "bookings": "/api/v1/public/bookings",
+      "otp": "/api/v1/public/otp",
+      "otpVerify": "/api/v1/public/otp/verify",
+      "memberships": "/api/v1/public/memberships",
+      "catalog": "/api/v1/public/catalog"
+    },
+    "feeCents": 2500,
+    "feeText": "$25 due at the counter or by the link we text you",
+    "feeSubPrefix": "'$25 due at the counter or by the link we text you. Pay '"
+  },
+  "contact": {
+    "phoneE164": "+12015986304",
+    "phoneDisplay": "201-598-6304",
+    "email": "support@oasisautospanj.com",
+    "smsKeyword": "WASH",
+    "address": {
+      "line1": "468 River Drive",
+      "city": "Garfield",
+      "region": "NJ",
+      "postalCode": "07026",
+      "country": "US"
+    },
+    "addressShort": "468 River Dr, Garfield",
+    "mapsUrl": "https://maps.google.com/?q=468+River+Drive+Garfield+NJ+07026",
+    "cityLine": "Garfield, NJ 07026"
+  },
+  "catalog": {
+    "services": {
+      "signature": {
+        "key": "signature-hand-wash",
+        "name": "Signature Hand Wash"
+      },
+      "exterior": {
+        "key": "exterior-hand-wash",
+        "name": "Exterior Hand Wash"
+      }
+    },
+    "addons": {
+      "wax": "hand-wax",
+      "engine": "engine-bay-wash",
+      "leather": "leather-conditioning",
+      "stain": "stain-removal",
+      "tire": "tire-shine-dressing",
+      "rain": "rain-repellent-glass",
+      "odor": "odor-removal",
+      "pet": "pet-hair-removal",
+      "deep": "interior-deep-clean"
+    },
+    "plans": {
+      "gold": "gold",
+      "vip": "vip"
+    }
+  },
+  "imageSlots": {
+    "tag": "image-slot"
+  },
+  "bridges": {
+    "index": "@/site/index.bridge"
+  },
+  "parity": {
+    "viewports": [
+      {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      }
+    ]
+  },
   "business": {
-    "type": "LocalBusiness",
-    "telephone": null,
-    "address": null,
+    "type": "AutoWash",
+    "telephone": "+1-201-598-6304",
+    "email": "support@oasisautospanj.com",
+    "address": {
+      "streetAddress": "468 River Drive",
+      "addressLocality": "Garfield",
+      "addressRegion": "NJ",
+      "postalCode": "07026",
+      "addressCountry": "US"
+    },
     "geo": null,
-    "sameAs": []
+    "sameAs": [],
+    "priceRange": "$$"
   }
 }

@@ -1,1 +1,229 @@
-{ "entries": [] }
+{
+  "entries": [
+    {
+      "id": "contact-phone-display-tpl",
+      "page": "index",
+      "scope": "template",
+      "from": "201-598-6304",
+      "toConfig": "contact.phoneDisplay",
+      "count": 5,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-phone-display-logic",
+      "page": "index",
+      "scope": "logic",
+      "from": "201-598-6304",
+      "toConfig": "contact.phoneDisplay",
+      "count": 1,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-phone-e164-tpl",
+      "page": "index",
+      "scope": "template",
+      "from": "+12015986304",
+      "toConfig": "contact.phoneE164",
+      "count": 7,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-phone-e164-logic",
+      "page": "index",
+      "scope": "logic",
+      "from": "+12015986304",
+      "toConfig": "contact.phoneE164",
+      "count": 2,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-email-tpl",
+      "page": "index",
+      "scope": "template",
+      "from": "support@oasisautospanj.com",
+      "toConfig": "contact.email",
+      "count": 2,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-address-line1-tpl",
+      "page": "index",
+      "scope": "template",
+      "from": "468 River Drive",
+      "toConfig": "contact.address.line1",
+      "count": 3,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-address-line1-logic",
+      "page": "index",
+      "scope": "logic",
+      "from": "468 River Drive",
+      "toConfig": "contact.address.line1",
+      "count": 1,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-city-line-tpl",
+      "page": "index",
+      "scope": "template",
+      "from": "Garfield, NJ 07026",
+      "toConfig": "contact.cityLine",
+      "count": 2,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-address-short-tpl",
+      "page": "index",
+      "scope": "template",
+      "from": "468 River Dr, Garfield",
+      "toConfig": "contact.addressShort",
+      "count": 1,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-maps-tpl",
+      "page": "index",
+      "scope": "template",
+      "from": "https://maps.google.com/?q=468+River+Drive+Garfield+NJ+07026",
+      "toConfig": "contact.mapsUrl",
+      "count": 2,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "book-cta",
+      "page": "index",
+      "scope": "logic",
+      "from": "'Pay $25 & book'",
+      "to": "'Book'",
+      "count": 1,
+      "dv": "DV-BOOK"
+    },
+    {
+      "id": "book-due-label",
+      "page": "index",
+      "scope": "logic",
+      "from": "'Due now'",
+      "to": "'Booking fee'",
+      "count": 1,
+      "dv": "DV-BOOK"
+    },
+    {
+      "id": "book-due-sub",
+      "page": "index",
+      "scope": "logic",
+      "from": "'Booking fee. Pay '",
+      "toConfig": "booking.feeSubPrefix",
+      "count": 1,
+      "dv": "DV-BOOK"
+    },
+    {
+      "id": "book-done-note",
+      "page": "index",
+      "scope": "template",
+      "from": "We'll text a reminder the day before. Reply ",
+      "to": "We'll text your confirmation and a reminder the day before. Reply ",
+      "count": 1,
+      "dv": "DV-BOOK"
+    },
+    {
+      "id": "join-step4-eyebrow",
+      "page": "index",
+      "scope": "logic",
+      "from": "'STEP 4 OF 4 · PAYMENT'",
+      "to": "'STEP 4 OF 4 · CHECKOUT'",
+      "count": 1,
+      "dv": "DV-JOIN"
+    },
+    {
+      "id": "join-step4-sub",
+      "page": "index",
+      "scope": "logic",
+      "from": "'Billed monthly from today. Your first wash can be today.'",
+      "to": "'We\\u2019ll text you a secure checkout link. Billed monthly once you pay, and your first wash can be today.'",
+      "count": 1,
+      "dv": "DV-JOIN"
+    },
+    {
+      "id": "join-welcome-sub",
+      "page": "index",
+      "scope": "logic",
+      "from": "' 4 washes are ready. Book the first one now.'",
+      "to": "' checkout link is on its way by text. Your 4 washes start the moment it\\u2019s paid.'",
+      "count": 1,
+      "dv": "DV-JOIN"
+    },
+    {
+      "id": "join-due-today",
+      "page": "index",
+      "scope": "template",
+      "from": "Due today",
+      "to": "Due at checkout",
+      "count": 1,
+      "dv": "DV-JOIN"
+    },
+    {
+      "id": "join-card-input",
+      "page": "index",
+      "scope": "source",
+      "from": "              <input value=\"{{ jv.card }}\" onInput=\"{{ jv.setCard }}\" inputmode=\"numeric\" autocomplete=\"cc-number\" placeholder=\"Card number\" style=\"height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;letter-spacing:.04em;\">\n",
+      "to": "",
+      "count": 1,
+      "dv": "DV-JOIN"
+    },
+    {
+      "id": "join-card-grid",
+      "page": "index",
+      "scope": "source",
+      "from": "              <div style=\"display:grid;grid-template-columns:1fr 1fr;gap:10px;\">\n                <input value=\"{{ jv.exp }}\" onInput=\"{{ jv.setExp }}\" inputmode=\"numeric\" autocomplete=\"cc-exp\" placeholder=\"MM / YY\" style=\"height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;min-width:0;\">\n                <input value=\"{{ jv.cvc }}\" onInput=\"{{ jv.setCvc }}\" inputmode=\"numeric\" autocomplete=\"cc-csc\" placeholder=\"CVC\" style=\"height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;min-width:0;\">\n              </div>\n",
+      "to": "",
+      "count": 1,
+      "dv": "DV-JOIN"
+    },
+    {
+      "id": "join-card-digits",
+      "page": "index",
+      "scope": "source",
+      "from": "<span>•••• 0427</span>",
+      "to": "",
+      "count": 1,
+      "dv": "DV-JOIN"
+    },
+    {
+      "id": "join-card-check",
+      "page": "index",
+      "scope": "logic",
+      "from": "      if (st === 3 && (digits(j.card).length < 13 || digits(j.exp).length < 4 || digits(j.cvc).length < 3)) return 'Check your card details.';\n",
+      "to": "",
+      "count": 1,
+      "dv": "DV-JOIN"
+    },
+    {
+      "id": "contact-phone-placeholder",
+      "page": "index",
+      "scope": "source",
+      "from": "placeholder=\"(201) 555-0123\"",
+      "to": "placeholder=\"Mobile number\"",
+      "count": 1,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "hours-sunday-table",
+      "page": "index",
+      "scope": "logic",
+      "from": "HOURS = [[9,15],",
+      "to": "HOURS = [[24,24],",
+      "count": 1,
+      "dv": "DV-HOURS"
+    },
+    {
+      "id": "hours-sunday-row",
+      "page": "index",
+      "scope": "logic",
+      "from": "t:'9 AM – 3 PM'",
+      "to": "t:'Closed'",
+      "count": 1,
+      "dv": "DV-HOURS"
+    }
+  ]
+}

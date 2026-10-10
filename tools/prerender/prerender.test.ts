@@ -64,6 +64,13 @@ describe('head and seo', () => {
     hydratedBecause: [],
     helmetLinks: [{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://x.test', crossorigin: '' } }],
     droppedHelmetLinks: [],
+    helmetScripts: [],
+    droppedHelmetScripts: [],
+    fontSheets: [],
+    propDefaults: null,
+    title: null,
+    source: 'bundle',
+    bridge: null,
     headHtml:
       '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n',
     cssParts: [],
@@ -161,7 +168,7 @@ describe('head and seo', () => {
       'https://x.test/payments',
     )
     const ld = localBusinessJsonLd(site, 'https://oasisautospanj.com', validatePublicHours(fallback), null)
-    expect(ld['@type']).toBe('LocalBusiness')
+    expect(ld['@type']).toBe(site.business.type)
     expect(ld.name).toBe('Oasis Auto Spa')
     const spec = ld.openingHoursSpecification as { dayOfWeek: string; opens: string; closes: string }[]
     expect(spec.map((d) => d.dayOfWeek.split('/').pop())).toEqual([
@@ -178,9 +185,9 @@ describe('head and seo', () => {
       opens: '08:00',
       closes: '17:00',
     })
-    expect(ld).not.toHaveProperty('telephone')
+    expect(ld.telephone).toBe(site.business.telephone)
     expect(notFoundDocument({ lang: 'en', siteName: 'S', cssHref: null, homeHref: '/' })).toContain(
-      '<title>Page not found — S</title>',
+      '<title>Page not found · S</title>',
     )
     expect(sitemapXml([{ loc: 'https://s/' }])).toContain('<loc>https://s/</loc>')
     expect(robotsTxt('https://s')).toContain('Sitemap: https://s/sitemap.xml')
@@ -204,91 +211,91 @@ describe('asset store', () => {
   })
 })
 
-describe('build on the configured pages (design/pages.json)', { timeout: 240_000 }, () => {
+describe('build on the configured page (design/pages.json: the raw Oasis Site v2 document)', { timeout: 300_000 }, () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-dist-'))
   const outParity = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-dist-parity-'))
 
-  it('prerenders the pages, hydrates only where needed, hashes every asset and passes check:dist', async () => {
+  it('prerenders the home view, hydrates it, hashes every asset, self-hosts the fonts and passes check:dist', async () => {
     const r = await buildSite({
       root,
       variant: 'prod',
       outDir: out,
       hoursJson: null,
+      availabilityJson: null,
+      booking: 'sms',
       now: '2026-06-13T10:36:00-04:00',
       log: () => {},
     })
     expect(r.hoursSource).toBe('fallback')
-    expect(r.pages.map((p) => p.file)).toEqual(['index.html', 'payments/index.html'])
-    for (const p of r.pages) expect(p.hydrated).toBe(true)
+    expect(r.availabilitySource).toBe('none')
+    expect(r.booking).toBe('sms')
+    expect(r.buildNow).toBe('2026-06-13T10:36:00-04:00')
+    expect(r.placeholders).toEqual(['/assets/oasis-logo.png'])
+    expect(r.pages.map((p) => p.file)).toEqual(['index.html'])
+    expect(r.pages[0]!.hydrated).toBe(true)
     const check = checkDist(out, site.marker)
     expect(check.problems).toEqual([])
     const files = fs.readdirSync(path.join(out, 'assets'))
     expect(files.every((f) => /\.[0-9a-f]{8}\.[a-z0-9]+$/.test(f))).toBe(true)
-    expect(files.filter((f) => f.endsWith('.js')).sort()).toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(/^page-settings\./),
-        expect.stringMatching(/^page-payments\./),
-        expect.stringMatching(/^theme\./),
-      ]),
-    )
-    expect(files.some((f) => f.startsWith('hours.'))).toBe(false)
+    expect(files.filter((f) => f.endsWith('.js'))).toEqual([expect.stringMatching(/^page-index\./)])
+    expect(files.filter((f) => f.endsWith('.woff2'))).toHaveLength(13)
+    expect(files.some((f) => f.startsWith('image-slot'))).toBe(false)
     const index = fs.readFileSync(path.join(out, 'index.html'), 'utf8')
     expect(index).toContain(site.marker)
-    expect(index).toContain('data-theme="light"')
+    expect(index).toContain('<title>Oasis Auto Spa · Concierge Hand Wash · Garfield, NJ</title>')
+    expect(index).toContain('data-theme="dark"')
     expect(index).not.toContain('data-dc-tpl')
-    expect(index).not.toContain('__oasis-vals')
-    expect(index).toMatch(/<script src="\/assets\/theme\.[0-9a-f]{8}\.js"><\/script>/)
-    expect(index).toMatch(/<script src="\/assets\/page-settings\.[0-9a-f]{8}\.js" defer><\/script>/)
-    const css = fs.readFileSync(
-      path.join(
-        out,
-        'assets',
-        files.find((f) => f.startsWith('settings.'))!,
-      ),
-      'utf8',
-    )
+    expect(index).not.toContain('fonts.googleapis.com')
+    expect(index).not.toContain('fonts.gstatic.com')
+    expect(index).not.toContain('(201) 555-0123')
+    expect(index).toContain('<template shadowrootmode="open">')
+    expect(index).toMatch(/<img src="\/assets\/oasis-logo\.[0-9a-f]{8}\.png" alt="Oasis Auto Spa"/)
+    expect(index).toMatch(/<script src="\/assets\/page-index\.[0-9a-f]{8}\.js" defer><\/script>/)
+    expect((index.match(/<script/g) ?? []).length).toBe(2) // the JSON-LD data block and the bundle
+    expect(index).toContain('"dayOfWeek":"https://schema.org/Monday","opens":"08:00","closes":"18:00"')
+    expect(index).not.toContain('schema.org/Sunday')
+    expect(index).toMatch(/Sunday<\/span><\/span><span style="color:var\(--ink\);font-weight:600"><span class="sc-interp">Closed<\/span>/)
+    expect(index).toContain('SAT JUN 13 · 10:36 AM')
+    const css = fs.readFileSync(path.join(out, 'assets', files.find((f) => f.startsWith('index.'))!), 'utf8')
     expect(css.startsWith('html,body{height:100%;margin:0}')).toBe(true)
-    expect(css).toMatch(/url\("\/assets\/manrope-latin\.[0-9a-f]{8}\.woff2"\)/)
+    expect(css).toMatch(/url\(\/assets\/archivo-latin\.[0-9a-f]{8}\.woff2\)/)
     expect(css).not.toContain('/fonts/')
-    const js = fs.readFileSync(
-      path.join(
-        out,
-        'assets',
-        files.find((f) => f.startsWith('page-settings.'))!,
-      ),
-      'utf8',
-    )
+    expect(css).not.toContain('gstatic')
+    const js = fs.readFileSync(path.join(out, 'assets', files.find((f) => f.startsWith('page-index.'))!), 'utf8')
     expect(js).toContain('"18.3.1"')
     expect(js).not.toContain('new Function(')
-    expect(js).toContain('oasis-theme')
+    expect(js).toContain('2026-06-13T10:36:00-04:00')
+    expect(js).toContain('/api/v1/public/availability')
     const manifest = JSON.parse(fs.readFileSync(path.join(out, 'manifest.json'), 'utf8'))
-    expect(manifest.themeScript.file).toMatch(/^assets\/theme\./)
+    expect(manifest.themeScript).toBeNull()
+    expect(manifest.booking).toBe('sms')
     expect(Object.keys(manifest.files)).toContain('404.html')
+    const notFound = fs.readFileSync(path.join(out, '404.html'), 'utf8')
+    expect(notFound).toContain('Wrong<br>turn.')
+    expect(notFound).not.toContain('<script')
     expect(fs.readFileSync(path.join(out, 'robots.txt'), 'utf8')).toContain(
       'Sitemap: https://oasisautospanj.com/sitemap.xml',
     )
-    expect(fs.readFileSync(path.join(out, 'sitemap.xml'), 'utf8')).toContain(
-      '<loc>https://oasisautospanj.com/payments</loc>',
-    )
+    const sitemap = fs.readFileSync(path.join(out, 'sitemap.xml'), 'utf8')
+    expect(sitemap).toContain('<loc>https://oasisautospanj.com/</loc>')
+    expect(sitemap.match(/<loc>/g)).toHaveLength(1)
     // the parity variant: tpl ids in the markup, parity hook in the bundle, no baked ready flag on hydrated pages
     const p = await buildSite({
       root,
       variant: 'parity',
       outDir: outParity,
       hoursJson: null,
+      availabilityJson: null,
+      booking: 'sms',
       now: '2026-06-13T10:36:00-04:00',
       log: () => {},
     })
     const pindex = fs.readFileSync(path.join(outParity, 'index.html'), 'utf8')
-    expect(pindex).toContain('data-dc-tpl="5"')
+    expect(pindex).toContain('data-dc-tpl="8"')
     expect(pindex).toContain('<div id="dc-root"><div class="sc-host"')
     expect(pindex).not.toContain('__oasis-vals')
     const pjs = fs.readFileSync(
-      path.join(
-        outParity,
-        'assets',
-        fs.readdirSync(path.join(outParity, 'assets')).find((f) => f.startsWith('page-settings.'))!,
-      ),
+      path.join(outParity, 'assets', fs.readdirSync(path.join(outParity, 'assets')).find((f) => f.startsWith('page-index.'))!),
       'utf8',
     )
     expect(pjs).toContain('__oasisParity')
@@ -297,6 +304,41 @@ describe('build on the configured pages (design/pages.json)', { timeout: 240_000
     expect(p.pages[0]!.textBoundaries).toBe(r.pages[0]!.textBoundaries)
     fs.rmSync(out, { recursive: true, force: true })
     fs.rmSync(outParity, { recursive: true, force: true })
+  })
+
+  it('bakes SITE_AVAILABILITY_JSON (the board shows slots) and refuses an unknown SITE_BOOKING', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-dist-a-'))
+    const { designAvailability } = await import('../../src/site/availability')
+    const { hoursTable } = await import('../../src/site/hours')
+    // the pattern is seeded by the local date and filtered by the local time of day: generate it in the shop's zone,
+    // like build:parity and serve-dist do (an earlier test may have pinned the worker's TZ elsewhere)
+    const tz = process.env.TZ
+    process.env.TZ = 'America/New_York'
+    const avail = designAvailability(new Date('2026-06-13T10:36:00-04:00'), hoursTable(fallback))
+    if (tz === undefined) delete process.env.TZ
+    else process.env.TZ = tz
+    const r = await buildSite({
+      root,
+      variant: 'prod',
+      outDir: dir,
+      htmlOnly: true,
+      hoursJson: null,
+      availabilityJson: JSON.stringify(avail),
+      booking: 'live',
+      apiOrigin: 'https://api.example.test/',
+      now: '2026-06-13T10:36:00-04:00',
+      log: () => {},
+    })
+    expect(r.availabilitySource).toBe('SITE_AVAILABILITY_JSON')
+    expect(r.booking).toBe('live')
+    const index = fs.readFileSync(path.join(dir, 'index.html'), 'utf8')
+    expect(index).toContain('NEXT OPEN')
+    expect(index).not.toContain('TO CHECK TIMES')
+    expect(index).toContain(' open</span>')
+    await expect(
+      buildSite({ root, variant: 'prod', outDir: dir, htmlOnly: true, hoursJson: null, booking: 'nope', log: () => {} }),
+    ).rejects.toThrow(/SITE_BOOKING/)
+    fs.rmSync(dir, { recursive: true, force: true })
   })
 
   it('bakes SITE_HOURS_JSON when valid and falls back with a warning otherwise', async () => {
@@ -349,6 +391,13 @@ describe('renderPage', () => {
       hydratedBecause: [],
       helmetLinks: [],
       droppedHelmetLinks: [],
+      helmetScripts: [],
+      droppedHelmetScripts: [],
+      fontSheets: [],
+      propDefaults: null,
+      title: null,
+      source: 'bundle',
+      bridge: null,
       headHtml: '',
       cssParts: [],
       pseudoRules: [],
@@ -372,7 +421,7 @@ describe('renderPage', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('serialises the user props under renderVals for the parity record', () => {
+  it('the fallback hours read Closed on Sunday and parse5 is available to the checks', () => {
     const f = formatHours(validatePublicHours(fallback))
     expect(f.week[0]!.range).toBe('Closed')
     const doc = parse('<!DOCTYPE html><html><body></body></html>')

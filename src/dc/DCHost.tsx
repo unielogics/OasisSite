@@ -12,6 +12,8 @@ export interface DCHostProps {
   render: DCRender
   /** What the dc runtime calls the "user props" (data-props defaults + overrides); the site adds `hours` here. */
   userProps?: Record<string, unknown>
+  /** Runs once, right before the logic's componentDidMount (the client boot restores the real clock here). */
+  beforeMount?: () => void
 }
 
 interface DCHostState {
@@ -51,10 +53,8 @@ export class DCHost extends Component<DCHostProps, DCHostState> implements DCHos
     }
     this.logic.__host = this
     if (process.env.OASIS_PARITY === '1') {
-      registerParityHost(props.meta.slug, () => ({
-        ...(this.props.userProps ?? EMPTY),
-        ...(this.logic.renderVals() || {}),
-      }))
+      // what the original runtime's logic instance returns (the harness reads renderVals() on both sides)
+      registerParityHost(props.meta.slug, () => this.logic.renderVals() || {})
     }
   }
 
@@ -71,6 +71,11 @@ export class DCHost extends Component<DCHostProps, DCHostState> implements DCHos
   }
 
   componentDidMount(): void {
+    try {
+      this.props.beforeMount?.()
+    } catch (e) {
+      console.error(e)
+    }
     try {
       this.logic.componentDidMount()
     } catch (e) {

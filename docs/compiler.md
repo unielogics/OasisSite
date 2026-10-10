@@ -70,6 +70,30 @@ the reference interpreter (`tests/reference.ts`, a transliteration of the runtim
   `componentDidMount`, timers, `addEventListener` or `requestAnimationFrame`, or it has an `x-import`. Otherwise no
   React is shipped at all.
 
+## Added for "Oasis Site v2" (a raw document)
+
+- **`<image-slot>` (DV-IMG).** `site.config.json` `imageSlots: { tag }` names a custom element the build renders as a
+  static placeholder: the element keeps its tag and attributes and gets `dangerouslySetInnerHTML` = a declarative
+  shadow root (`src/dc/image-slot.ts`: image-slot.js's `:host` rules, the design's chrome gradient, the wordmark and
+  the slot's caption; with a `src` the frame holds the photo). The HTML parser attaches the shadow root before any
+  script runs; hydration never looks inside `dangerouslySetInnerHTML`. The helmet's `image-slot.js` is dropped
+  (`head.drop` on `<script src>`).
+- **Font sheets (DV-FONTS).** `meta.json` `fontSheets` (the vendored Google CSS, docs/intake.md) are folded into the
+  page CSS right before the helmet's own styles.
+- **`source` copy entries.** A copy-map entry with `scope: "source"` edits the template TEXT before parsing, exactly
+  like the harness's pre-render swaps on the original, so a markup removal (the join flow's card fields) numbers the
+  remaining elements identically on both sides. `toConfig` resolves the replacement from `site.config.json`
+  (contact facts), so nothing is written twice.
+- **The bridge.** `site.config.json` `bridges: { "<slug>": "@/site/<slug>.bridge" }` makes `<slug>.logic.js` import
+  the module and `export default bridge(Component, env)`, with `env` from `./site-env.js` (written by the build,
+  tools/prerender/site-env.ts). The original script stays byte for byte; the bridge subclasses it (docs/site.md).
+- **`propDefaults`** (the data-props defaults the runtime's StandaloneRoot passes) are the host's user props; the
+  parity vals are `renderVals()` alone, like the original's logic instance.
+- **The build instant.** Every prerender runs with `Date` pinned to `buildNow` (`SITE_BUILD_NOW`, else now; the parity
+  build: the harness's `FIXED_NOW`); a bridged page's client pins its first render to the same instant
+  (`src/client/boot.tsx` `freeze`, released right before the logic's `componentDidMount`), so hydration matches
+  and the design then re-renders with the real time (DV-CLOCK).
+
 ## Patch layer (`design-patches/`)
 
 Same ops as the dashboard (`replace-text` with `{{= path }}` raw interpolation, `rewrite-href`, `set-attr`,
@@ -79,9 +103,9 @@ and the build fails (exit 3) unless `design-patches/DEVIATIONS.md` has a `**DV-.
 may also carry `head.drop: [{tag, attr, value, dv}]` to keep helmet links (e.g. external preconnects) out of the
 head; a drop that matches nothing fails the build.
 
-The hours region of the real design will be bound the same way: `set-attr data-hours="week.1.range"` plus
-`replace-text` with `{{= hours.week.1.range }}`; `hours` is passed as a user prop (the formatted strings of
-`src/hours/format.ts`), baked at build time and refreshed in the browser through the same `[data-hours]` keys.
+Designs without a bridge can bind an hours region with `set-attr data-hours="week.1.range"` plus `replace-text`
+`{{= hours.week.1.range }}` (`hours` as a user prop, refreshed through `src/client/hours.ts`); "Oasis Site v2" binds
+its hours, board and flows through the bridge instead (docs/site.md).
 
 ## Runtime shim (`src/dc`)
 

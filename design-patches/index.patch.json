@@ -1,0 +1,55 @@
+{
+  "head": {
+    "drop": [
+      {
+        "tag": "link",
+        "attr": "rel",
+        "value": "preconnect",
+        "dv": "DV-FONTS"
+      },
+      {
+        "tag": "link",
+        "attr": "rel",
+        "value": "stylesheet",
+        "dv": "DV-FONTS"
+      },
+      {
+        "tag": "script",
+        "attr": "src",
+        "value": "/assets/image-slot.js",
+        "dv": "DV-IMG"
+      }
+    ]
+  },
+  "ops": [
+    {
+      "op": "replace-text",
+      "tpl": 175,
+      "expectTag": "div",
+      "expect": "NO TIMES IN THIS PART OF THE DAY",
+      "with": "{{= site.boardEmptyText }}",
+      "dv": "DV-AVAIL"
+    },
+    {
+      "op": "insert-after",
+      "tpl": 676,
+      "expectTag": "sc-if",
+      "html": "<sc-if value=\"{{ sh.bCode }}\"><div style=\"padding:18px;border-radius:20px;background:var(--card);border:1.5px solid var(--cyanBrd);\"><div style=\"font-weight:800;font-size:17px;\">Enter the code we texted</div><div style=\"font-size:13.5px;color:var(--ink3);margin-top:3px;\">Sent to {{ sh.codePhone }} · 6 digits, 3 tries</div><div style=\"display:flex;gap:8px;margin-top:14px;\"><input value=\"{{ site.code }}\" onInput=\"{{ site.setCode }}\" inputmode=\"numeric\" autocomplete=\"one-time-code\" placeholder=\"123456\" style=\"flex:1;min-width:0;height:52px;padding:0 14px;border-radius:14px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;letter-spacing:.2em;\"><button onClick=\"{{ site.codeContinue }}\" style=\"flex:none;height:52px;padding:0 18px;border-radius:14px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:15px;\">Verify</button></div><sc-if value=\"{{ site.codeErr }}\"><div style=\"font-size:12.5px;color:#E5533D;margin-top:8px;font-weight:700;\">{{ site.codeErr }}</div></sc-if><button onClick=\"{{ site.resendCode }}\" style=\"margin-top:12px;font-size:13px;font-weight:700;color:var(--ink3);\">Send a new code</button></div></sc-if>",
+      "dv": "DV-OTP"
+    },
+    {
+      "op": "insert-after",
+      "tpl": 729,
+      "expectTag": "div",
+      "html": "<sc-if value=\"{{ site.timeNote }}\"><div style=\"padding:14px 16px;border-radius:16px;background:var(--cyanSoft);border:1px solid var(--cyanBrd);font-size:13.5px;line-height:1.45;color:var(--cyanInk);\">{{ site.timeNote }}</div></sc-if>",
+      "dv": "DV-AVAIL"
+    },
+    {
+      "op": "insert-before",
+      "tpl": 752,
+      "expectTag": "button",
+      "html": "<sc-if value=\"{{ site.guestDetails }}\"><div style=\"display:flex;flex-direction:column;gap:10px;\"><input value=\"{{ site.name }}\" onInput=\"{{ site.setName }}\" autocomplete=\"name\" placeholder=\"Full name\" style=\"height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;\"><input value=\"{{ site.phone }}\" onInput=\"{{ site.setPhone }}\" inputmode=\"tel\" autocomplete=\"tel\" placeholder=\"Mobile number\" style=\"height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;\"><div style=\"font-size:12.5px;color:var(--ink3);\">We'll text your confirmation to this number.</div></div></sc-if>",
+      "dv": "DV-BOOK"
+    }
+  ]
+}

@@ -20,6 +20,11 @@ export interface EmitOptions {
    * to import. Unknown urls fail the build (an import must be a bundled resource; nothing is fetched at run time).
    */
   imports?: ReadonlyMap<string, string>
+  /**
+   * A custom element the build renders as a static placeholder (site.config.json `imageSlots`): the element keeps its
+   * tag and attributes, its content becomes a declarative shadow root built by `imageSlotProps` (src/dc/image-slot.ts).
+   */
+  imageSlot?: { tag: string; brand: string }
 }
 
 export interface Bindings {
@@ -192,6 +197,7 @@ export class Emitter {
     pc: false,
     hs: false,
     XI: false,
+    IS: false,
   }
   readonly pseudo: PseudoSheet
   /** true when the first style-<pseudo> attribute was met before the helmet (sheet order in <head>) */
@@ -496,6 +502,8 @@ export class Emitter {
       }
       case 'x-import':
         return this.ximport(n, scope, ind)
+      case this.opts.imageSlot?.tag:
+        return this.imageSlot(n, scope, ind)
       case 'dc-import':
       case 'sc-else':
         return this.fail(`<${n.tag}> is not supported`)
@@ -590,6 +598,31 @@ export class Emitter {
     return [open, call, `${pad}    <>`, ...kids, `${pad}    </>,`, `${pad}  )}`, `${pad}</div>`]
   }
 
+  // ---- image-slot ----------------------------------------------------------------------------------------------------
+  /** The slot element with its attributes, plus the shadow-root placeholder markup built at render time. */
+  private imageSlot(n: ElNode, scope: Loop[], ind: number): string[] {
+    const pad = indentOf(ind)
+    const where = `<${n.tag}> tpl ${n.tpl}`
+    if (n.children.some((c) => c.kind === 'el' || c.value.trim() !== ''))
+      this.fail(`${where}: an image slot with children is not supported`)
+    const props: string[] = []
+    if (this.opts.tplIds && n.tpl >= 0) props.push(`"data-dc-tpl": "${n.tpl}"`)
+    for (const { name, value } of n.attrs) {
+      if (name === 'sc-name' || name === 'data-dc-tpl') continue
+      let key = name
+      if (key.startsWith(CAMEL_ATTR)) key = kebabToCamel(key.slice(CAMEL_ATTR.length))
+      if (key.startsWith('on') || key === 'ref') this.fail(`${where}: handlers and refs are not supported on image slots`)
+      if (key === 'style') {
+        this.used.css = true
+        props.push(`style: css(${this.valueCode(value, scope, `${where} attribute ${name}`)})`)
+        continue
+      }
+      props.push(`${IDENT_KEY.test(key) ? key : JSON.stringify(key)}: ${this.valueCode(value, scope, `${where} attribute ${name}`)}`)
+    }
+    this.used.IS = true
+    return [`${pad}<${n.tag} {...IS({ ${props.join(', ')} }, ${JSON.stringify(this.opts.imageSlot!.brand)})} />`]
+  }
+
   // ---- file --------------------------------------------------------------------------------------------------------
   emit(
     nodes: Node[],
@@ -607,6 +640,7 @@ export class Emitter {
     lines.push(`import type { ${reactTypes} } from 'react'`)
     if (rt.length) lines.push(`import { ${rt.join(', ')} } from '@/dc/runtime'`)
     if (this.used.XI) lines.push("import type { XImportSpec } from '@/dc/runtime'")
+    if (this.used.IS) lines.push("import { imageSlotProps as IS } from '@/dc/image-slot'")
     lines.push("import type { DCRenderCtx } from '@/dc/types'")
     for (const [file, v] of this.importVars) lines.push(`import * as ${v} from ${JSON.stringify(file)}`)
     lines.push('')

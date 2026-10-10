@@ -57,8 +57,8 @@ describe('parity hook', () => {
     expect(container.getAttribute('data-oasis-ready')).toBe('1')
     expect(hook.page).toBe('payments')
     const vals = hook.getVals()
+    // renderVals() alone, like the original runtime's logic instance (user props are not part of the record)
     expect(vals).toEqual({
-      p: 1,
       label: 'x',
       onClick: '[fn]',
       icon: { $el: 'i', key: null, props: { className: 'ic' } },

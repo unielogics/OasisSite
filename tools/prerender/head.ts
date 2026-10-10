@@ -79,27 +79,51 @@ export function buildDocument(d: DocumentInput): string {
   return `<!DOCTYPE html>\n<html lang="${esc(d.lang)}">\n<head>\n${h.join('\n')}\n</head>\n<body>\n${b.join('\n')}\n</body>\n</html>\n`
 }
 
+/**
+ * The 404 page in the design's tokens (dark theme, the chrome wordmark gradient, Archivo/Hanken Grotesk/JetBrains Mono
+ * from the page stylesheet, the design's button). Inline style attributes only (the CSP allows them), no script.
+ */
 export function notFoundDocument(o: {
   lang: string
   siteName: string
   cssHref: string | null
   homeHref: string
+  logoHref?: string | null
+  icons?: { rel: string; href: string; type?: string; sizes?: string }[]
 }): string {
   const style = o.cssHref ? `<link rel="stylesheet" href="${esc(o.cssHref)}">` : ''
+  const icons = (o.icons ?? [])
+    .map(
+      (i) =>
+        `<link rel="${esc(i.rel)}" href="${esc(i.href)}"${i.type ? ` type="${esc(i.type)}"` : ''}${i.sizes ? ` sizes="${esc(i.sizes)}"` : ''}>`,
+    )
+    .join('\n')
+  const logo = o.logoHref
+    ? `<a href="${esc(o.homeHref)}" style="display:flex;justify-content:center;"><img src="${esc(o.logoHref)}" alt="${esc(o.siteName)}" style="height:76px;width:auto;display:block;filter:drop-shadow(0 6px 18px rgba(31,182,255,.25));"></a>`
+    : ''
   return `<!DOCTYPE html>
 <html lang="${esc(o.lang)}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Page not found — ${esc(o.siteName)}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Page not found · ${esc(o.siteName)}</title>
 <meta name="robots" content="noindex">
+${icons}
 ${style}
 </head>
-<body>
-<main id="not-found" style="font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem">
-<h1>Page not found</h1>
-<p>${esc(o.siteName)}: this page does not exist. <a href="${esc(o.homeHref)}">Back to the home page</a>.</p>
+<body style="margin:0;background:#06080A;">
+<div id="not-found" data-oa="1" data-theme="dark" style="min-height:100vh;background:var(--bg,#06080A);color:var(--ink,#F2F5F7);font-family:'Hanken Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;">
+<header style="height:84px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 14px;border-bottom:1px solid var(--line2,rgba(255,255,255,.06));"><div></div>${logo}<div></div></header>
+<main style="flex:1;max-width:980px;width:100%;margin:0 auto;padding:72px 20px 80px;display:flex;flex-direction:column;align-items:center;text-align:center;">
+<div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accentText,#1FB6FF);text-transform:uppercase;">404 · Not found</div>
+<h1 style="margin:22px 0 0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(38px,10.5vw,124px);line-height:.88;letter-spacing:-.03em;text-transform:uppercase;background:var(--chrome,linear-gradient(180deg,#FFFFFF 0%,#DCE3E9 40%,#7C8893 53%,#EEF2F5 64%,#A9B4BE 100%));-webkit-background-clip:text;background-clip:text;color:transparent;">Wrong<br>turn.</h1>
+<p style="margin:22px 0 0;max-width:520px;font-size:17px;line-height:1.55;color:var(--ink2,#B7C0C8);">This page does not exist. The whole site lives on one page: the home, membership, the wash, tint, detailing, the experience and how to visit us.</p>
+<div style="display:flex;gap:10px;margin-top:28px;flex-wrap:wrap;justify-content:center;">
+<a href="${esc(o.homeHref)}" style="display:flex;align-items:center;height:58px;padding:0 24px;border-radius:17px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:16.5px;text-decoration:none;box-shadow:0 12px 34px rgba(31,182,255,.38),inset 0 1px 0 rgba(255,255,255,.55);">Back to the home page</a>
+<a href="${esc(o.homeHref)}#/visit" style="display:flex;align-items:center;height:58px;padding:0 22px;border-radius:17px;background:var(--btn2,rgba(255,255,255,.05));border:1px solid var(--line,rgba(255,255,255,.1));color:var(--ink,#F2F5F7);font-weight:700;font-size:16px;text-decoration:none;">Visit us</a>
+</div>
 </main>
+</div>
 </body>
 </html>
 `

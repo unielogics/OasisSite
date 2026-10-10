@@ -11,3 +11,4 @@ coverage/
 .tsbuildinfo
 .tmp-snippets/
 .DS_Store
+dist-e2e-*/

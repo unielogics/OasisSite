@@ -6,3 +6,4 @@ parity-reports
 design
 pnpm-lock.yaml
 docs/intake-report.md
+dist-*

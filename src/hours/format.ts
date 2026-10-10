@@ -16,7 +16,11 @@ export interface HoursDay {
 export interface HoursToday {
   date?: string
   day?: string
+  weekday?: number
   closed: boolean
+  /** minutes from midnight (the backend's publicHoursView) */
+  openMin?: number | null
+  closeMin?: number | null
   openNow?: boolean
   state?: 'open' | 'opens_later' | 'closed' | string
   opensAt?: string | number | null

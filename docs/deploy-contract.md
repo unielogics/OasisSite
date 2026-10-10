@@ -18,11 +18,14 @@ deterministic for the same inputs (asset hashes are content hashes; nothing is t
 
 Environment:
 
-| variable          | required | meaning                                                                                                     |
-| ----------------- | -------- | ----------------------------------------------------------------------------------------------------------- |
-| `SITE_URL`        | no       | canonical origin (default `site.config.json` `siteUrl`): canonical links, Open Graph, sitemap, robots       |
-| `SITE_HOURS_JSON` | no       | body of `GET /api/v1/public/hours`; invalid or unset = committed fallback (Sunday closed) + a build warning |
-| `PRERENDER_NOW`   | no       | pins `Date` during the prerender (parity builds only; never set it in production)                           |
+| variable                 | required | meaning                                                                                                                         |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `SITE_URL`               | no       | canonical origin (default `site.config.json` `siteUrl`): canonical links, Open Graph, sitemap, robots                           |
+| `SITE_HOURS_JSON`        | no       | body of `GET /api/v1/public/hours`; invalid or unset = committed fallback (Sunday closed) + a build warning                     |
+| `SITE_AVAILABILITY_JSON` | no       | body of `GET /api/v1/public/availability?days=7`; unset = the board shows the hours with "text to check times" + a warning     |
+| `SITE_BOOKING`           | no       | `sms` (default: Book/Join compose sms: texts, no API calls) or `live` (the public booking API; needs the SMS tablet)           |
+| `SITE_API_ORIGIN`        | no       | API origin for the browser; default `''` = same origin (nginx proxies `/api/v1/public/*`)                                      |
+| `SITE_BUILD_NOW`         | no       | the prerender instant (default: now); `PRERENDER_NOW` pins it for parity builds, never set that one in production             |
 
 ## Output (`dist/`)
 
@@ -38,9 +41,9 @@ Environment:
 Nothing else is written at the top level, there are no symlinks, and no file references `localhost`.
 
 HTML must be served with `Cache-Control: no-cache` (it changes on every release while asset names change with
-their content). Sizes to expect for the fixture configuration: HTML 35–80 KB per page, CSS ~16 KB per page,
-fonts 230 KB in total, one 210–260 KB bundle per hydrated page; a static page ships no JavaScript at all except the
-0.5 KB theme script when the design has a theme toggle.
+their content). Sizes to expect: `index.html` ~105 KB (the whole home view prerendered), CSS ~17 KB, 13 font files (~340 KB in
+total), one ~330 KB page bundle (React 18.3.1 + the design's logic + the bridge), the logo (placeholder) and three
+icons.
 
 ## Content Security Policy
 
@@ -51,7 +54,7 @@ object-src 'none'`:
 - every `<script>` with executable content is an external file under `/assets/` (`script-src 'self'`); the only
   inline `<script>` elements are data blocks (`type="application/ld+json"`), which the CSP does not execute;
 - `style-src 'unsafe-inline'` is needed for the designs' inline `style=""` attributes (the stylesheet itself is a file);
-- `connect-src 'self'` covers the hours fetch (`/api/v1/public/hours`, same origin);
+- `connect-src 'self'` covers the hours, availability, booking, code and join calls (`/api/v1/public/*`, same origin);
 - `img-src data:` is for images the design embeds as data URIs (none in the fixtures);
 - `manifest.json` records the theme script's sha256 (`themeScript.sha256`) in case a stricter hash-based policy is
   ever wanted; it is not needed with `'self'`.
@@ -63,11 +66,13 @@ A `<link rel="preconnect">` to an external font host is kept only if the design'
 
 - `root /var/www/site/current; try_files $uri $uri.html $uri/ =404; error_page 404 /404.html;`
 - `location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; }`
-- `location = /api/v1/public/hours { proxy_pass oasis_api; proxy_cache ... 60s; proxy_set_header Cookie ""; }`
+- `location /api/v1/public/ { proxy_pass oasis_api; proxy_cache ... 60s for GETs; proxy_set_header Cookie ""; }` (hours,
+  availability, catalog, otp, bookings, memberships: the backend kit's `oasis-site.conf.template`)
 - everything else under `/api`, `/hooks`, `/dev-storage` → 404; dotfiles → 404.
 
-`tools/parity/serve-dist.ts` mimics these rules (clean URLs, 404 page, immutable assets, no-cache HTML, the hours
-endpoint with a fixture body) for the harness and for `pnpm serve:dist` on port 3301.
+`tools/parity/serve-dist.ts` mimics these rules (clean URLs, 404 page, immutable assets, no-cache HTML, the hours and
+availability endpoints with fixture bodies) for the harness and for `pnpm serve:dist` on port 3301;
+`tools/site/proxy.ts` proxies the real `/api/v1/public/*` prefix for the e2e (docs/e2e.md).
 
 ## Health
 

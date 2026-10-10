@@ -2,6 +2,7 @@
 // Renders one compiled page to static markup: the inner HTML of #dc-root (renderToString of <DCHost/>, so the
 // client can hydrate it) plus the serialised renderVals() for the parity variant. Console output during the render
 // is captured: an error fails the build, warnings are reported.
+import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createElement } from 'react'
@@ -33,14 +34,24 @@ export interface Rendered {
   storageWrites: Record<string, string>
 }
 
+let loadSeq = 0
+
+/**
+ * Imports the generated page modules. Node caches ES modules by URL for the life of the process, so a second build in
+ * the same process (the tests) would keep the first build's `site-env.js` (hours, availability, booking mode): every
+ * import carries a per-load query string, and the logic module is loaded through a copy whose `./site-env.js` import
+ * carries it too (the compiler's own output stays byte-stable for `pnpm dc:check`).
+ */
 export async function loadPageModules(
   generatedDir: string,
   slug: string,
 ): Promise<{ render: DCRender; Logic: DCLogicCtor }> {
-  const tsx = await import(/* @vite-ignore */ pathToFileURL(path.join(generatedDir, `${slug}.tsx`)).href)
-  const logic = await import(
-    /* @vite-ignore */ pathToFileURL(path.join(generatedDir, `${slug}.logic.js`)).href
-  )
+  const v = `v=${process.pid}-${++loadSeq}`
+  const logicSrc = fs.readFileSync(path.join(generatedDir, `${slug}.logic.js`), 'utf8')
+  const logicFile = path.join(generatedDir, `${slug}.logic.prerender.js`)
+  fs.writeFileSync(logicFile, logicSrc.replace("from './site-env.js'", `from './site-env.js?${v}'`))
+  const tsx = await import(/* @vite-ignore */ `${pathToFileURL(path.join(generatedDir, `${slug}.tsx`)).href}?${v}`)
+  const logic = await import(/* @vite-ignore */ `${pathToFileURL(logicFile).href}?${v}`)
   if (typeof tsx.default !== 'function') throw new Error(`${slug}.tsx has no default render export`)
   if (typeof logic.default !== 'function')
     throw new Error(`${slug}.logic.js did not define a Component class`)
@@ -74,12 +85,12 @@ export async function renderPage(input: RenderInput): Promise<Rendered> {
     if (html.includes('role="alert"') && html.includes('This page failed to load')) {
       errors.push(`${meta.slug}: the host rendered its error card (see the errors above)`)
     }
-    // renderToString does not attach refs; rebuild the vals the way DCHost does for the parity record
+    // renderToString does not attach refs; rebuild the vals the way the harness reads them (renderVals() only)
     void host
     let vals: unknown = null
     try {
       const logic = new Logic(input.userProps)
-      vals = serializeVals({ ...input.userProps, ...(logic.renderVals() || {}) })
+      vals = serializeVals(logic.renderVals() || {})
     } catch (e) {
       errors.push(
         `${meta.slug}: renderVals for the parity record threw: ${e instanceof Error ? e.message : String(e)}`,

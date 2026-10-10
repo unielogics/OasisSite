@@ -5,6 +5,7 @@ import path from 'node:path'
 import type { PublicHours } from '../../src/hours/format'
 import { toMinutes } from '../../src/hours/format'
 import type { ThemeConfig } from '../../src/client/theme'
+import type { CatalogConfig, ContactConfig } from '../../src/site/env'
 
 export interface SiteConfig {
   name: string
@@ -15,11 +16,25 @@ export interface SiteConfig {
   viewport: string | null
   theme: ThemeConfig | null
   hours: { endpoint: string; timeoutMs: number; labels?: Record<string, string> }
+  availability?: { endpoint: string; timeoutMs: number; days: number }
+  booking?: {
+    endpoints: { bookings: string; otp: string; otpVerify: string; memberships: string; catalog: string }
+    feeCents: number
+    feeText: string
+  }
+  contact?: ContactConfig
+  catalog?: CatalogConfig
+  /** a custom element rendered as a static placeholder (src/dc/image-slot.ts) */
+  imageSlots?: { tag: string } | null
+  /** per page slug: the module wrapped around the logic class */
+  bridges?: Record<string, string>
+  parity?: { viewports?: { name: string; width: number; height: number }[] }
   /** logical asset path of the logo/icon (/assets/oasis-logo.png) or null */
   icon?: string | null
   business: {
     type: string
     telephone: string | null
+    email?: string | null
     address: {
       streetAddress: string
       addressLocality: string
@@ -114,6 +129,7 @@ export function localBusinessJsonLd(
   }
   if (image) out.image = image
   if (site.business?.telephone) out.telephone = site.business.telephone
+  if (site.business?.email) out.email = site.business.email
   if (site.business?.address) out.address = { '@type': 'PostalAddress', ...site.business.address }
   if (site.business?.geo) out.geo = { '@type': 'GeoCoordinates', ...site.business.geo }
   if (site.business?.priceRange) out.priceRange = site.business.priceRange

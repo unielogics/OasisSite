@@ -9,9 +9,13 @@ import type { ElNode, Node } from './parse'
 export interface CopyEntry {
   id: string
   page: string
-  scope: 'template' | 'logic'
+  /** template: static text/attribute values of the parsed tree; source: the raw template text before parsing (markup
+   *  removals, so both sides number elements identically); logic: the logic script text */
+  scope: 'template' | 'logic' | 'source'
   from: string
+  /** the replacement; or `toConfig`, a dotted path into site.config.json resolved at load time (contact strings) */
   to: string
+  toConfig?: string
   /** Exact number of occurrences that must be replaced; anything else fails the build (exit 3). */
   count: number
   /** the DEVIATIONS.md id that explains the change */
@@ -88,7 +92,9 @@ export function loadPatchConfig(root: string, page: string): PatchConfig {
   const own = readJson(path.join(dir, `${page}.patch.json`))
   const h = crypto.createHash('sha256')
   h.update(href.raw).update('\0').update(copy.raw).update('\0').update(own.raw)
-  const entries = (copy.json.entries ?? []).filter((e) => e.page === page)
+  const entries = (copy.json.entries ?? [])
+    .filter((e) => e.page === page)
+    .map((e) => (e.toConfig ? { ...e, to: configValue(root, e.toConfig, `copy-map ${e.id}`) } : e))
   const ops = own.json.ops ?? []
   const headDrops = own.json.head?.drop ?? []
   const hrefMap = href.json.map ?? {}
@@ -111,6 +117,22 @@ export function loadPatchConfig(root: string, page: string): PatchConfig {
     dvIds: [...dvIds].sort(),
     sha: h.digest('hex'),
   }
+}
+
+let siteConfigCache: { root: string; json: Record<string, unknown> } | null = null
+/** A string from site.config.json by dotted path (copy-map `toConfig`), so a fact is never hard-coded twice. */
+export function configValue(root: string, dotted: string, what: string): string {
+  if (!siteConfigCache || siteConfigCache.root !== root) {
+    const file = path.join(root, 'site.config.json')
+    siteConfigCache = { root, json: fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>) : {} }
+  }
+  let cur: unknown = siteConfigCache.json
+  for (const seg of dotted.split('.')) {
+    if (!cur || typeof cur !== 'object') cur = undefined
+    else cur = (cur as Record<string, unknown>)[seg]
+  }
+  guard(typeof cur === 'string' && cur.length > 0, `${what}: site.config.json has no string at ${dotted}`)
+  return cur as string
 }
 
 /** Every id a page's patches reference must have a `DV-...` line in DEVIATIONS.md (exit 3 otherwise). */
@@ -151,7 +173,7 @@ export function parseMarkup(html: string, where: string): Node[] {
 }
 
 /** Replace `from` by `to`, requiring exactly `count` occurrences. Returns the new text. */
-export function applyCopy(text: string, entries: CopyEntry[], scope: 'template' | 'logic'): string {
+export function applyCopy(text: string, entries: CopyEntry[], scope: 'template' | 'logic' | 'source'): string {
   for (const e of entries) {
     if (e.scope !== scope) continue
     const n = text.split(e.from).length - 1

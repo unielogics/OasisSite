@@ -1,11 +1,8 @@
 {
   "default": {
-    "title": "Oasis Auto Spa",
-    "description": "Oasis Auto Spa — fixture build of the website pipeline; the real copy arrives with the Oasis Site v2 design.",
-    "image": null
+    "title": "Oasis Auto Spa · Concierge Hand Wash · Garfield, NJ",
+    "description": "Hand washed, never tunneled. Oasis Auto Spa in Garfield, NJ washes every car by hand, one panel at a time: hand wash, interior, window tint and detailing. Members get 4 washes a month with the interior included, priority times and no booking fee.",
+    "image": "/assets/oasis-logo.png"
   },
-  "pages": {
-    "settings": { "title": "Oasis Auto Spa — Settings (dashboard fixture)" },
-    "payments": { "title": "Oasis Auto Spa — Payments (dashboard fixture)" }
-  }
+  "pages": {}
 }
