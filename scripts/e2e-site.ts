@@ -543,6 +543,9 @@ async function main(): Promise<number> {
     const navs = await navigations(page)
     check('sms mode: Book composes an sms: link with the booking', navs.length === 1 && /^sms:\+12015986304\?&body=WASH%20booking%3A/.test(navs[0]!), navs[0])
     check('sms mode: the composed text names the wash, the vehicle and the time', /Signature%20Hand%20Wash/.test(navs[0] ?? '') && /Sedan/.test(decodeURIComponent(navs[0] ?? '')) && /(AM|PM)/.test(decodeURIComponent(navs[0] ?? '')), decodeURIComponent(navs[0] ?? ''))
+    // the design's own text links (the hero's "Text WASH to …", the footer) live on the home view
+    const href = await page.locator('#dc-root a[href^="sms:"]').first().getAttribute('href')
+    check('sms mode: the design\'s own text links keep the configured number', href === 'sms:+12015986304?&body=WASH', href ?? '')
     await bookPage.ctx.close()
     // a fresh page for the join flow: the sms: navigation was swallowed by the test hook, so the sheet is still open
     // on the first page and a hash-only goto would keep it (and its CTA) over the join page
@@ -562,8 +565,6 @@ async function main(): Promise<number> {
     await settle(page)
     const navs2 = await navigations(page)
     check('sms mode: Join composes an sms: link with the plan, name, phone and car', navs2.length === 1 && /^sms:\+12015986304\?&body=JOIN%20VIP%3A/.test(navs2[0]!) && /Sam%20Lee/.test(navs2[0]!) && /Audi/.test(navs2[0]!), navs2[0])
-    const href = await page.locator('#dc-root a[href^="sms:"]').first().getAttribute('href')
-    check('sms mode: the design\'s own text links keep the configured number', href === 'sms:+12015986304?&body=WASH', href ?? '')
     check('sms mode: no API write was attempted', smsProxy.log.filter((l) => l.method === 'POST').length === posts0, JSON.stringify(smsProxy.log.filter((l) => l.method === 'POST')))
     await joinPage.ctx.close()
   } finally {
