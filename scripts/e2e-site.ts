@@ -136,6 +136,39 @@ async function managerSession(stack: Stack): Promise<string> {
   throw new Error('could not sign in as a seeded manager who may read /ops/snapshot')
 }
 
+/**
+ * The owner's decision: Sunday is closed. The design seed keeps the design's Sunday 9-3, so the stack's Settings are
+ * corrected through the Settings API as a seeded user with `set.hours` (the super admin first), exactly the way the
+ * owner sets it in the dashboard (PUT /settings/hours with the current version). Returns what was done.
+ */
+async function ensureSundayClosed(stack: Stack): Promise<string> {
+  for (const first of ['amara', 'rafael']) {
+    const r = await fetch(`${stack.apiUrl}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: stack.webUrl },
+      body: JSON.stringify({ email: `${first}@oasisautospa.com`, password: stack.devPassword }),
+    })
+    if (!r.ok) continue
+    const cookie = r.headers.getSetCookie?.().map((c) => c.split(';')[0]).join('; ') ?? ''
+    const cur = await getJson(`${stack.apiUrl}/api/v1/settings/hours`, { headers: { cookie } })
+    if (cur.status !== 200) continue
+    const days = cur.body.days as { weekday: number; open: boolean; from: string; to: string }[]
+    const sunday = days.find((d) => d.weekday === 0)
+    if (sunday && !sunday.open) return 'Sunday was already closed in the stack Settings'
+    const put = await getJson(`${stack.apiUrl}/api/v1/settings/hours`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie, origin: stack.webUrl, 'if-match': `"${cur.body.version}"` },
+      body: JSON.stringify({
+        version: cur.body.version,
+        days: days.map((d) => ({ weekday: d.weekday, open: d.weekday === 0 ? false : d.open, from: d.from, to: d.to })),
+      }),
+    })
+    if (put.status === 200) return `Sunday set closed through PUT /settings/hours as ${first} (version ${cur.body.version} -> ${put.body.version})`
+    if (put.status !== 403) throw new Error(`PUT /settings/hours as ${first}: ${put.status} ${JSON.stringify(put.body).slice(0, 200)}`)
+  }
+  throw new Error('no seeded user could set Sunday closed through the Settings API')
+}
+
 async function snapshotText(stack: Stack, cookie: string): Promise<string> {
   const r = await fetch(`${stack.apiUrl}/api/v1/ops/snapshot?window=week`, { headers: { cookie } })
   assert(r.ok, `ops/snapshot ${r.status}`)
@@ -216,6 +249,9 @@ async function main(): Promise<number> {
     log(`fixture API at ${fixture.origin}`)
   }
 
+  // 0. the stack's Settings follow the owner's decision (Sunday closed) before the hours are snapshotted
+  if (api.kind === 'stack') log(`settings: ${await ensureSundayClosed(api.stack!)}`)
+
   // 1. the two builds: live (the API's hours and availability baked in) and sms (the launch default)
   const hours = await getJson(`${api.origin}/api/v1/public/hours`)
   assert(hours.status === 200, `GET /public/hours -> ${hours.status}`)
@@ -253,15 +289,15 @@ async function main(): Promise<number> {
       trackers.push(t)
       await page.goto(`${proxy.origin}/#/visit`, { waitUntil: 'load' })
       await ready(page)
-      const rowOf = (label: RegExp) =>
-        page.locator('#dc-root span.sc-interp').filter({ hasText: label }).first().evaluate((el) => el.parentElement?.parentElement?.textContent ?? '')
+      // the visit page's HOURS block and the footer both list hoursList: the first "Sunday" row is the visit page's, the last the footer's
+      const rowOf = (label: RegExp, which: 'first' | 'last' = 'first') =>
+        page.locator('#dc-root span.sc-interp').filter({ hasText: label })[which]().evaluate((el) => el.parentElement?.parentElement?.textContent ?? '')
       const sunday = await rowOf(/^Sunday$/)
       const sun = (hours.body.week as { weekday: number; open: boolean }[]).find((w) => w.weekday === 0)!
-      check(
-        `visit page: Sunday follows the live hours (the API says ${sun.open ? 'open' : 'closed'}${api.kind === 'stack' && sun.open ? '; the seeded Settings keep the design\'s Sunday, production has it closed' : ''})`,
-        sun.open ? /Sunday\s*\d/.test(sunday) : /Sunday\s*Closed/.test(sunday),
-        sunday,
-      )
+      check('visit page: the API says Sunday is closed (the owner\'s decision, set through the Settings API)', !sun.open, JSON.stringify(sun))
+      check('visit page: Sunday reads "Closed"', /Sunday\s*Closed/.test(sunday), sunday)
+      const sundayFooter = await rowOf(/^Sunday$/, 'last')
+      check('footer: Sunday reads "Closed"', /Sunday\s*Closed/.test(sundayFooter) && (await page.locator('#dc-root span.sc-interp').filter({ hasText: /^Sunday$/ }).count()) === 2, sundayFooter)
       const week = (hours.body.week as { weekday: number; open: boolean; from: string }[]).find((w) => w.weekday === 1)!
       const mon = await rowOf(/^Monday/)
       check('visit page: Monday row shows the API hours', /8 AM|8:00/.test(mon) === /08:00|8:00/.test(String(week.from)), mon)

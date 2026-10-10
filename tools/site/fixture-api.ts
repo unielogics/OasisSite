@@ -81,9 +81,21 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
     tags: [] as string[],
   }))
   const addons = Object.entries(site.catalog.addons).map(([id, key]) => ({ key, name: id, priceCents: 2500, tags: [] as string[] }))
+  // The design's pattern and `today` are computed from LOCAL hours: always in the shop's zone, whatever the process
+  // zone is (the prerender shims set TZ to the shop's zone when it is unset, so an in-process fixture must not drift).
+  const inShopZone = <T,>(fn: () => T): T => {
+    const prev = process.env.TZ
+    process.env.TZ = base.tz || 'America/New_York'
+    try {
+      return fn()
+    } finally {
+      if (prev === undefined) delete process.env.TZ
+      else process.env.TZ = prev
+    }
+  }
   const availability = (days: number, serviceKey: string): Availability => {
     const t = now()
-    const a = designAvailability(t, hoursTable(base), { days, serviceKey, tz: base.tz })
+    const a = inShopZone(() => designAvailability(t, hoursTable(base), { days, serviceKey, tz: base.tz }))
     // bookings taken out: a booked slot loses one bay
     for (const day of a.days)
       for (const s of day.slots) {
@@ -93,7 +105,7 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
         s.state = s.bays === 0 ? 'booked' : s.bays === 1 ? 'last' : s.state
       }
     for (const day of a.days) day.openCount = day.slots.filter((s) => s.state === 'open' || s.state === 'last').length
-    const h = withToday(base, t)!
+    const h = inShopZone(() => withToday(base, t))!
     const open = !!h.today && !h.today.closed && h.today.state === 'open'
     return { ...a, now: { open, baysFree: open ? 2 : 0, baysTotal: 3 } }
   }
@@ -114,7 +126,7 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
     if (p === '/__fixture/texts') return json(res, 200, { texts: state.texts })
     if (p === '/__fixture/state')
       return json(res, 200, { bookings: state.bookings, memberships: state.memberships, challenges: [...state.challenges.entries()].map(([id, c]) => ({ id, phone: c.phone, code: c.code })) })
-    if (p === '/api/v1/public/hours') return json(res, 200, withToday(base, now()), { 'cache-control': 'public, max-age=60' })
+    if (p === '/api/v1/public/hours') return json(res, 200, inShopZone(() => withToday(base, now())), { 'cache-control': 'public, max-age=60' })
     if (p === '/api/v1/public/availability') {
       const days = Math.max(1, Math.min(14, Number(url.searchParams.get('days') ?? '5') || 5))
       const service = url.searchParams.get('service') || services[0]!.key

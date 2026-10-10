@@ -17,25 +17,28 @@ Results: the console and `parity-reports/e2e-site.json`.
 
 ```bash
 cd ~/oasis/dashboard
-SMS_ALLOWLIST=+12015550141,+12015550142,+12015550143,+12015550177 PUBLIC_SITE_URL=http://127.0.0.1:3301 \
-  pnpm live:up --name site --backend ~/oasis/wt/s3-public-booking --profile design,demo --api-port 4081 --web-port 3281
+ALLOW_DEV_ENDPOINTS=true SMS_ALLOWLIST=+12015550141,+12015550142,+12015550143,+12015550177 PUBLIC_SITE_URL=http://127.0.0.1:3301 \
+  pnpm live:up --name site --backend ~/oasis/backend --profile design,demo --api-port 4081 --web-port 3281
 cd ~/oasis/site && pnpm e2e:site --stack site
-cd ~/oasis/dashboard && pnpm live:down --name site
+cd ~/oasis/dashboard && pnpm live:down --name site --drop
 ```
 
-`SMS_ALLOWLIST` lets the stack queue the e2e numbers' texts (outside production every other number is suppressed);
-`PUBLIC_SITE_URL` makes the API accept the site host's `Origin` on the public POSTs. The script reads
-`~/oasis/dashboard/.live-stack/site.json` (API URL, schema, dev password, backend path), signs in as a seeded
-manager through `POST /api/v1/auth/login` to read `GET /api/v1/ops/snapshot`, and reads the stack's database through
-`psql` (the backend's `DATABASE_URL`, the stack's schema) for what the API does not expose: the one-time code (the
-`sms_outbox` row while it is unredacted; otherwise the code is recovered from the challenge's `sha256(id:code)` by
-searching the six digits, because the simulator delivers instantly and delivered one-time codes are redacted) and
-the pending membership row.
+The backend checkout must carry the public booking API (backend main at or after `50ffac4`). `SMS_ALLOWLIST` lets the
+stack queue the e2e numbers' texts (outside production every other number is suppressed) and `ALLOW_DEV_ENDPOINTS`
+exposes the SMS simulator's dev routes (not needed by the script itself); `PUBLIC_SITE_URL` makes the API accept the
+site host's `Origin` on the public POSTs. The script reads `~/oasis/dashboard/.live-stack/site.json` (API URL, schema,
+dev password, backend path), first sets **Sunday closed** through `PUT /api/v1/settings/hours` as a seeded user with
+`set.hours` when the design seed left it open (the owner's decision; production Settings are set by the owner), signs
+in as a seeded manager through `POST /api/v1/auth/login` to read `GET /api/v1/ops/snapshot`, and reads the stack's
+database through `psql` (the backend's `DATABASE_URL`, the stack's schema) for what the API does not expose: the
+one-time code (the `sms_outbox` row while it is unredacted; otherwise the code is recovered from the challenge's
+`sha256(id:code)` by searching the six digits, because the simulator delivers instantly and delivered one-time codes
+are redacted) and the pending membership row.
 
 ## Checks
 
-1. `#/visit` shows Sunday closed and the API's Monday hours; the home pill, the day cards' open counts and NEXT OPEN
-   come from the availability payload.
+1. The API's hours say Sunday is closed; `#/visit` and the footer both read "Sunday Closed" and the visit page shows
+   the API's Monday hours; the home pill, the day cards' open counts and NEXT OPEN come from the availability payload.
 2. A guest booking (NEXT OPEN → guest → Hand wax → review → name, mobile, terms → Book) answers 201 with
    `deposit {dueCents: 2500, how: counter|link}`; the done step shows the reference; the appointment is in the ops
    snapshot (`"seq": N`) that the seeded manager reads (fixture: in its state).
