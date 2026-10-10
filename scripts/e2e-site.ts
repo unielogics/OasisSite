@@ -525,8 +525,9 @@ async function main(): Promise<number> {
   // 8. sms mode: the buttons produce sms: links with the composed body
   const smsProxy = await startSiteProxy({ dir: smsDir, apiOrigin: api.origin, port: port + 1 })
   try {
-    const { ctx, page, t } = await newPage(browser, smsProxy.origin)
-    trackers.push(t)
+    const bookPage = await newPage(browser, smsProxy.origin)
+    trackers.push(bookPage.t)
+    let page = bookPage.page
     await page.goto(`${smsProxy.origin}/`, { waitUntil: 'load' })
     await ready(page)
     const posts0 = smsProxy.log.filter((l) => l.method === 'POST').length
@@ -542,6 +543,12 @@ async function main(): Promise<number> {
     const navs = await navigations(page)
     check('sms mode: Book composes an sms: link with the booking', navs.length === 1 && /^sms:\+12015986304\?&body=WASH%20booking%3A/.test(navs[0]!), navs[0])
     check('sms mode: the composed text names the wash, the vehicle and the time', /Signature%20Hand%20Wash/.test(navs[0] ?? '') && /Sedan/.test(decodeURIComponent(navs[0] ?? '')) && /(AM|PM)/.test(decodeURIComponent(navs[0] ?? '')), decodeURIComponent(navs[0] ?? ''))
+    await bookPage.ctx.close()
+    // a fresh page for the join flow: the sms: navigation was swallowed by the test hook, so the sheet is still open
+    // on the first page and a hash-only goto would keep it (and its CTA) over the join page
+    const joinPage = await newPage(browser, smsProxy.origin)
+    trackers.push(joinPage.t)
+    page = joinPage.page
     await page.goto(`${smsProxy.origin}/#/join`, { waitUntil: 'load' })
     await ready(page)
     await btn(page, /^\s*Continue\s*$/).click()
@@ -558,7 +565,7 @@ async function main(): Promise<number> {
     const href = await page.locator('#dc-root a[href^="sms:"]').first().getAttribute('href')
     check('sms mode: the design\'s own text links keep the configured number', href === 'sms:+12015986304?&body=WASH', href ?? '')
     check('sms mode: no API write was attempted', smsProxy.log.filter((l) => l.method === 'POST').length === posts0, JSON.stringify(smsProxy.log.filter((l) => l.method === 'POST')))
-    await ctx.close()
+    await joinPage.ctx.close()
   } finally {
     await smsProxy.close()
     await browser.close()
