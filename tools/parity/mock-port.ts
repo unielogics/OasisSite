@@ -13,7 +13,8 @@ import { serializeVals } from './vals-serialize'
  * and adds the two things the port contract requires: `#dc-root[data-oasis-ready="1"]` once the page has mounted and
  * `window.__oasisParity.getVals()` returning serializeVals(renderVals()). This proves the port-side plumbing (routes,
  * hash, ready flag, hook) independently of the build. Like every dry-run port it carries the owner's copy decisions
- * (design-patches/copy-map.json) as pre-render swaps, since the baseline renders with them (docs/parity.md).
+ * (design-patches/copy-map.json) as pre-render swaps, since the baseline renders with them (docs/parity.md), and like
+ * the port it renders the stored or the device's theme (DV-THEME; the baseline is rendered with the run's theme).
  */
 const HOOK = `<script>(function () {
   var ser = ${serializeVals.toString()};
@@ -45,6 +46,21 @@ const HOOK = `<script>(function () {
     parent.appendChild(s);
   }
   hideBadge();
+  // DV-THEME: like the port, render the theme stored on the device, else the device's color scheme (the design's
+  // data-props default is rewritten when the parser is done, before the dc runtime boots from it)
+  document.addEventListener('readystatechange', function () {
+    if (document.readyState !== 'interactive') return;
+    var el = document.querySelector('script[data-dc-script]');
+    if (!el) return;
+    try {
+      var props = JSON.parse(el.getAttribute('data-props') || 'null');
+      if (!props || !props.theme) return;
+      var stored = null;
+      try { stored = localStorage.getItem('oasis-theme'); } catch (e) {}
+      props.theme.default = stored === 'light' || stored === 'dark' ? stored : (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      el.setAttribute('data-props', JSON.stringify(props));
+    } catch (e) {}
+  });
   new MutationObserver(function (_m, obs) { hideBadge(); if (mark()) obs.disconnect(); }).observe(document, { childList: true, subtree: true });
 })();</script>`
 

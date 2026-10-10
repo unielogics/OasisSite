@@ -17,6 +17,7 @@ import {
   REPORTS_DIR,
   ROOT,
   SLUGS,
+  THEMES,
   TOLERANCES_FILE,
   VIEWPORTS,
   type Theme,
@@ -168,8 +169,11 @@ export async function runHarness(opts: HarnessOptions): Promise<HarnessResult> {
   const finished = tracker.finish()
   const problems = opts.staleCheck === false ? stepProblems : finished
   const usage = tracker.usage()
+  // the page's swaps, then the per-theme DV-THEME swaps of its theme variants
   const swaps = SLUGS.flatMap((page) =>
-    (origServer.swapResults[page] ?? []).map((r) => ({ page, id: r.id, found: r.found })),
+    [page, ...THEMES.map((t) => `${page}@${t}`)].flatMap((key) =>
+      (origServer.swapResults[key] ?? []).map((r) => ({ page, id: r.id, found: r.found })),
+    ),
   )
   const unitFailures = units.filter((u) => !u.ok)
   const ok = unitFailures.length === 0 && problems.length === 0 && units.length > 0

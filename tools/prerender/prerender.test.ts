@@ -237,7 +237,11 @@ describe('build on the configured page (design/pages.json: the raw Oasis Site v2
     expect(check.problems).toEqual([])
     const files = fs.readdirSync(path.join(out, 'assets'))
     expect(files.every((f) => /\.[0-9a-f]{8}\.[a-z0-9]+$/.test(f))).toBe(true)
-    expect(files.filter((f) => f.endsWith('.js'))).toEqual([expect.stringMatching(/^page-index\./)])
+    // the hydration bundle and the pre-hydration theme script (DV-THEME: the device or the stored choice decides)
+    expect(files.filter((f) => f.endsWith('.js')).sort()).toEqual([
+      expect.stringMatching(/^page-index\./),
+      expect.stringMatching(/^theme\./),
+    ])
     expect(files.filter((f) => f.endsWith('.woff2'))).toHaveLength(13)
     expect(files.some((f) => f.startsWith('image-slot'))).toBe(false)
     const index = fs.readFileSync(path.join(out, 'index.html'), 'utf8')
@@ -251,7 +255,9 @@ describe('build on the configured page (design/pages.json: the raw Oasis Site v2
     expect(index).toContain('<template shadowrootmode="open">')
     expect(index).toMatch(/<img src="\/assets\/oasis-logo\.[0-9a-f]{8}\.png" alt="Oasis Auto Spa"/)
     expect(index).toMatch(/<script src="\/assets\/page-index\.[0-9a-f]{8}\.js" defer><\/script>/)
-    expect((index.match(/<script/g) ?? []).length).toBe(2) // the JSON-LD data block and the bundle
+    expect((index.match(/<script/g) ?? []).length).toBe(3) // the JSON-LD data block, the theme script and the bundle
+    // the theme script runs right after the markup it patches, before the deferred bundle
+    expect(index).toMatch(/<\/div>\n<script src="\/assets\/theme\.[0-9a-f]{8}\.js"><\/script>\n<script src="\/assets\/page-index\./)
     expect(index).toContain('"dayOfWeek":"https://schema.org/Monday","opens":"08:00","closes":"18:00"')
     expect(index).not.toContain('schema.org/Sunday')
     expect(index).toMatch(/Sunday<\/span><\/span><span style="color:var\(--ink\);font-weight:600"><span class="sc-interp">Closed<\/span>/)
@@ -267,7 +273,12 @@ describe('build on the configured page (design/pages.json: the raw Oasis Site v2
     expect(js).toContain('2026-06-13T10:36:00-04:00')
     expect(js).toContain('/api/v1/public/availability')
     const manifest = JSON.parse(fs.readFileSync(path.join(out, 'manifest.json'), 'utf8'))
-    expect(manifest.themeScript).toBeNull()
+    expect(manifest.themeScript.file).toMatch(/^assets\/theme\.[0-9a-f]{8}\.js$/)
+    const themeJs = fs.readFileSync(path.join(out, manifest.themeScript.file), 'utf8')
+    expect(themeJs).toContain('(prefers-color-scheme: light)')
+    expect(themeJs).toContain('oasis-theme')
+    expect(themeJs).toContain('#F2F3F1')
+    expect(js).toContain('prop:"theme"')
     expect(manifest.booking).toBe('sms')
     expect(Object.keys(manifest.files)).toContain('404.html')
     const notFound = fs.readFileSync(path.join(out, '404.html'), 'utf8')

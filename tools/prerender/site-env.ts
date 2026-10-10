@@ -79,6 +79,7 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
     catalog: s.catalog,
     fee: { cents: s.booking.feeCents, text: s.booking.feeText },
     brand: s.name,
+    theme: s.theme ?? null,
   }
 }
 

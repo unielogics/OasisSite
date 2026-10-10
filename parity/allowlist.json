@@ -65,6 +65,7 @@
         "scenarios": [
           "initial",
           "theme-toggle",
+          "stored-choice",
           "menu",
           "scroll-pricing",
           "faq",
@@ -101,6 +102,7 @@
         "scenarios": [
           "initial",
           "theme-toggle",
+          "stored-choice",
           "menu",
           "scroll-pricing",
           "faq",

@@ -38,7 +38,10 @@ const NO_ANIMATION_CSS =
 const HIDE_BRANDING_CSS = '#__claude_design_branding{display:none!important}'
 
 export interface ParityContextOptions {
+  /** the run's theme: the device's color scheme on every side (prefers-color-scheme; the site follows it, DV-THEME) */
   theme: Theme
+  /** a theme choice stored on the device before load (localStorage oasis-theme); none by default */
+  stored?: Theme | null
   /** origins the page may talk to; everything else is aborted (data:, blob: and about: are always allowed) */
   allowedOrigins: string[]
   /** hide the "Made with Claude Design" badge that the original bundles append to <body> */
@@ -72,7 +75,7 @@ export async function newParityContext(browser: Browser, opts: ParityContextOpti
     deviceScaleFactor: 1,
     timezoneId: TIMEZONE,
     locale: LOCALE,
-    colorScheme: 'light',
+    colorScheme: opts.theme,
     hasTouch: opts.touch ?? false,
     serviceWorkers: 'block',
     acceptDownloads: false,
@@ -94,11 +97,15 @@ export async function newParityContext(browser: Browser, opts: ParityContextOpti
     blocked.push(route.request().url())
     return route.abort()
   })
-  // Fresh storage per context; the theme is seeded before the page script runs (only when nothing is stored yet, so a
-  // scenario that toggles the theme keeps it across a reload).
+  // Fresh storage per context. The run's theme is the device's color scheme (above); a stored choice is seeded before
+  // the page script runs only when the scenario asks for one (only when nothing is stored yet, so a choice made by the
+  // scenario survives a reload).
+  const seed = opts.stored
+    ? `try { if (!localStorage.getItem(${JSON.stringify(THEME_KEY)})) localStorage.setItem(${JSON.stringify(THEME_KEY)}, ${JSON.stringify(opts.stored)}); } catch (e) {}`
+    : ''
   await ctx.addInitScript(
     `${NAME_SHIM}
-    try { if (!localStorage.getItem(${JSON.stringify(THEME_KEY)})) localStorage.setItem(${JSON.stringify(THEME_KEY)}, ${JSON.stringify(opts.theme)}); } catch (e) {}
+    ${seed}
     (function () {
       var css = ${JSON.stringify(NO_ANIMATION_CSS + (opts.hideBranding ? HIDE_BRANDING_CSS : ''))};
       function ensure() {

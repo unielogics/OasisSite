@@ -2,7 +2,8 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { AddressInfo } from 'node:net'
-import { DEFAULT_ORIGINAL_PORT, DESIGN_DIR, PAGES } from './config'
+import { DEFAULT_ORIGINAL_PORT, DESIGN_DIR, PAGES, ROOT, THEMES, type Theme } from './config'
+import { themeSwaps } from './theme-swap'
 import type { PageSpec } from '../dc-compile/pages'
 import { isBundledPage } from '../intake/raw'
 import { PLACEHOLDER_SIZE, transparentPng } from '../prerender/placeholder'
@@ -27,13 +28,22 @@ export interface ServeOptions {
   swapsBySlug?: Record<string, SwapSpec[]>
   /** Arbitrary source rewrite applied after the swaps; used by the sensitivity self-test to build a mutated "port". */
   transform?: (slug: string, template: string) => string
+  /**
+   * Per page and theme, the extra swaps that render the page in that theme (default: the DV-THEME swap of the data-props
+   * default, tools/parity/theme-swap.ts). A theme with swaps is served as its own variant (`url(slug, hash, theme)`).
+   */
+  themeSwaps?: (slug: string, theme: Theme) => SwapSpec[]
 }
 
 export interface OriginalServer {
   origin: string
   port: number
-  /** URL of a page; the path name becomes the dc `data-sc-name` (stripped by the DOM check). */
-  url(slug: string, hash?: string): string
+  /**
+   * URL of a page, rendered in `theme` when given (the DV-THEME variant; the query parameter is `run-theme`, never
+   * `theme`, which support.js reads for its canvas background). The path name becomes the dc `data-sc-name` (stripped by
+   * the DOM check).
+   */
+  url(slug: string, hash?: string, theme?: Theme): string
   swapResults: Record<string, SwapResult[]>
   close(): Promise<void>
 }
@@ -90,17 +100,21 @@ export async function startOriginalServer(opts: ServeOptions = {}): Promise<Orig
   const pages = opts.pages ?? PAGES
   const html = new Map<string, string>()
   const swapResults: Record<string, SwapResult[]> = {}
+  const themeOf = opts.themeSwaps ?? ((slug: string, theme: Theme) => themeSwaps(ROOT, slug, theme))
   let anyRaw = false
   for (const p of pages) {
-    const built = buildBundle(
-      p.slug,
-      path.join(dir, p.file),
-      opts.swapsBySlug?.[p.slug] ?? [],
-      opts.transform,
-    )
+    const base = opts.swapsBySlug?.[p.slug] ?? []
+    const built = buildBundle(p.slug, path.join(dir, p.file), base, opts.transform)
     html.set(p.slug, built.html)
     swapResults[p.slug] = built.results
     anyRaw ||= built.raw
+    for (const theme of THEMES) {
+      const extra = themeOf(p.slug, theme)
+      if (!extra.length) continue
+      const variant = buildBundle(p.slug, path.join(dir, p.file), [...base, ...extra], opts.transform)
+      html.set(`${p.slug}?${theme}`, variant.html)
+      swapResults[`${p.slug}@${theme}`] = variant.results.slice(base.length)
+    }
   }
   const looseDir = path.join(dir, 'original', 'loose')
   const placeholder = transparentPng(PLACEHOLDER_SIZE, PLACEHOLDER_SIZE)
@@ -115,9 +129,10 @@ export async function startOriginalServer(opts: ServeOptions = {}): Promise<Orig
     return true
   }
   const server = http.createServer((req, res) => {
-    const pathname = (req.url ?? '/').split('?')[0]!
+    const [pathname, query] = (req.url ?? '/').split('?') as [string, string | undefined]
     const m = /^\/orig\/([a-z0-9-]+)\.html$/.exec(pathname)
-    const page = m ? html.get(m[1]!) : undefined
+    const runTheme = new URLSearchParams(query ?? '').get('run-theme')
+    const page = m ? (runTheme ? html.get(`${m[1]}?${runTheme}`) : undefined) ?? html.get(m[1]!) : undefined
     if (page) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }).end(page)
       return
@@ -160,8 +175,8 @@ export async function startOriginalServer(opts: ServeOptions = {}): Promise<Orig
   return {
     origin,
     port,
-    url: (slug, hash) =>
-      `${origin}/orig/${slug}.html${hash ? (hash.startsWith('#') ? hash : `#${hash}`) : ''}`,
+    url: (slug, hash, theme) =>
+      `${origin}/orig/${slug}.html${theme && html.has(`${slug}?${theme}`) ? `?run-theme=${theme}` : ''}${hash ? (hash.startsWith('#') ? hash : `#${hash}`) : ''}`,
     swapResults,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   }

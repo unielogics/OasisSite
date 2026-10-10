@@ -18,7 +18,8 @@ has not supplied, same bytes as the build's), and a 404 for image-slot.js's `.im
 console line, allow-listed as `DV-IMG-sidecar-404`). The original's own `image-slot` drop zones stay as designed; the
 port's placeholders differ only inside the slots, which region masks cover (`DV-IMG-mask-*`).
 
-**Owner decisions on the original.** Before render the original gets every wording decision of
+**Owner decisions on the original.** The original of each run is rendered in the run's theme (the DV-THEME swap of
+its data-props default, see the port contract's theme item). Before render the original gets every wording decision of
 `design-patches/copy-map.json` as a text swap (`tools/parity/copy-swaps.ts`: template, logic and `source` entries,
 identity entries skipped), so the ORIGINAL renders "Book", Sunday closed, no card fields, "Due at checkout", … and the
 port must match it at zero diff. `parity/allowlist.json` holds only what cannot be a swap: the logo's hashed `src`,
@@ -60,8 +61,14 @@ process at a time on the shared box (`flock /tmp/oasis-heavy.lock`).
    `<script type="application/json" id="__oasis-vals">`. The driver reads the hook, else the block, else the React
    fiber (the original's path).
 5. **`data-dc-tpl`** on every element, numbered like the original runtime (the parity compile emits it).
-6. **Theme.** `localStorage["oasis-theme"]`, seeded by the harness before any page script; the theme script patches
-   the baked default before hydration. `data-theme` stays on the wrapper div inside `#dc-root`.
+6. **Theme.** The run's theme is the device's color scheme: both contexts get `colorScheme: <theme>`
+   (prefers-color-scheme), the port follows it (DV-THEME: the theme script patches the baked dark default before
+   hydration and boot passes the decision as the design's `theme` prop), and the ORIGINAL, which ignores the device, is
+   served with the run's theme as its data-props default (the DV-THEME swap, `tools/parity/theme-swap.ts`, as the
+   `?run-theme=light` variant of `serve-original`; `?theme=` is avoided because support.js reads it). Nothing is stored
+   unless a scenario asks (`storedTheme: 'other'`: the opposite theme is seeded in `localStorage["oasis-theme"]` before
+   any page script, and the original is rendered in that stored theme). `data-theme` stays on the wrapper div inside
+   `#dc-root`.
 7. **CSS.** One stylesheet per page with the runtime's sheets in the runtime's order (docs/compiler.md). `html` and
    `body` are part of the computed-style check.
 8. **No timers to become ready.** The clock is frozen; hydration and re-renders happen from events.
@@ -138,7 +145,10 @@ Expected for the real design (not needed by the fixtures): an `attr` entry with 
 ## Scenarios
 
 `tools/parity/scenarios/<slug>.ts`, registered in `scenarios/index.ts` by slug; a page without a module gets the
-automatic `initial` scenario. `scenarios/site.ts` holds the design's: `initial`, `theme-toggle`, `menu` (open,
+automatic `initial` scenario. `scenarios/site.ts` holds the design's: `initial`, `theme-toggle` (from the device theme
+to the other, then `device-flip`: the device's color scheme switches to the other theme and back on both sides, and the
+port's stored choice must hold), `stored-choice` (the opposite theme stored on the device wins on load and over a
+device flip, then the toggle back), `menu` (open,
 appearance Light/Dark, close), `route-{membership,wash,tint,detailing,experience,visit,join}` (hash routes),
 `tint-sim` (shade/film/vehicle chips and a pointer drag on the slider), `scroll-pricing` (the IntersectionObserver
 flips), `faq`, `sheet-guest` (NEXT OPEN → guest → add-on → wash → review → terms → back), `sheet-member`
@@ -165,7 +175,8 @@ details → checkout → terms → back). The submits are sms: navigations in th
 
 ## Phone smoke (`pnpm parity:phone`)
 
-Loads every page of `dist/` at 390x844 and 768x1024 with touch emulation and a fixed (not paused) clock, waits for
-hydration, records the document scroll size, a full-page screenshot (`parity-reports/phone/`) and the console; fails
-on any error, page error or blocked request. The design is fluid, so this is a real phone render (and the first
+Loads every page of `dist/` at 390x844 and 768x1024 with touch emulation and a fixed (not paused) clock, on a light and
+on a dark device (`prefers-color-scheme`, DV-THEME), waits for hydration, records the document scroll size, a full-page
+screenshot (`parity-reports/phone/<page>-<viewport>-<theme>.png`) and the console; fails on any error, page error,
+blocked request, or a `data-theme` that is not the device's. The design is fluid, so this is a real phone render (and the first
 configured parity viewport is the phone).

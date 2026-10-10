@@ -54,4 +54,9 @@ are redacted) and the pending membership row.
    every `sms:` link goes to `+18623885827` (none to the old number), every `tel:` link to `+12015986304` (none to the
    texting number), the Text WASH / quote / tint / member-line links are all there, 201-598-6304 is shown only on a
    `tel:` link and the "Text … " lines show 862-388-5827.
-8. Over every page: no console error or page error, no request to another origin, no 5xx.
+8. Theme (DV-THEME, `page.emulateMedia({ colorScheme })` and the context's `colorScheme`): a light device gets the light
+   page before hydration (bundle held back) and after it; a dark device gets dark; nothing is stored by either; a live
+   device change flips the page while nothing is stored; the header toggle stores its choice, which holds over a live
+   device change and a reload on a device that says otherwise; the menu's Appearance Light on a dark device is stored
+   and kept after a reload; no hydration error in any of them.
+9. Over every page: no console error or page error, no request to another origin, no 5xx.

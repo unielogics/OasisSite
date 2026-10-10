@@ -23,6 +23,11 @@ export interface Scenario {
   hash?: string
   /** both themes by default */
   themes?: readonly Theme[]
+  /**
+   * `other`: a theme choice is stored on the device before load, the opposite of the run's device theme (DV-THEME: the
+   * stored choice must win; the original is rendered with the stored theme)
+   */
+  storedTheme?: 'other'
   /** enable touch emulation (hasTouch) on both pages */
   touch?: boolean
   tags?: readonly string[]

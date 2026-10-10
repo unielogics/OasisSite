@@ -291,7 +291,8 @@ export async function runUnit(ctx: RunContext, scenario: Scenario, theme: Theme,
   const port = ctx.makePort()
   const label = `${scenario.page}/${scenario.id}@${theme}${viewport ? '/' + viewport.name : ''}`
   try {
-    const open = { page: scenario.page, theme, hash: scenario.hash, touch: scenario.touch, viewport }
+    const stored: Theme | null = scenario.storedTheme === 'other' ? (theme === 'light' ? 'dark' : 'light') : null
+    const open = { page: scenario.page, theme, stored, hash: scenario.hash, touch: scenario.touch, viewport }
     await orig.open(open)
     await port.open(open)
     const steps = [

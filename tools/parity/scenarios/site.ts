@@ -33,6 +33,21 @@ const route = (name: string, title: string): Scenario => ({
  */
 const pickableSlot = (a: Actions) => a.css('button').filter({ hasText: /^\d+:\d\d (AM|PM)\s*(OPEN|LAST BAY)$/ }).first()
 
+/**
+ * DV-THEME: the device's color scheme flips to the other theme and back on both sides. The original ignores the device;
+ * the port must too once the visitor's choice is stored (else the flip back would change its theme).
+ */
+const DEVICE_FLIP: ScenarioStep = {
+  id: 'device-flip',
+  title: 'the device switches to the other color scheme and back (a stored choice holds)',
+  run: async (a) => {
+    await a.page.emulateMedia({ colorScheme: a.theme === 'light' ? 'dark' : 'light' })
+    await a.settle()
+    await a.page.emulateMedia({ colorScheme: a.theme })
+    await a.settle()
+  },
+}
+
 const PRICING_SCROLL: ScenarioStep = {
   id: 'pricing-revealed',
   title: 'scroll to the pricing section and let the IntersectionObserver flip the prices',
@@ -46,7 +61,22 @@ const PRICING_SCROLL: ScenarioStep = {
 
 export const siteScenarios: Scenario[] = [
   initialScenario('index', 'the home view on load'),
-  { id: 'theme-toggle', page: 'index', title: 'toggle the theme from the header', tags: ['smoke'], steps: [clickCss('toggled', 'button[aria-label="Theme"]')] },
+  // the run's theme is the device's color scheme on both sides (the original is rendered with it, DV-THEME): the toggle
+  // goes from the device theme to the other one, and the port stores that choice
+  {
+    id: 'theme-toggle',
+    page: 'index',
+    title: 'toggle the theme from the header (from the device theme to the other), then the device flips',
+    tags: ['smoke'],
+    steps: [clickCss('toggled', 'button[aria-label="Theme"]'), DEVICE_FLIP],
+  },
+  {
+    id: 'stored-choice',
+    page: 'index',
+    title: 'a theme stored on the device (the opposite of the device setting) wins on load and over device changes',
+    storedTheme: 'other',
+    steps: [DEVICE_FLIP, clickCss('toggled', 'button[aria-label="Theme"]', 'toggle back to the device theme')],
+  },
   {
     id: 'menu',
     page: 'index',

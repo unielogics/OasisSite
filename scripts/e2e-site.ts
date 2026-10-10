@@ -205,8 +205,13 @@ interface Tracker {
   responses: { url: string; status: number; body: string }[]
 }
 
-async function newPage(browser: Browser, origin: string, timezoneId = 'America/New_York'): Promise<{ ctx: BrowserContext; page: Page; t: Tracker }> {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, timezoneId, locale: 'en-US' })
+async function newPage(
+  browser: Browser,
+  origin: string,
+  timezoneId = 'America/New_York',
+  colorScheme: 'light' | 'dark' = 'light',
+): Promise<{ ctx: BrowserContext; page: Page; t: Tracker }> {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, timezoneId, locale: 'en-US', colorScheme })
   const t: Tracker = { errors: [], blocked: [], fiveHundreds: [], navigations: [], responses: [] }
   await ctx.route('**/*', (route) => {
     const u = new URL(route.request().url())
@@ -272,6 +277,40 @@ const auditContacts = (page: Page): Promise<ContactAudit> =>
     { a: SMS_DISPLAY, b: TEL_DISPLAY },
   )
 const audits: { view: string; audit: ContactAudit }[] = []
+
+/** The page's theme: the design wrapper's data-theme, the body background, the stored choice (DV-THEME). */
+const themeState = (page: Page): Promise<{ attr: string; bg: string; stored: string | null }> =>
+  page.evaluate(() => {
+    let stored: string | null = null
+    try {
+      stored = localStorage.getItem('oasis-theme')
+    } catch {
+      stored = null
+    }
+    return {
+      attr: document.querySelector('#dc-root [data-oa]')?.getAttribute('data-theme') ?? '',
+      bg: document.body.style.background,
+      stored,
+    }
+  })
+const BG = { light: 'rgb(242, 243, 241)', dark: 'rgb(6, 8, 10)' }
+/**
+ * Hydration adopted the prerendered markup: the design wrapper seen when the parser finished (before the deferred bundle
+ * ran) is still the one in the document. A hydration mismatch makes React render the root again on the client (new
+ * nodes) besides logging a recoverable error.
+ */
+const markWrapper = async (page: Page): Promise<void> => {
+  await page.addInitScript(() => {
+    document.addEventListener('readystatechange', () => {
+      if (document.readyState === 'interactive') (window as any).__oasisWrap = document.querySelector('#dc-root [data-oa]')
+    })
+  })
+}
+const adopted = (page: Page): Promise<boolean> =>
+  page.evaluate(() => {
+    const w = (window as any).__oasisWrap as Element | null | undefined
+    return !!w && w.isConnected && w === document.querySelector('#dc-root [data-oa]')
+  })
 const settle = (page: Page) => page.waitForTimeout(250)
 
 // ---- the run --------------------------------------------------------------------------------------------------------------
@@ -632,7 +671,80 @@ async function main(): Promise<number> {
     check('time zone: no hydration error in Los Angeles', far.t.errors.length === 0, far.t.errors.slice(0, 2).join(' | '))
     await far.ctx.close()
 
-    // 8c. texting vs calling (DV-CONTACT): every view's sms: links, tel: links and visible numbers
+    // 8c. the theme follows the device until the visitor picks one, which is remembered (DV-THEME)
+    {
+      const errorsOf = (t: Tracker) => t.errors.filter((e) => !/Failed to load resource/.test(e))
+      // device light, nothing stored: light from the first paint (the theme script alone, with the bundle held back)
+      const held = await newPage(browser, smsProxy.origin, 'America/New_York', 'light')
+      trackers.push(held.t)
+      await held.page.route(/\/assets\/page-index\.[0-9a-f]+\.js$/, (r) => r.abort())
+      await held.page.goto(`${smsProxy.origin}/`, { waitUntil: 'load' })
+      const before = await themeState(held.page)
+      check('theme: device light -> light before hydration (the theme script alone, no bundle)', before.attr === 'light' && before.bg === BG.light && before.stored === null, JSON.stringify(before))
+      await held.ctx.close()
+      held.t.errors.length = 0 // the aborted bundle's load error
+      // device light / dark, nothing stored: hydrated in that theme without a hydration error
+      for (const scheme of ['light', 'dark'] as const) {
+        const d = await newPage(browser, smsProxy.origin, 'America/New_York', scheme)
+        trackers.push(d.t)
+        await markWrapper(d.page)
+        await d.page.goto(`${smsProxy.origin}/`, { waitUntil: 'load' })
+        await ready(d.page)
+        const st = await themeState(d.page)
+        const kept = await adopted(d.page)
+        check(`theme: device ${scheme} -> ${scheme} page, nothing stored, hydration adopted the markup without an error`, st.attr === scheme && st.bg === BG[scheme] && st.stored === null && kept && errorsOf(d.t).length === 0, `${JSON.stringify(st)} adopted=${kept} ${errorsOf(d.t).slice(0, 2).join(' | ')}`)
+        await d.ctx.close()
+      }
+      // a live change of the device setting flips the page while nothing is stored, and is not stored
+      const live = await newPage(browser, smsProxy.origin, 'America/New_York', 'light')
+      trackers.push(live.t)
+      await markWrapper(live.page)
+      await live.page.goto(`${smsProxy.origin}/`, { waitUntil: 'load' })
+      await ready(live.page)
+      await live.page.emulateMedia({ colorScheme: 'dark' })
+      await settle(live.page)
+      const toDark = await themeState(live.page)
+      await live.page.emulateMedia({ colorScheme: 'light' })
+      await settle(live.page)
+      const toLight = await themeState(live.page)
+      check('theme: a live device change flips the page while nothing is stored (and is not stored)', toDark.attr === 'dark' && toDark.bg === BG.dark && toLight.attr === 'light' && toLight.bg === BG.light && toLight.stored === null, `${JSON.stringify(toDark)} -> ${JSON.stringify(toLight)}`)
+      // the header toggle is stored; it holds over a live device change and a reload on a device that says otherwise
+      await live.page.locator('#dc-root button[aria-label="Theme"]').click()
+      await settle(live.page)
+      const toggled = await themeState(live.page)
+      check('theme: the header toggle switches to dark and stores the choice', toggled.attr === 'dark' && toggled.bg === BG.dark && toggled.stored === 'dark', JSON.stringify(toggled))
+      await live.page.emulateMedia({ colorScheme: 'dark' })
+      await settle(live.page)
+      await live.page.emulateMedia({ colorScheme: 'light' })
+      await settle(live.page)
+      const held2 = await themeState(live.page)
+      check('theme: with a stored choice a live device change does nothing', held2.attr === 'dark' && held2.stored === 'dark', JSON.stringify(held2))
+      await live.page.reload({ waitUntil: 'load' })
+      await ready(live.page)
+      const reloaded = await themeState(live.page)
+      const liveKept = await adopted(live.page)
+      check('theme: after a reload the stored dark wins over the light device, hydration adopted the markup without an error', reloaded.attr === 'dark' && reloaded.bg === BG.dark && liveKept && errorsOf(live.t).length === 0, `${JSON.stringify(reloaded)} adopted=${liveKept} ${errorsOf(live.t).slice(0, 2).join(' | ')}`)
+      await live.ctx.close()
+      // the menu's Appearance Light on a dark device is stored and wins on the next visit
+      const menu = await newPage(browser, smsProxy.origin, 'America/New_York', 'dark')
+      trackers.push(menu.t)
+      await markWrapper(menu.page)
+      await menu.page.goto(`${smsProxy.origin}/`, { waitUntil: 'load' })
+      await ready(menu.page)
+      await menu.page.locator('#dc-root button[aria-label="Menu"]').click()
+      await settle(menu.page)
+      await btn(menu.page, /^\s*Light\s*$/).click()
+      await settle(menu.page)
+      const picked = await themeState(menu.page)
+      await menu.page.reload({ waitUntil: 'load' })
+      await ready(menu.page)
+      const kept = await themeState(menu.page)
+      const menuKept = await adopted(menu.page)
+      check('theme: menu Appearance Light on a dark device is stored and kept after a reload, hydration adopted the markup without an error', picked.attr === 'light' && picked.stored === 'light' && kept.attr === 'light' && kept.bg === BG.light && menuKept && errorsOf(menu.t).length === 0, `${JSON.stringify(picked)} -> ${JSON.stringify(kept)} adopted=${menuKept} ${errorsOf(menu.t).slice(0, 2).join(' | ')}`)
+      await menu.ctx.close()
+    }
+
+    // 8d. texting vs calling (DV-CONTACT): every view's sms: links, tel: links and visible numbers
     const tour = await newPage(browser, smsProxy.origin)
     trackers.push(tour.t)
     await tour.page.goto(`${smsProxy.origin}/`, { waitUntil: 'load' })

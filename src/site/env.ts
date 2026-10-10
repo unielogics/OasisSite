@@ -3,6 +3,7 @@
 // availability snapshots baked into the page, and the booking mode (SITE_BOOKING=sms|live).
 import type { PublicHours } from '../hours/format'
 import type { Availability } from './availability'
+import type { ThemeConfig } from '../client/theme'
 
 export type BookingMode = 'sms' | 'live'
 
@@ -53,4 +54,6 @@ export interface SiteEnv {
   catalog: CatalogConfig
   fee: { cents: number; text: string }
   brand: string
+  /** site.config.json theme: the bridge follows the device setting and stores the visitor's choice (DV-THEME) */
+  theme: ThemeConfig | null
 }

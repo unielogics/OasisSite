@@ -33,6 +33,23 @@ export interface BootOptions {
   timeZone?: string | null
   /** the custom element rendered as a static placeholder (site.config.json imageSlots.tag), upgraded on the client */
   imageSlotTag?: string | null
+  /**
+   * The design's theme prop and its values: the pre-hydration theme script (src/client/theme.entry.ts) decided the
+   * theme from the visitor's stored choice or device setting and patched the markup; the logic gets that decision as
+   * this prop so its first client render equals the patched DOM (DEVIATIONS.md DV-THEME).
+   */
+  theme?: { prop: string; values: string[] } | null
+}
+
+/** The user props with the pre-hydration theme decision (window.__oasisTheme) in the design's theme prop. */
+export function withThemeDecision(
+  userProps: Record<string, unknown>,
+  theme: BootOptions['theme'],
+  decision: { theme?: unknown } | null | undefined,
+): Record<string, unknown> {
+  if (!theme || !decision || typeof decision.theme !== 'string' || !theme.values.includes(decision.theme))
+    return userProps
+  return { ...userProps, [theme.prop]: decision.theme }
 }
 
 /** UTC offset (ms, east positive) of `timeZone` at instant `t`, through Intl; null when the zone is unknown. */
@@ -144,7 +161,11 @@ export function boot(o: BootOptions): void {
       meta: o.meta,
       Logic: o.Logic,
       render: o.render,
-      userProps: o.userProps,
+      userProps: withThemeDecision(
+        o.userProps,
+        o.theme,
+        (window as unknown as { __oasisTheme?: { theme?: unknown } }).__oasisTheme,
+      ),
       beforeMount: restore,
     }),
     {

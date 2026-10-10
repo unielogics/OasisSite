@@ -129,12 +129,22 @@ export function checkDist(dist: string, marker: string): CheckResult {
   if (set.has('manifest.json')) {
     const manifest = JSON.parse(fs.readFileSync(path.join(dist, 'manifest.json'), 'utf8')) as {
       files?: Record<string, string>
-      pages?: { file: string }[]
+      pages?: { file: string; hydrated?: boolean }[]
+      themeScript?: { file: string } | null
     }
     for (const [f] of Object.entries(manifest.files ?? {}))
       if (!set.has(f)) problems.push(`manifest.json lists ${f} which is missing`)
     for (const p of manifest.pages ?? [])
       if (!set.has(p.file)) problems.push(`manifest.json page ${p.file} is missing`)
+    // DV-THEME: the pre-hydration theme script must run on the markup before the first paint and before hydration:
+    // a plain (blocking) external script right after #dc-root on every hydrated page
+    const theme = manifest.themeScript?.file
+    if (theme)
+      for (const p of (manifest.pages ?? []).filter((x) => x.hydrated && set.has(x.file))) {
+        const html = fs.readFileSync(path.join(dist, p.file), 'utf8')
+        if (!html.includes(`</div>\n<script src="/${theme}"></script>`))
+          problems.push(`${p.file}: the theme script /${theme} is not a blocking script right after #dc-root`)
+      }
   }
   return { ok: problems.length === 0, problems, files: files.length, pages }
 }

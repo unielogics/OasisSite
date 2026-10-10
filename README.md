@@ -4,7 +4,8 @@ The marketing site at https://oasisautospanj.com, built from the owner's Claude 
 (`design/original/Oasis Site v2.dc.html`, a raw design document with its loose files) with the same fidelity rule as the
 dashboard: the design is followed pixel for pixel, every deviation is listed in `design-patches/DEVIATIONS.md` with a
 DV id (the owner's decisions of 2026-10-10: live hours with Sunday closed, real availability and booking with an SMS
-fallback, no card capture, placeholder photos, self-hosted fonts, a separate texting number), and a parity harness proves zero difference between
+fallback, no card capture, placeholder photos, self-hosted fonts, the theme following the visitor's device, a separate
+texting number), and a parity harness proves zero difference between
 the original and `dist/` (DOM, computed style and rects, pixels at threshold 0, `renderVals`, console) at 390x844 and
 1440x900 in both themes, with the owner's decisions applied to the original as text swaps.
 
@@ -33,7 +34,8 @@ See `docs/intake.md`, `docs/compiler.md`, `docs/site.md` (the bridge: hours, ava
   `dist/manifest.json` (every file with its sha256, the build instant, the booking mode, the placeholder assets).
 - Every other file is a content-hashed asset under **`dist/assets/<name>.<hash>.<ext>`** (CSS, 13 self-hosted woff2 files,
   the logo and icons, one JS bundle). `/assets/` can be cached as immutable, HTML as `no-cache`.
-- **No inline `<script>` with executable content** (the only inline script is the LocalBusiness JSON-LD data block);
+- **No inline `<script>` with executable content** (the only inline script is the LocalBusiness JSON-LD data block; the
+  pre-hydration theme script, DV-THEME, is the external `/assets/theme.<hash>.js` right after `#dc-root`);
   **no external request** of any kind (fonts, scripts and images are all under `/assets/`).
 - Environment read at build time: `SITE_URL`, `SITE_HOURS_JSON` (fallback: `src/data/hours.fallback.json`, Sunday
   closed), `SITE_AVAILABILITY_JSON`, `SITE_BOOKING` (`sms` default | `live`), `SITE_API_ORIGIN` (default same origin),

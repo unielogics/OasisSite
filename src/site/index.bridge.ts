@@ -9,10 +9,12 @@
 //   DV-JOIN   joining creates the member record; the checkout link is texted (no card fields)
 //   DV-CLOCK  the first client render is pinned to the build instant so hydration matches the prerendered markup
 //   DV-HASH   the home view is prerendered; #/… views render after mount
+//   DV-THEME  the theme follows the device (prefers-color-scheme) live until the visitor picks one, which is remembered
 import type { PublicHours } from '../hours/format'
 import { validatePublicHours } from '../hours/format'
 import { daysFromAvailability, daysFromHours, validateAvailability, type Availability, type DesignDay } from './availability'
 import type { SiteEnv } from './env'
+import { decideTheme, LIGHT_QUERY, readStoredTheme, storeTheme, type ThemeConfig } from '../client/theme'
 import { designTime, hoursRows, hoursTable, withToday, type HoursTable } from './hours'
 
 type AnyLogic = new (props?: any) => any
@@ -43,6 +45,17 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
   const DAYS = env.availabilityDays || 5
   const fetchDays = DAYS + 2
   const api = (p: string): string => env.apiOrigin.replace(/\/$/, '') + p
+  // DV-THEME: only when the design's theme is a prop that follows the device (site.config.json theme)
+  const themeCfg: ThemeConfig | null = env.theme && env.theme.prop && env.theme.followSystem ? env.theme : null
+  const storage = (): Storage | null => {
+    try {
+      return window.localStorage
+    } catch {
+      return null
+    }
+  }
+  const matchMedia = (): ((q: string) => MediaQueryList) | null =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? (q: string) => window.matchMedia(q) : null
   // texts go to the texting number (DV-CONTACT: contact.smsE164); calls stay on contact.phoneE164
   const smsUrl = (body: string): string => `sms:${env.contact.smsE164}?&body=${encodeURIComponent(body)}`
 
@@ -59,6 +72,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     __busy = false
     __catalog: { services: { key: string; name: string; kind?: string; durationMin?: number }[]; addons: { key: string; name: string }[] } | null = null
     __catalogReady: Promise<void> | null = null
+    __schemeMq: MediaQueryList | null = null
+    __onScheme: ((e: { matches: boolean }) => void) | null = null
 
     constructor(props?: any) {
       super(props)
@@ -77,8 +92,42 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       // the design's own first-paint state, now with the real clock and the real hash
       this.setState({ now: Date.now(), flapAt: Date.now() })
       if (typeof location !== 'undefined' && location.hash.replace(/^#\/?/, '') !== '') this._hc()
+      this.__followDevice()
       void this.__refreshHours()
       void this.__refreshAvailability()
+    }
+
+    componentWillUnmount(): void {
+      const mq = this.__schemeMq as any
+      if (mq && this.__onScheme) {
+        if (typeof mq.removeEventListener === 'function') mq.removeEventListener('change', this.__onScheme)
+        else if (typeof mq.removeListener === 'function') mq.removeListener(this.__onScheme)
+      }
+      super.componentWillUnmount()
+    }
+
+    // ---- DV-THEME: the device decides until the visitor does ------------------------------------------------------------
+    /**
+     * The pre-hydration script (src/client/theme.entry.ts) already applied the decision and boot passed it as the theme
+     * prop; should the script not have run, the decision is applied now (after hydration, so nothing mismatches). From
+     * here a change of the device setting is applied while no choice is stored, through the design's own state
+     * (themeOverride), and never stored.
+     */
+    __followDevice(): void {
+      if (!themeCfg) return
+      const want = decideTheme(themeCfg, storage(), matchMedia()).theme
+      if (want !== this.theme()) this.setState({ themeOverride: want })
+      const mm = matchMedia()
+      if (!mm) return
+      const mq = mm(LIGHT_QUERY) as any
+      this.__schemeMq = mq
+      this.__onScheme = (e: { matches: boolean }) => {
+        if (readStoredTheme(themeCfg, storage())) return
+        const t = e.matches && themeCfg.values.includes('light') ? 'light' : themeCfg.default
+        if (t !== this.theme()) this.setState({ themeOverride: t })
+      }
+      if (typeof mq.addEventListener === 'function') mq.addEventListener('change', this.__onScheme)
+      else if (typeof mq.addListener === 'function') mq.addListener(this.__onScheme)
     }
 
     // ---- DV-HOURS -----------------------------------------------------------------------------------------------------
@@ -252,6 +301,20 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         codeErr: this.state.bk?.codeErr || '',
         busy: this.__busy,
         smsHref: smsUrl(env.contact.smsKeyword),
+      }
+      if (themeCfg) {
+        // the visitor's own choice (header toggle, menu Dark/Light) is remembered on the device (DV-THEME); the design's
+        // handlers set state synchronously, so this.theme() already reads the new theme
+        const remember =
+          (fn: any) =>
+          (...args: any[]) => {
+            const r = typeof fn === 'function' ? fn(...args) : undefined
+            storeTheme(themeCfg, storage(), this.theme())
+            return r
+          }
+        v.toggleTheme = remember(v.toggleTheme)
+        v.setDark = remember(v.setDark)
+        v.setLight = remember(v.setLight)
       }
       return v
     }

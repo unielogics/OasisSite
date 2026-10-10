@@ -58,6 +58,14 @@ Written by the build, imported by the bridge and the prerender, bundled into the
   real time (`now`, `flapAt`) and applies the URL hash (`#/membership` etc. render after mount; the home view is the
   prerendered one).
 
+- **Theme (DV-THEME).** `site.config.json` `theme` (`prop: "theme"`, `followSystem`, the body backgrounds) makes the
+  build ship `src/client/theme.entry.ts` as `/assets/theme.<hash>.js`, a blocking script right after `#dc-root`: it
+  decides the theme (a stored `localStorage["oasis-theme"]` choice, else the device's `prefers-color-scheme: light`, else
+  the design's dark default), patches `data-theme`, sets the body background and exposes `window.__oasisTheme`; boot
+  passes the decision as the design's `theme` prop (`withThemeDecision`). The bridge listens to
+  `matchMedia('(prefers-color-scheme: light)')` and applies a change as `themeOverride` only while nothing is stored, and
+  wraps `toggleTheme`/`setDark`/`setLight` to store the visitor's choice.
+
 `window.__oasisNavigate(url)` is a test hook: when defined, sms:/tel: navigations go to it instead of
 `location.href` (scripts/e2e-site.ts).
 

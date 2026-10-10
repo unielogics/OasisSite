@@ -4,7 +4,18 @@
   "siteUrl": "https://oasisautospanj.com",
   "marker": "Oasis Auto Spa",
   "viewport": null,
-  "theme": null,
+  "theme": {
+    "storageKey": "oasis-theme",
+    "attribute": "data-theme",
+    "default": "dark",
+    "values": ["dark", "light"],
+    "prop": "theme",
+    "followSystem": true,
+    "background": {
+      "dark": "#06080A",
+      "light": "#F2F3F1"
+    }
+  },
   "icon": "/assets/oasis-logo.png",
   "hours": {
     "endpoint": "/api/v1/public/hours",

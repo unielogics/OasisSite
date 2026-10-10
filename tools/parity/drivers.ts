@@ -17,7 +17,10 @@ import { serializeVals } from './vals-serialize'
 
 export interface OpenOptions {
   page: string
+  /** the run's theme = the device's color scheme on both sides */
   theme: Theme
+  /** a choice stored on the device before load (the port renders it; the original is rendered with it, DV-THEME) */
+  stored?: Theme | null
   hash?: string
   touch?: boolean
   viewport?: { width: number; height: number }
@@ -113,6 +116,7 @@ export abstract class PageDriver implements Driver {
     const extra = await this.prepare(opts)
     this.pc = await newParityContext(this.browser, {
       theme: opts.theme,
+      stored: opts.stored ?? null,
       allowedOrigins: this.allowedOrigins(),
       hideBranding: this.hideBranding,
       touch: opts.touch,
@@ -275,8 +279,12 @@ export class OriginalDriver extends PageDriver {
     return { intercepts: defaultIntercepts() }
   }
 
+  /**
+   * The original has no storage and ignores the device setting; it is rendered with the theme the port must show for
+   * this run: the stored choice, else the device's (the DV-THEME swap of its data-props default, serve-original).
+   */
   protected urlFor(o: OpenOptions): string {
-    return this.server.url(o.page, o.hash)
+    return this.server.url(o.page, o.hash, o.stored ?? o.theme)
   }
 
   protected async waitReady(): Promise<void> {

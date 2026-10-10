@@ -93,7 +93,8 @@ export interface CompiledPageMeta {
   assetPaths: string[]
   /** x-import wrapper modules this page imports (relative to .generated) */
   importModules: string[]
-  /** the logic reads localStorage[<key>] (site.config.json theme.storageKey) */
+  /** the page needs the pre-hydration theme script: the logic reads localStorage[<key>] (site.config.json
+   *  theme.storageKey), or the design's theme prop (theme.prop) defaults to theme.default */
   usesThemeStorage: boolean
   preview: Record<string, unknown> | null
   templateSha256: string
@@ -143,7 +144,7 @@ function dropHelmetLinks(links: PageMetaJson['helmetLinks'], scripts: string[], 
 
 export interface SiteCompileConfig {
   name: string
-  theme?: { storageKey?: string } | null
+  theme?: { storageKey?: string; prop?: string | null; default?: string } | null
   imageSlots?: { tag: string } | null
   bridges?: Record<string, string>
 }
@@ -357,9 +358,12 @@ export function compilePage(page: PageSpec, opts: CompileOptions): PageResult {
     fontFiles,
     assetPaths,
     importModules,
+    // the page gets the pre-hydration theme script: its logic reads the stored theme itself, or its theme is a prop
+    // that boot fills with the script's decision (site.config.json theme.prop, DV-THEME)
     usesThemeStorage:
       (themeKey !== null && logicSrc.includes(`'${themeKey}'`)) ||
-      (themeKey !== null && logicSrc.includes(`"${themeKey}"`)),
+      (themeKey !== null && logicSrc.includes(`"${themeKey}"`)) ||
+      (!!site.theme?.prop && (metaJson.propDefaults ?? {})[site.theme.prop] === site.theme.default),
     preview: metaJson.preview,
     templateSha256: sha(templateSource),
     patchesSha256: cfg.sha,

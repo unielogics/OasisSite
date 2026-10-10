@@ -94,6 +94,21 @@ of every entry below.
   getters and the page is prerendered in the shop's zone, so `Date.now()` and `new Date()` are shifted by the gap
   between the visitor's and the shop's UTC offsets (zero in New Jersey). A visitor elsewhere sees the shop's "today",
   clock label and opening times, and hydration matches the markup (src/client/boot.tsx `installShopClock`).
+- **DV-THEME** The design's theme is a data-props default (**dark**) plus the header toggle and the menu's Appearance
+  Dark/Light, and nothing is remembered. The site **follows the visitor's device** (`prefers-color-scheme: light` ->
+  light; dark or no preference -> dark, the design's default), follows a change of that setting live while the page is
+  open, until the visitor picks a theme with the design's own controls; that choice is **remembered on the device**
+  (`localStorage["oasis-theme"]`, errors ignored) and wins over the device setting on later visits
+  (`site.config.json` `theme`). The markup is prerendered dark; a tiny external script right after `#dc-root`
+  (`src/client/theme.entry.ts`, no inline script under the CSP) decides before the first paint, patches `data-theme` on
+  the wrapper, sets the body background the way the design's `componentDidUpdate` does (`#F2F3F1` / `#06080A`) and
+  exposes the decision; boot passes it as the design's `theme` prop so hydration matches. The bridge applies live device
+  changes through the design's own `themeOverride` only while nothing is stored, and stores the toggle/Dark/Light
+  choices (never the device-driven changes). Harness: the "light"/"dark" runs emulate that color scheme on both sides
+  and the ORIGINAL is rendered with the run's theme as its data-props default (the **DV-THEME swap**,
+  `tools/parity/theme-swap.ts`: `"default":"dark"` -> `"default":"light"` in the theme prop of the raw document's
+  `data-props`, light runs only); the `stored-choice` scenario seeds the opposite theme as the stored choice and renders
+  the original in it.
 - **DV-HASH** `#/membership`, `#/wash`, … are client-side views of the one document. The home view is prerendered;
   a hash in the URL is applied right after mount (the design's own `hashchange` handler). The sitemap lists `/` only.
 - **DV-HEAD** Additions outside `#dc-root`: `<html lang="en">`, description, canonical, Open Graph (image = the
