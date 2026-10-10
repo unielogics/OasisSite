@@ -19,7 +19,7 @@
     "dc:check": "tsx tools/dc-compile/index.ts --check",
     "build": "pnpm assert:react && pnpm design:verify && tsx tools/prerender/build.ts",
     "build:html": "tsx tools/prerender/build.ts --html-only",
-    "build:parity": "PRERENDER_NOW=2026-06-13T10:36:00-04:00 tsx tools/prerender/build.ts --variant=parity --out dist-parity",
+    "build:parity": "tsx tools/parity/build-parity.ts",
     "check:dist": "tsx scripts/check-dist.ts",
     "serve:dist": "tsx tools/parity/serve-dist.ts",
     "parity": "tsx tools/parity/cli.ts",
@@ -32,7 +32,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run --passWithNoTests",
-    "check": "pnpm assert:react && pnpm design:verify && pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm assert:react && pnpm design:verify && pnpm lint && pnpm typecheck && pnpm test",
+    "intake:fonts": "tsx tools/intake/fonts.ts",
+    "e2e:site": "tsx scripts/e2e-site.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

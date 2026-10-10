@@ -1,0 +1,15 @@
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  [data-oa]{--bg:#06080A;--bg2:#0A0E12;--panel:#0E1318;--inset:#06080A;--line:rgba(255,255,255,.1);--line2:rgba(255,255,255,.06);--ink:#F2F5F7;--ink2:#B7C0C8;--ink3:#8C97A1;--ink4:#5E6A75;--accentText:#1FB6FF;--cyanInk:#BFEAFF;--cyanSoft:rgba(31,182,255,.1);--cyanBrd:rgba(31,182,255,.34);--amber:#FFB547;--glass:rgba(6,8,10,.8);--card:linear-gradient(180deg,#10161C,#0A0D11);--shadow:0 30px 70px rgba(0,0,0,.5);--btn2:rgba(255,255,255,.05);--inv:#F2F5F7;--invInk:#06080A;--chrome:linear-gradient(180deg,#FFFFFF 0%,#DCE3E9 40%,#7C8893 53%,#EEF2F5 64%,#A9B4BE 100%);--hero:radial-gradient(120% 60% at 85% 110%,rgba(31,182,255,.28),transparent 60%),radial-gradient(90% 50% at 0% 0%,rgba(255,255,255,.06),transparent 60%),linear-gradient(162deg,#11171D 0%,#07090C 48%,#030405 100%);--sheen:rgba(255,255,255,.07);--ok:#2EE59D;--bad:#FF5A52;}
+  [data-oa][data-theme="light"]{--bg:#F2F3F1;--bg2:#FFFFFF;--panel:#FFFFFF;--inset:#E9ECEB;--line:rgba(10,13,16,.12);--line2:rgba(10,13,16,.07);--ink:#0A0D10;--ink2:#3F4851;--ink3:#5F6973;--ink4:#89929A;--accentText:#0272AD;--cyanInk:#014F7A;--cyanSoft:rgba(31,182,255,.13);--cyanBrd:rgba(2,114,173,.32);--amber:#A86200;--glass:rgba(242,243,241,.84);--card:linear-gradient(180deg,#FFFFFF,#F7F8F7);--shadow:0 24px 60px rgba(10,13,16,.12);--btn2:rgba(10,13,16,.04);--inv:#0A0D10;--invInk:#FFFFFF;--chrome:linear-gradient(180deg,#3A434C 0%,#6B7681 38%,#0A0D10 52%,#4A555F 66%,#1C2329 100%);--hero:radial-gradient(120% 60% at 85% 110%,rgba(31,182,255,.24),transparent 60%),radial-gradient(90% 50% at 0% 0%,rgba(255,255,255,.9),transparent 60%),linear-gradient(162deg,#FFFFFF 0%,#ECEFF1 50%,#D5DADE 100%);--sheen:rgba(255,255,255,.65);--ok:#0E8A55;--bad:#D23A2F;}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;}
+  a{color:var(--accentText);text-decoration:none;}
+  a:hover{color:var(--ink);}
+  input::placeholder{color:var(--ink4);}
+  input:focus{outline:none;border-color:#1FB6FF!important;}
+  ::selection{background:#1FB6FF;color:#00131D;}
+  @keyframes oaPulse{0%{box-shadow:0 0 0 0 rgba(31,182,255,.7);}70%{box-shadow:0 0 0 9px rgba(31,182,255,0);}100%{box-shadow:0 0 0 0 rgba(31,182,255,0);}}
+  @keyframes oaDot{0%,80%,100%{opacity:.25;transform:translateY(0);}40%{opacity:1;transform:translateY(-3px);}}
+  @keyframes oaIn{from{opacity:0;transform:translateY(10px) scale(.98);}to{opacity:1;transform:none;}}
+  @keyframes oaRise{from{opacity:0;transform:translateY(40px) rotateX(18deg) scale(.92);}to{opacity:1;transform:none;}}

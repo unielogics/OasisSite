@@ -1,4 +1,1 @@
-[
-  { "slug": "settings", "route": "/", "file": "fixtures/settings.bundle.html", "name": "Oasis Settings" },
-  { "slug": "payments", "route": "/payments", "file": "fixtures/payments.bundle.html", "name": "Oasis Payments" }
-]
+[{ "slug": "index", "route": "/", "file": "original/Oasis Site v2.dc.html", "name": "Oasis Site v2" }]

@@ -36,6 +36,8 @@ export interface Inventory {
     atomics: boolean
   }
   mediaQueries: string[]
+  /** custom elements of the template (a tag with a dash that is not one of the runtime's sc-, x- or dc- tags), with their count */
+  customElements: Record<string, number>
   root: {
     tag: string
     style: string | null
@@ -107,6 +109,7 @@ export function inventoryOf(extractedDir: string, slug: string): Inventory {
     xImports,
     helmet: { sheets: [], links: meta.helmetLinks, scripts: meta.helmetScripts, atomics: meta.helmetAtomics },
     mediaQueries: [],
+    customElements: {},
     root: null,
     theme: { attributeBinding: null, storageKey: null, values: [] },
     logic: {},
@@ -148,6 +151,7 @@ export function inventoryOf(extractedDir: string, slug: string): Inventory {
       }
       if (!afterHelmet && n.tag !== 'sc-if' && n.tag !== 'sc-for' && (seenHelmet || list === nodes))
         afterHelmet = n
+      if (n.tag.includes('-') && !/^(sc|x|dc)-/.test(n.tag)) inv.customElements[n.tag] = (inv.customElements[n.tag] ?? 0) + 1
       if (n.tag === 'sc-if') {
         inv.constructs.scIf++
         const w = wholeBinding(n.attrs.find((a) => a.name === 'value')?.value ?? '', 'sc-if')
@@ -348,7 +352,8 @@ export function renderReport(invs: Inventory[], extractedDir: string): string {
       }; scripts: ${i.helmet.scripts}; data-dc-atomics: ${i.helmet.atomics}`,
     )
     L.push(
-      `- @media queries: ${i.mediaQueries.length ? i.mediaQueries.map((m) => `\`${m}\``).join(', ') : 'none (fixed-width design)'}`,
+      `- @media queries: ${i.mediaQueries.length ? i.mediaQueries.map((m) => `\`${m}\``).join(', ') : i.root?.width ? 'none (fixed-width design)' : 'none (the root has no fixed width: a fluid layout)'}`,
+      `- Custom elements: ${Object.keys(i.customElements).length ? Object.entries(i.customElements).map(([t, n]) => `\`<${t}>\` x${n}`).join(', ') : 'none'}`,
     )
     L.push(
       `- x-import: ${i.xImports.length ? i.xImports.map((x) => `tpl ${x.tpl} from [${x.from.join(' ')}] component "${x.component || x.globalName}"${x.unresolved.length ? ` UNRESOLVED ${x.unresolved.join(' ')}` : ''}`).join('; ') : 'none'}`,

@@ -1,82 +1,99 @@
 {
   "files": {
-    "bricolage-grotesque-latin-ext.woff2": {
-      "sha256": "776f6dcaf03636cd69a5802c94808cc8896c0a66c8e9ce0fe147231b6ee01957",
-      "family": "Bricolage Grotesque",
+    "archivo-latin-ext.woff2": {
+      "sha256": "5717f37059660ca5c899bad6c48ee22c3ac55cb3c484055241689d0f905a1a86",
+      "family": "Archivo",
       "subset": "latin-ext",
-      "bytes": 30736
+      "bytes": 86240
     },
-    "bricolage-grotesque-latin.woff2": {
-      "sha256": "a79fdb52d4a5c76552452f69202add96e287401fff03d3e8c0e38b4dcb5a99cd",
-      "family": "Bricolage Grotesque",
+    "archivo-latin.woff2": {
+      "sha256": "e3a28eade21a900c7155a247757f4b2834c07bb7ef07ad7efa55cebaac1e8f5e",
+      "family": "Archivo",
       "subset": "latin",
-      "bytes": 76888
+      "bytes": 90104
     },
-    "bricolage-grotesque-vietnamese.woff2": {
-      "sha256": "b50a9d90a5264f20d1e45be0b948fe947ddb3644557f1e85ef5d3bd06427c944",
-      "family": "Bricolage Grotesque",
+    "archivo-vietnamese.woff2": {
+      "sha256": "332e6f66de84927cdffc60894e4e186ced783f5cb4b3e88200f45b7c1d306810",
+      "family": "Archivo",
       "subset": "vietnamese",
-      "bytes": 12984
+      "bytes": 34464
     },
-    "manrope-cyrillic-ext.woff2": {
-      "sha256": "de37de877dc17e4577341fa68bb5cb526b53d54cb29721e674208546a3c7849d",
-      "family": "Manrope",
+    "hanken-grotesk-cyrillic-ext.woff2": {
+      "sha256": "7ba47c78279dc529afe577dc2476bc8fd3c0e32f78efa26dca9f9382d49a157d",
+      "family": "Hanken Grotesk",
       "subset": "cyrillic-ext",
-      "bytes": 2552
+      "bytes": 1668
     },
-    "manrope-cyrillic.woff2": {
-      "sha256": "c268b459a9329e59fecf39a17618efd44c71735532048d60b12aab76a8c14914",
-      "family": "Manrope",
-      "subset": "cyrillic",
-      "bytes": 14500
-    },
-    "manrope-greek.woff2": {
-      "sha256": "2fb2e8cbfd52ae46179a8b6024eb162f1f9c6de3d22d6e3a30d8f395de7220be",
-      "family": "Manrope",
-      "subset": "greek",
-      "bytes": 9444
-    },
-    "manrope-latin-ext.woff2": {
-      "sha256": "3911b66d9f2e005a4b989223405d0e5032619c668597ba467cc76a23c8fffcfb",
-      "family": "Manrope",
+    "hanken-grotesk-latin-ext.woff2": {
+      "sha256": "768af2923e0ab1549f1dfba0a5c8ea749c4c01f01d8e77ffaf7fcd12f57a0a24",
+      "family": "Hanken Grotesk",
       "subset": "latin-ext",
-      "bytes": 15120
+      "bytes": 19588
     },
-    "manrope-latin.woff2": {
-      "sha256": "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972",
-      "family": "Manrope",
+    "hanken-grotesk-latin.woff2": {
+      "sha256": "e9201eddf1d41d0b62253295d869ce3cf65768f7102b797f02c7f8c876b4a9d5",
+      "family": "Hanken Grotesk",
       "subset": "latin",
-      "bytes": 24836
+      "bytes": 34704
     },
-    "manrope-vietnamese.woff2": {
-      "sha256": "6bbb044ab420e07edb0a3042d2eb314b85e83a0182e945a15ab3b9092668dfd5",
-      "family": "Manrope",
+    "hanken-grotesk-vietnamese.woff2": {
+      "sha256": "992b5d147edde9d637ce22e7bb9cc9e6909c05410226b36a2e581ada9877eb4a",
+      "family": "Hanken Grotesk",
       "subset": "vietnamese",
-      "bytes": 8520
+      "bytes": 9320
+    },
+    "jetbrains-mono-cyrillic-ext.woff2": {
+      "sha256": "62213be8a78b42f1e29d1452d91e2f8b3e745572a9dd98d3941e39fa00b37d76",
+      "family": "JetBrains Mono",
+      "subset": "cyrillic-ext",
+      "bytes": 1640
+    },
+    "jetbrains-mono-cyrillic.woff2": {
+      "sha256": "e17cfd15fb96909d64095015f958207063a0c07191da3512df7d560a781aebdf",
+      "family": "JetBrains Mono",
+      "subset": "cyrillic",
+      "bytes": 8872
+    },
+    "jetbrains-mono-greek.woff2": {
+      "sha256": "0a557721b1f8b36d3f3f84442689a71ca4a744300abcb46a1953f51bfc663b66",
+      "family": "JetBrains Mono",
+      "subset": "greek",
+      "bytes": 6836
+    },
+    "jetbrains-mono-latin-ext.woff2": {
+      "sha256": "db5ff4db83e580426280e9337a58dc57d3a83784a1b03ad80914651594441d52",
+      "family": "JetBrains Mono",
+      "subset": "latin-ext",
+      "bytes": 11624
+    },
+    "jetbrains-mono-latin.woff2": {
+      "sha256": "83c005d49d8a6a50474c73a5a36ac0468076e9c4a29da7bdb14995d80560a5be",
+      "family": "JetBrains Mono",
+      "subset": "latin",
+      "bytes": 31432
+    },
+    "jetbrains-mono-vietnamese.woff2": {
+      "sha256": "c89b9cc0bc6262bd4f8d8494b6961601f3aefa829d08c2e3635f4d501d3a47c2",
+      "family": "JetBrains Mono",
+      "subset": "vietnamese",
+      "bytes": 5888
     }
   },
   "uuidToFilePerPage": {
-    "settings": {
-      "6e26ff20-2ee8-4766-8c6f-85f6ecbe789c": "bricolage-grotesque-vietnamese.woff2",
-      "45044423-1a6e-4862-ae2c-62f10cb4a164": "bricolage-grotesque-latin-ext.woff2",
-      "9b126e06-f49b-41e1-b2bd-6f7b1e122646": "bricolage-grotesque-latin.woff2",
-      "46780587-293a-4084-9bd1-ef006b929357": "manrope-cyrillic-ext.woff2",
-      "beb9621c-5e6a-476b-8e41-d9431bcc25e1": "manrope-cyrillic.woff2",
-      "d25384f0-0b11-44a4-a8cd-bd91452119b5": "manrope-greek.woff2",
-      "2b43a10d-6e84-4c03-95eb-27c94d7bdd38": "manrope-vietnamese.woff2",
-      "45858bcd-639c-4bb4-b374-09ff6e34bc40": "manrope-latin-ext.woff2",
-      "94c2befd-12f4-498a-b19d-9e6ce5636b36": "manrope-latin.woff2"
-    },
-    "payments": {
-      "c9615f4b-c268-4346-aeef-e1189cf9d8c5": "bricolage-grotesque-vietnamese.woff2",
-      "4b6b4944-9dc3-4f69-8c8f-d6086f513858": "bricolage-grotesque-latin-ext.woff2",
-      "749e736d-400f-4835-8f1f-438d394564d0": "bricolage-grotesque-latin.woff2",
-      "70152ca1-2b0d-48fc-83fe-b1ac71f00834": "manrope-cyrillic-ext.woff2",
-      "975984de-7780-417c-adc9-149a3b09ad52": "manrope-cyrillic.woff2",
-      "7405bb98-15cd-471f-908a-5f5943260997": "manrope-greek.woff2",
-      "33892667-4d57-4ce6-887f-a8e92afb8428": "manrope-vietnamese.woff2",
-      "262dfc1e-72c3-47c6-9864-de1c8e66611f": "manrope-latin-ext.woff2",
-      "cad32f89-9201-4ea0-bea6-398030c7c012": "manrope-latin.woff2"
+    "index": {
+      "https://fonts.gstatic.com/s/archivo/v25/k3kQo8UDI-1M0wlSfdboLnnA.woff2": "archivo-vietnamese.woff2",
+      "https://fonts.gstatic.com/s/archivo/v25/k3kQo8UDI-1M0wlSfdfoLnnA.woff2": "archivo-latin-ext.woff2",
+      "https://fonts.gstatic.com/s/archivo/v25/k3kQo8UDI-1M0wlSfdnoLg.woff2": "archivo-latin.woff2",
+      "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpQ59CjCQ.woff2": "hanken-grotesk-cyrillic-ext.woff2",
+      "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpS59CjCQ.woff2": "hanken-grotesk-vietnamese.woff2",
+      "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpT59CjCQ.woff2": "hanken-grotesk-latin-ext.woff2",
+      "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpd59A.woff2": "hanken-grotesk-latin.woff2",
+      "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx3cwhsk.woff2": "jetbrains-mono-cyrillic-ext.woff2",
+      "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxTcwhsk.woff2": "jetbrains-mono-cyrillic.woff2",
+      "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxPcwhsk.woff2": "jetbrains-mono-greek.woff2",
+      "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx_cwhsk.woff2": "jetbrains-mono-vietnamese.woff2",
+      "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx7cwhsk.woff2": "jetbrains-mono-latin-ext.woff2",
+      "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2": "jetbrains-mono-latin.woff2"
     }
   }
 }

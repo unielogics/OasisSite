@@ -1,0 +1,523 @@
+{
+  "slug": "index",
+  "name": "Oasis Site v2",
+  "route": "/",
+  "elements": 797,
+  "constructs": {
+    "scIf": 58,
+    "scFor": 41,
+    "textInterpolations": 130,
+    "wholeAttrBindings": 281,
+    "mixedAttrBindings": 22,
+    "eventHandlers": 71,
+    "refs": 12,
+    "complexExpressions": []
+  },
+  "pseudo": {},
+  "classAttrs": {
+    "static": 0,
+    "bound": 0
+  },
+  "xImports": [],
+  "helmet": {
+    "sheets": [
+      {
+        "file": "helmet.0.css",
+        "fontFace": false,
+        "chars": 2577,
+        "mediaQueries": 0,
+        "fontFaces": 0
+      }
+    ],
+    "links": [
+      {
+        "tag": "meta",
+        "attrs": {
+          "name": "viewport",
+          "content": "width=device-width, initial-scale=1, viewport-fit=cover"
+        }
+      },
+      {
+        "tag": "link",
+        "attrs": {
+          "rel": "preconnect",
+          "href": "https://fonts.googleapis.com"
+        }
+      },
+      {
+        "tag": "link",
+        "attrs": {
+          "rel": "preconnect",
+          "href": "https://fonts.gstatic.com",
+          "crossorigin": ""
+        }
+      },
+      {
+        "tag": "link",
+        "attrs": {
+          "href": "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap",
+          "rel": "stylesheet"
+        }
+      }
+    ],
+    "scripts": 1,
+    "atomics": false
+  },
+  "mediaQueries": [],
+  "customElements": {
+    "image-slot": 5
+  },
+  "root": {
+    "tag": "div",
+    "style": "min-height:100vh;background:var(--bg);color:var(--ink);font-family:'Hanken Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip;transition:background .4s,color .4s;",
+    "width": null,
+    "height": null,
+    "label": "Oasis Site v2"
+  },
+  "theme": {
+    "attributeBinding": "theme",
+    "storageKey": null,
+    "values": []
+  },
+  "logic": {
+    "new Date": 5,
+    "Date.now": 10,
+    "location": 3,
+    "innerWidth/innerHeight": 3,
+    "setTimeout": 9,
+    "setInterval": 1,
+    "requestAnimationFrame": 2,
+    "document.": 5,
+    "window.": 14,
+    "addEventListener": 2,
+    "setState": 45,
+    "componentDidMount": 1,
+    "React.createElement": 4
+  },
+  "hrefs": {
+    "#": [
+      "#/",
+      "#/membership",
+      "#/tint"
+    ],
+    "sms:": [
+      "sms:+12015986304?&body=WASH",
+      "sms:+12015986304?&body=Hi%2C%20I%20just%20joined"
+    ],
+    "https:": [
+      "https://maps.google.com/?q=468+River+Drive+Garfield+NJ+07026"
+    ],
+    "tel:": [
+      "tel:+12015986304"
+    ],
+    "mailto:": [
+      "mailto:support@oasisautospanj.com"
+    ]
+  },
+  "ctas": [
+    {
+      "tag": "a",
+      "tpl": 18,
+      "text": "",
+      "href": "#/"
+    },
+    {
+      "tag": "button",
+      "tpl": 21,
+      "text": "Join",
+      "handler": "{{ goJoinGold }}"
+    },
+    {
+      "tag": "a",
+      "tpl": 33,
+      "text": "{{ l.n }} {{ l.label }}",
+      "href": "{{ l.href }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 37,
+      "text": "Join VIP",
+      "handler": "{{ goJoinVip }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 38,
+      "text": "Book a time",
+      "handler": "{{ openBookAny }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 42,
+      "text": "Dark",
+      "handler": "{{ setDark }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 43,
+      "text": "Light",
+      "handler": "{{ setLight }}"
+    },
+    {
+      "tag": "a",
+      "tpl": 44,
+      "text": "Text WASH to 201-598-6304",
+      "href": "sms:+12015986304?&body=WASH"
+    },
+    {
+      "tag": "button",
+      "tpl": 53,
+      "text": "{{ liveDot }}{{ baysShort }}",
+      "handler": "{{ scrollTimes }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 59,
+      "text": "Become a memberfrom $99",
+      "handler": "{{ goJoinVip }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 61,
+      "text": "Today's open times",
+      "handler": "{{ scrollTimes }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 78,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 105,
+      "text": "Join Gold",
+      "handler": "{{ goJoinGold }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 125,
+      "text": "Join VIP",
+      "handler": "{{ goJoinVip }}"
+    },
+    {
+      "tag": "a",
+      "tpl": 129,
+      "text": "Compare plans",
+      "href": "#/membership"
+    },
+    {
+      "tag": "button",
+      "tpl": 143,
+      "text": "Book it",
+      "handler": "{{ bookNext }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 146,
+      "text": "{{ d.top }} {{ d.num }} {{ d.count }}",
+      "handler": "{{ d.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 153,
+      "text": "{{ t.label }}",
+      "handler": "{{ t.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 160,
+      "text": "{{ c.ch }} {{ r.ap }} {{ c.ch }}",
+      "handler": "{{ r.pick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 177,
+      "text": "{{ boardMoreLabel }}",
+      "handler": "{{ toggleBoardAll }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 238,
+      "text": "Book",
+      "handler": "{{ openBookGuest }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 240,
+      "text": "Join",
+      "handler": "{{ goJoinGold }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 242,
+      "text": "Join",
+      "handler": "{{ goJoinVip }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 262,
+      "text": "Book this wash",
+      "handler": "{{ w.book }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 280,
+      "text": "{{ o.label }}{{ o.sub }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 286,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 299,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "a",
+      "tpl": 307,
+      "text": "Text me a quote",
+      "href": "{{ tintSms }}"
+    },
+    {
+      "tag": "a",
+      "tpl": 362,
+      "text": "Get directions",
+      "href": "https://maps.google.com/?q=468+River+Drive+Garfield+NJ+07026"
+    },
+    {
+      "tag": "a",
+      "tpl": 363,
+      "text": "Text 201-598-6304",
+      "href": "sms:+12015986304?&body=WASH"
+    },
+    {
+      "tag": "a",
+      "tpl": 364,
+      "text": "Call",
+      "href": "tel:+12015986304"
+    },
+    {
+      "tag": "a",
+      "tpl": 422,
+      "text": "Text us a photo for a quote",
+      "href": "{{ g.quoteHref }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 439,
+      "text": "Join VIP",
+      "handler": "{{ goJoinVip }}"
+    },
+    {
+      "tag": "a",
+      "tpl": 468,
+      "text": "06 · WINDOW TINT Try the shadebefore it's on. Carbon and cer",
+      "href": "#/tint"
+    },
+    {
+      "tag": "a",
+      "tpl": 487,
+      "text": "TEXT “WASH” TO201-598-6304",
+      "href": "sms:+12015986304?&body=WASH"
+    },
+    {
+      "tag": "button",
+      "tpl": 500,
+      "text": "Replay",
+      "handler": "{{ replaySms }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 511,
+      "text": "{{ f.q }}",
+      "handler": "{{ f.toggle }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 525,
+      "text": "Join VIP · $169/mo",
+      "handler": "{{ goJoinVip }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 526,
+      "text": "Book a time",
+      "handler": "{{ openBookAny }}"
+    },
+    {
+      "tag": "a",
+      "tpl": 534,
+      "text": "Get directions",
+      "href": "https://maps.google.com/?q=468+River+Drive+Garfield+NJ+07026"
+    },
+    {
+      "tag": "a",
+      "tpl": 539,
+      "text": "{{ l.label }}",
+      "href": "{{ l.href }}"
+    },
+    {
+      "tag": "a",
+      "tpl": 548,
+      "text": "201-598-6304",
+      "href": "tel:+12015986304"
+    },
+    {
+      "tag": "a",
+      "tpl": 549,
+      "text": "Text WASH to book",
+      "href": "sms:+12015986304?&body=WASH"
+    },
+    {
+      "tag": "a",
+      "tpl": 550,
+      "text": "support@oasisautospanj.com",
+      "href": "mailto:support@oasisautospanj.com"
+    },
+    {
+      "tag": "button",
+      "tpl": 576,
+      "text": "{{ t.name }} {{ t.price }}/mo {{ p }} {{ t.badge }}",
+      "handler": "{{ t.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 594,
+      "text": "Remove",
+      "handler": "{{ v.remove }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 599,
+      "text": "+ Add another vehicle",
+      "handler": "{{ jv.addVeh }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 611,
+      "text": "{{ jv.agreeText }}",
+      "handler": "{{ jv.toggleAgree }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 621,
+      "text": "Book your first wash",
+      "handler": "{{ jv.bookFirst }}"
+    },
+    {
+      "tag": "a",
+      "tpl": 622,
+      "text": "Text our member line",
+      "href": "sms:+12015986304?&body=Hi%2C%20I%20just%20joined"
+    },
+    {
+      "tag": "a",
+      "tpl": 623,
+      "text": "Back to home",
+      "href": "#/"
+    },
+    {
+      "tag": "button",
+      "tpl": 650,
+      "text": "{{ jv.ctaLabel }}",
+      "handler": "{{ jv.next }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 658,
+      "text": "Book",
+      "handler": "{{ openBookAny }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 659,
+      "text": "Join",
+      "handler": "{{ goJoinVip }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 690,
+      "text": "Continue",
+      "handler": "{{ memberContinue }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 693,
+      "text": "Become a memberThis wash is included. Gold $99 or VIP $169 a",
+      "handler": "{{ goJoinVip }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 699,
+      "text": "Continue as guestGuest prices · $25 non-refundable booking f",
+      "handler": "{{ guestContinue }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 709,
+      "text": "{{ o.label }}",
+      "handler": "{{ o.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 712,
+      "text": "{{ w.name }}{{ w.sub }} {{ w.price }}{{ w.note }}",
+      "handler": "{{ w.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 723,
+      "text": "{{ a.name }}{{ a.price }}",
+      "handler": "{{ a.onClick }}"
+    },
+    {
+      "tag": "a",
+      "tpl": 727,
+      "text": "Text us for a quote.",
+      "href": "{{ tintSms }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 731,
+      "text": "{{ d.top }}{{ d.num }}",
+      "handler": "{{ d.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 736,
+      "text": "{{ t.label }}{{ t.tag }}",
+      "handler": "{{ t.onClick }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 742,
+      "text": "Join VIP",
+      "handler": "{{ goJoinVip }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 757,
+      "text": "I understand the $25 booking fee is non-refundable, includin",
+      "handler": "{{ sh.toggleAck }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 766,
+      "text": "Join and book",
+      "handler": "{{ goJoinVip }}"
+    },
+    {
+      "tag": "button",
+      "tpl": 794,
+      "text": "{{ sh.ctaLabel }}",
+      "handler": "{{ sh.cta }}"
+    }
+  ],
+  "hoursLike": [],
+  "unreferencedResources": 0
+}

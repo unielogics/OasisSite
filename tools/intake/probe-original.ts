@@ -8,8 +8,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { launchBrowser, newParityContext } from '../parity/browser'
+import { defaultIntercepts } from '../parity/cdn'
 import { settleInPage } from '../parity/collect'
-import { ROOT, THEME_KEY, type Theme } from '../parity/config'
+import { ROOT, THEME_KEY, VIEWPORT, type Theme } from '../parity/config'
 import { startOriginalServer } from '../parity/serve-original'
 import { loadPages } from '../dc-compile/pages'
 
@@ -97,6 +98,7 @@ export async function probePages(
         theme,
         allowedOrigins: [server.origin],
         hideBranding: true,
+        intercepts: defaultIntercepts(),
       })
       await pc.page.goto(server.url(p.slug), { waitUntil: 'load', timeout: 45_000 })
       await pc.page.waitForSelector('#dc-root .sc-host', { state: 'attached', timeout: 30_000 })
@@ -130,7 +132,7 @@ export async function probePages(
         fonts: raw.fonts,
         console: pc.takeConsole(),
         blocked: pc.takeBlocked(),
-        viewport: { width: 1480, height: 1000 },
+        viewport: { width: VIEWPORT.width, height: VIEWPORT.height },
         scrollHeight: raw.scrollHeight,
       }
       results.push(r)

@@ -1,9 +1,13 @@
-// intake: generic unpacker for Claude Design "Bundled Page" HTML files (the format the dashboard's three bundles and
-// "Oasis Site v2" share). One bundle = <script type="__bundler/manifest"> (uuid -> {mime, compressed, data}),
-// __bundler/ext_resources (CDN ids -> uuids), __bundler/page_order (nested page uuids) and __bundler/template (the
-// JSON-encoded page document whose uuids the browser-side unpacker replaces with blob: URLs). This tool classifies the
-// manifest by MIME, writes every resource under design/extracted/ with a stable name, rewrites the uuids to
-// /assets/* and /fonts/* once, and splits the page document into head / template / logic / helmet styles.
+// intake: generic unpacker for Claude Design pages. Two source formats:
+//  * "Bundled Page" HTML (the dashboard's three bundles): <script type="__bundler/manifest"> (uuid -> {mime, compressed,
+//    data}), __bundler/ext_resources (CDN ids -> uuids), __bundler/page_order (nested page uuids) and __bundler/template
+//    (the JSON-encoded page document whose uuids the browser-side unpacker replaces with blob: URLs). Every manifest
+//    entry is classified by MIME, written under design/extracted/ with a stable name and the uuids are rewritten once.
+//  * a RAW .dc.html document ("Oasis Site v2"): <head> loads ./support.js (the dc runtime), <x-dc> holds the helmet and
+//    the template, <script type="text/x-dc" data-dc-script data-props> the logic. Its loose files (design/original/loose:
+//    the runtime, helmet scripts, assets/) are the resources; relative references are rewritten to /assets/* and the
+//    runtime to /runtime/*; Google Fonts come from design/fonts (pnpm intake:fonts, see raw.ts).
+// Both split the page into head / template / logic / helmet styles with the same meta.json.
 // Usage: tsx tools/intake/unpack.ts [--pages design/pages.json] [--out design/extracted]
 import fs from 'node:fs'
 import path from 'node:path'
@@ -16,6 +20,7 @@ import { parseTemplate, walkEls, textOf as textOfNodes } from '../dc-compile/par
 import type { ElNode } from '../dc-compile/parse'
 import { loadPages } from '../dc-compile/pages'
 import type { PageSpec } from '../dc-compile/pages'
+import { isBundledPage, unpackRawDocument } from './raw'
 
 type El = DefaultTreeAdapterMap['element']
 type P5 = DefaultTreeAdapterMap['node']
@@ -51,7 +56,7 @@ export interface ManifestEntry {
   data: string
 }
 
-export type ResourceKind = 'runtime' | 'react' | 'import' | 'font' | 'asset' | 'frame'
+export type ResourceKind = 'runtime' | 'react' | 'import' | 'font' | 'asset' | 'frame' | 'script'
 
 export interface Resource {
   uuid: string
@@ -68,9 +73,12 @@ export interface Resource {
   subset?: string
   /** name came from a sha256 match against design/original/loose/ */
   looseName?: string
+  /** raw documents: the file the reference points at does not exist yet (the build substitutes a placeholder) */
+  missing?: boolean
 }
 
 export interface UuidRef {
+  /** the uuid (bundles) or the relative reference text (raw documents) */
   uuid: string
   where: 'attribute' | 'css' | 'logic' | 'head' | 'frame-marker'
   /** attribute refs: element tag + attribute + source tpl id */
@@ -106,15 +114,29 @@ export interface XImportInfo {
   unresolved: string[]
 }
 
+/** A Google Fonts stylesheet of the helmet, vendored at intake (raw documents; docs/intake.md). */
+export interface FontSheet {
+  file: string
+  href: string
+  chars: number
+  files: string[]
+}
+
 export interface PageMetaJson {
   slug: string
   route: string
   name: string
   sourceFile: string
   sourceSha256: string
+  /** 'bundle' (a Bundled Page) or 'raw' (a .dc.html document with loose files) */
+  source: 'bundle' | 'raw'
   /** data-props minus $preview (null when absent), and the $preview block */
   dataProps: Record<string, unknown> | null
+  /** what the runtime's StandaloneRoot passes as props: every data-props entry's `default` (null when none) */
+  propDefaults: Record<string, unknown> | null
   preview: Record<string, unknown> | null
+  /** the helmet's <title> text, null when none */
+  title: string | null
   /** data-screen-label of the root element when present */
   label: string | null
   templateChars: number
@@ -122,6 +144,10 @@ export interface PageMetaJson {
   helmets: Omit<HelmetSheet, 'css'>[]
   helmetLinks: HelmetLink[]
   helmetScripts: number
+  /** the helmet's <script src> values after rewriting (raw documents; the port decides per DV whether to ship them) */
+  helmetScriptSrcs: string[]
+  /** vendored Google Fonts stylesheets (raw documents), in helmet order */
+  fontSheets: FontSheet[]
   helmetAtomics: boolean
   xImports: number
   frames: string[]
@@ -139,6 +165,8 @@ export interface Unpacked {
   logic: string
   meta: PageMetaJson
   helmets: HelmetSheet[]
+  /** raw documents: the vendored Google Fonts sheets (css already localised to /fonts/*) */
+  fontSheets: (FontSheet & { css: string })[]
   xImports: XImportInfo[]
   /** uuids present in the manifest that no text of this page references (after rewriting) */
   unreferenced: string[]
@@ -414,6 +442,51 @@ export function unpackBundle(
     .filter((r) => !referenced.has(r.uuid) && r.kind !== 'react')
     .map((r) => r.uuid)
 
+  return describePage({
+    page,
+    source: 'bundle',
+    sourceSha256,
+    resources,
+    refs,
+    head,
+    templateHtml,
+    logic,
+    dataPropsRaw,
+    unreferenced,
+    fontSheets: [],
+  })
+}
+
+export interface DescribeInput {
+  page: PageSpec
+  source: 'bundle' | 'raw'
+  sourceSha256: string
+  resources: Resource[]
+  refs: UuidRef[]
+  head: string
+  templateHtml: string
+  logic: string
+  dataPropsRaw: string | undefined
+  unreferenced: string[]
+  fontSheets: (FontSheet & { css: string })[]
+}
+
+/** data-props -> the runtime's StandaloneRoot defaults (`{k: meta.default}` for entries that declare one). */
+export function propDefaultsOf(dataProps: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!dataProps) return null
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(dataProps)) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && 'default' in (v as object)) {
+      const d = (v as { default?: unknown }).default
+      if (d !== undefined) out[k] = d
+    }
+  }
+  return Object.keys(out).length ? out : null
+}
+
+/** The part of the intake both source formats share: helmet, x-imports and meta.json, from the rewritten page. */
+export function describePage(d: DescribeInput): Unpacked {
+  const { page, resources, templateHtml, logic } = d
   // --- helmet: styles in order, links/metas, scripts, atomics flag ------------------------------------------------
   const frag = parseFragment(templateHtml)
   const helmetEls: El[] = []
@@ -422,8 +495,10 @@ export function unpackBundle(
   })
   const helmets: HelmetSheet[] = []
   const helmetLinks: HelmetLink[] = []
+  const helmetScriptSrcs: string[] = []
   let helmetScripts = 0
   let helmetAtomics = false
+  let title: string | null = null
   if (helmetEls.length > 1)
     throw new IntakeError(`${page.file}: ${helmetEls.length} <helmet> elements (expected at most one)`)
   const helmet = helmetEls[0]
@@ -444,7 +519,11 @@ export function unpackBundle(
         i++
       } else if (c.tagName === 'link' || c.tagName === 'meta') {
         helmetLinks.push({ tag: c.tagName, attrs: Object.fromEntries(c.attrs.map((a) => [a.name, a.value])) })
-      } else if (c.tagName === 'script') helmetScripts++
+      } else if (c.tagName === 'script') {
+        helmetScripts++
+        const src = attr(c, 'src')
+        if (src) helmetScriptSrcs.push(src)
+      } else if (c.tagName === 'title') title = textOf(c)
     }
   }
 
@@ -476,9 +555,9 @@ export function unpackBundle(
   // --- meta ----------------------------------------------------------------------------------------------------------
   let dataProps: Record<string, unknown> | null = null
   let preview: Record<string, unknown> | null = null
-  if (dataPropsRaw) {
+  if (d.dataPropsRaw) {
     try {
-      const obj = JSON.parse(dataPropsRaw) as Record<string, unknown>
+      const obj = JSON.parse(d.dataPropsRaw) as Record<string, unknown>
       if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
         preview =
           obj.$preview && typeof obj.$preview === 'object' ? (obj.$preview as Record<string, unknown>) : null
@@ -496,15 +575,20 @@ export function unpackBundle(
     route: page.route,
     name: page.name,
     sourceFile: page.file,
-    sourceSha256,
+    sourceSha256: d.sourceSha256,
+    source: d.source,
     dataProps,
+    propDefaults: propDefaultsOf(dataProps),
     preview,
+    title,
     label: templateHtml.match(/data-screen-label="([^"]*)"/)?.[1] ?? null,
     templateChars: templateHtml.length,
     logicChars: logic.length,
     helmets: helmets.map(({ css: _css, ...h }) => h),
     helmetLinks,
     helmetScripts,
+    helmetScriptSrcs,
+    fontSheets: d.fontSheets.map(({ css: _css, ...f }) => f),
     helmetAtomics,
     xImports: xImports.length,
     frames: resources.filter((r) => r.kind === 'frame').map((r) => r.file),
@@ -512,16 +596,17 @@ export function unpackBundle(
   }
   return {
     page,
-    sourceSha256,
+    sourceSha256: d.sourceSha256,
     resources,
-    refs,
-    head,
+    refs: d.refs,
+    head: d.head,
     template: templateHtml,
     logic,
     meta,
     helmets,
+    fontSheets: d.fontSheets,
     xImports,
-    unreferenced,
+    unreferenced: d.unreferenced,
   }
 }
 
@@ -543,13 +628,19 @@ export function runIntake(opts: IntakeOptions): IntakeResult {
   const { pages, designDir } = loadPages(opts.root, opts.pagesFile)
   const outDir = path.resolve(opts.root, opts.outDir ?? 'design/extracted')
   const log = opts.log ?? ((l: string) => console.log(l))
-  const loose = readLooseFiles(path.join(designDir, 'original', 'loose'))
+  const looseDir = path.join(designDir, 'original', 'loose')
+  const loose = readLooseFiles(looseDir)
   const reg = newRegistry()
   const results: Unpacked[] = []
   for (const page of pages) {
     const file = path.join(designDir, page.file)
     if (!fs.existsSync(file)) throw new IntakeError(`${page.slug}: ${page.file} not found under design/`)
-    results.push(unpackBundle(fs.readFileSync(file, 'utf8'), page, reg, loose))
+    const raw = fs.readFileSync(file, 'utf8')
+    results.push(
+      isBundledPage(raw)
+        ? unpackBundle(raw, page, reg, loose)
+        : unpackRawDocument(raw, page, reg, loose, { looseDir, fontsDir: path.join(designDir, 'fonts') }),
+    )
   }
   const runtimes = new Set(results.map((r) => r.meta.runtimeSha256).filter(Boolean))
   if (runtimes.size > 1)
@@ -570,7 +661,7 @@ export function runIntake(opts: IntakeOptions): IntakeResult {
   const fontFiles: Record<string, { sha256: string; family: string; subset: string; bytes: number }> = {}
   const assetFiles: Record<
     string,
-    { sha256: string; mime: string; bytes: number; kind: ResourceKind; loose: string | null }
+    { sha256: string; mime: string; bytes: number; kind: ResourceKind; loose: string | null; missing?: boolean }
   > = {}
   const uuidToFilePerPage: Record<string, Record<string, string>> = {}
   const assetUuidPerPage: Record<string, Record<string, string>> = {}
@@ -587,10 +678,12 @@ export function runIntake(opts: IntakeOptions): IntakeResult {
               ? `frames/${res.file}`
               : res.kind === 'import'
                 ? `imports/${res.file}`
-                : `assets/${res.file}`
+                : res.kind === 'script'
+                  ? `scripts/${res.file}`
+                  : `assets/${res.file}`
       if (!shared.has(rel)) {
         shared.set(rel, res)
-        write(rel, res.bytes)
+        if (!res.missing) write(rel, res.bytes)
       } else if (shared.get(rel)!.sha256 !== res.sha256) {
         throw new IntakeError(
           `${rel}: two different contents across pages (${shared.get(rel)!.sha256.slice(0, 8)} vs ${res.sha256.slice(0, 8)})`,
@@ -611,6 +704,7 @@ export function runIntake(opts: IntakeOptions): IntakeResult {
           bytes: res.bytes.length,
           kind: res.kind,
           loose: res.looseName ?? null,
+          ...(res.missing ? { missing: true } : {}),
         }
         assetUuidPerPage[r.page.slug]![res.uuid] = res.path
       }
@@ -620,11 +714,12 @@ export function runIntake(opts: IntakeOptions): IntakeResult {
     write(`${d}/template.html`, r.template)
     write(`${d}/logic.original.js`, r.logic)
     for (const h of r.helmets) write(`${d}/${h.file}`, h.css)
+    for (const f of r.fontSheets) write(`${d}/${f.file}`, f.css)
     write(`${d}/meta.json`, JSON.stringify(r.meta, null, 2) + '\n')
     write(`${d}/imports.json`, JSON.stringify(r.xImports, null, 2) + '\n')
     write(`${d}/refs.json`, JSON.stringify({ refs: r.refs, unreferenced: r.unreferenced }, null, 2) + '\n')
     log(
-      `intake ${d}: template ${r.template.length} chars, logic ${r.logic.length} chars, ${r.helmets.length} helmet sheets, ${r.resources.length} resources (${r.resources.filter((x) => x.kind === 'font').length} fonts, ${r.xImports.length} x-imports${r.unreferenced.length ? `, ${r.unreferenced.length} unreferenced` : ''})`,
+      `intake ${d} (${r.meta.source}): template ${r.template.length} chars, logic ${r.logic.length} chars, ${r.helmets.length} helmet sheets${r.fontSheets.length ? `, ${r.fontSheets.length} vendored font sheets` : ''}, ${r.resources.length} resources (${r.resources.filter((x) => x.kind === 'font').length} fonts, ${r.xImports.length} x-imports${r.unreferenced.length ? `, ${r.unreferenced.length} unreferenced` : ''}${r.resources.some((x) => x.missing) ? `, MISSING: ${r.resources.filter((x) => x.missing).map((x) => x.uuid).join(', ')}` : ''})`,
     )
   }
   write(

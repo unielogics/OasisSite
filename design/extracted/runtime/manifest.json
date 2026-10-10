@@ -1,11 +1,7 @@
 {
   "runtimeSha256": "8fe7df74405f3c55f49b7249c74ea1397e65d07dea2b1bd3b4a489bec2e28cbe",
-  "react": {
-    "react.production.min.js": "d949f1c3687aedadcedac85261865f29b17cd273997e7f6b2bfc53b2f9d4c4dd",
-    "react-dom.production.min.js": "35f4f974f4b2bcd44da73963347f8952e341f83909e4498227d4e26b98f66f0d"
-  },
+  "react": {},
   "pages": [
-    "settings",
-    "payments"
+    "index"
   ]
 }

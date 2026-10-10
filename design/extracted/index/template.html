@@ -1,0 +1,879 @@
+
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oasis Auto Spa · Concierge Hand Wash · Garfield, NJ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+<script src="/assets/image-slot.js"></script>
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  [data-oa]{--bg:#06080A;--bg2:#0A0E12;--panel:#0E1318;--inset:#06080A;--line:rgba(255,255,255,.1);--line2:rgba(255,255,255,.06);--ink:#F2F5F7;--ink2:#B7C0C8;--ink3:#8C97A1;--ink4:#5E6A75;--accentText:#1FB6FF;--cyanInk:#BFEAFF;--cyanSoft:rgba(31,182,255,.1);--cyanBrd:rgba(31,182,255,.34);--amber:#FFB547;--glass:rgba(6,8,10,.8);--card:linear-gradient(180deg,#10161C,#0A0D11);--shadow:0 30px 70px rgba(0,0,0,.5);--btn2:rgba(255,255,255,.05);--inv:#F2F5F7;--invInk:#06080A;--chrome:linear-gradient(180deg,#FFFFFF 0%,#DCE3E9 40%,#7C8893 53%,#EEF2F5 64%,#A9B4BE 100%);--hero:radial-gradient(120% 60% at 85% 110%,rgba(31,182,255,.28),transparent 60%),radial-gradient(90% 50% at 0% 0%,rgba(255,255,255,.06),transparent 60%),linear-gradient(162deg,#11171D 0%,#07090C 48%,#030405 100%);--sheen:rgba(255,255,255,.07);--ok:#2EE59D;--bad:#FF5A52;}
+  [data-oa][data-theme="light"]{--bg:#F2F3F1;--bg2:#FFFFFF;--panel:#FFFFFF;--inset:#E9ECEB;--line:rgba(10,13,16,.12);--line2:rgba(10,13,16,.07);--ink:#0A0D10;--ink2:#3F4851;--ink3:#5F6973;--ink4:#89929A;--accentText:#0272AD;--cyanInk:#014F7A;--cyanSoft:rgba(31,182,255,.13);--cyanBrd:rgba(2,114,173,.32);--amber:#A86200;--glass:rgba(242,243,241,.84);--card:linear-gradient(180deg,#FFFFFF,#F7F8F7);--shadow:0 24px 60px rgba(10,13,16,.12);--btn2:rgba(10,13,16,.04);--inv:#0A0D10;--invInk:#FFFFFF;--chrome:linear-gradient(180deg,#3A434C 0%,#6B7681 38%,#0A0D10 52%,#4A555F 66%,#1C2329 100%);--hero:radial-gradient(120% 60% at 85% 110%,rgba(31,182,255,.24),transparent 60%),radial-gradient(90% 50% at 0% 0%,rgba(255,255,255,.9),transparent 60%),linear-gradient(162deg,#FFFFFF 0%,#ECEFF1 50%,#D5DADE 100%);--sheen:rgba(255,255,255,.65);--ok:#0E8A55;--bad:#D23A2F;}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;}
+  a{color:var(--accentText);text-decoration:none;}
+  a:hover{color:var(--ink);}
+  input::placeholder{color:var(--ink4);}
+  input:focus{outline:none;border-color:#1FB6FF!important;}
+  ::selection{background:#1FB6FF;color:#00131D;}
+  @keyframes oaPulse{0%{box-shadow:0 0 0 0 rgba(31,182,255,.7);}70%{box-shadow:0 0 0 9px rgba(31,182,255,0);}100%{box-shadow:0 0 0 0 rgba(31,182,255,0);}}
+  @keyframes oaDot{0%,80%,100%{opacity:.25;transform:translateY(0);}40%{opacity:1;transform:translateY(-3px);}}
+  @keyframes oaIn{from{opacity:0;transform:translateY(10px) scale(.98);}to{opacity:1;transform:none;}}
+  @keyframes oaRise{from{opacity:0;transform:translateY(40px) rotateX(18deg) scale(.92);}to{opacity:1;transform:none;}}
+</style>
+</helmet>
+
+<div data-oa="1" data-theme="{{ theme }}" data-screen-label="Oasis Site v2" style="min-height:100vh;background:var(--bg);color:var(--ink);font-family:'Hanken Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip;transition:background .4s,color .4s;">
+
+  <!-- HEADER -->
+  <sc-if value="{{ notJoin }}" hint-placeholder-val="{{ true }}">
+    <header style="position:sticky;top:0;z-index:50;height:84px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 14px;background:var(--glass);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);border-bottom:1px solid var(--line2);">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button onClick="{{ openMenu }}" aria-label="Menu" style="width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);color:var(--ink);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 8h16M4 16h11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+        <button onClick="{{ toggleTheme }}" aria-label="Theme" style="width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--ink3);"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M20 14.5A8 8 0 019.5 4 7 7 0 1020 14.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+      </div>
+      <a href="#/" style="display:flex;align-items:center;justify-content:center;"><img src="/assets/oasis-logo.png" alt="Oasis Auto Spa" style="height:76px;width:auto;display:block;filter:drop-shadow(0 6px 18px rgba(31,182,255,.25));"></a>
+      <div style="display:flex;justify-content:flex-end;">
+        <button onClick="{{ goJoinGold }}" style="height:46px;padding:0 18px;border-radius:14px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:14.5px;box-shadow:0 6px 20px rgba(31,182,255,.35);">Join</button>
+      </div>
+    </header>
+  </sc-if>
+
+  <!-- MENU -->
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:90;background:var(--bg);display:flex;flex-direction:column;overflow-y:auto;animation:oaIn .3s ease;">
+      <div style="flex:none;height:84px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 14px;border-bottom:1px solid var(--line2);">
+        <div></div>
+        <img src="/assets/oasis-logo.png" alt="" style="height:76px;width:auto;">
+        <div style="display:flex;justify-content:flex-end;"><button onClick="{{ closeMenu }}" aria-label="Close" style="width:46px;height:46px;border-radius:14px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button></div>
+      </div>
+      <nav style="flex:1;max-width:760px;width:100%;margin:0 auto;padding:22px 20px;display:flex;flex-direction:column;">
+        <sc-for list="{{ menuLinks }}" as="l" hint-placeholder-count="7">
+          <a href="{{ l.href }}" style="display:flex;align-items:baseline;gap:16px;padding:14px 0;border-bottom:1px solid var(--line2);">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;color:var(--accentText);width:22px;">{{ l.n }}</span>
+            <span style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(26px,7.5vw,48px);letter-spacing:-.02em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">{{ l.label }}</span>
+          </a>
+        </sc-for>
+        <div style="display:flex;gap:10px;margin-top:26px;flex-wrap:wrap;">
+          <button onClick="{{ goJoinVip }}" style="flex:1;min-width:150px;height:56px;border-radius:16px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:16px;">Join VIP</button>
+          <button onClick="{{ openBookAny }}" style="flex:1;min-width:150px;height:56px;border-radius:16px;border:1px solid var(--line);font-weight:700;font-size:16px;">Book a time</button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:22px;padding:14px 16px;border-radius:16px;border:1px solid var(--line);">
+          <span style="font-weight:700;">Appearance</span>
+          <div style="display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--inset);">
+            <button onClick="{{ setDark }}" style="{{ darkBtn }}">Dark</button>
+            <button onClick="{{ setLight }}" style="{{ lightBtn }}">Light</button>
+          </div>
+        </div>
+        <a href="sms:+12015986304?&amp;body=WASH" style="margin-top:18px;font-weight:700;">Text WASH to 201-598-6304</a>
+      </nav>
+    </div>
+  </sc-if>
+
+  <!-- ===================== HOME (TOP) ===================== -->
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+    <section ref="{{ heroRef }}" onPointerMove="{{ onHeroMove }}" style="position:relative;min-height:calc(100svh - 84px);display:flex;flex-direction:column;justify-content:center;overflow:hidden;touch-action:pan-y;background:var(--hero);">
+      <div style="position:absolute;inset:0;background:linear-gradient(115deg,transparent 28%,var(--sheen) 41%,transparent 56%);pointer-events:none;"></div>
+      <div style="position:absolute;left:-10%;right:-10%;top:30%;height:2px;background:linear-gradient(90deg,transparent,rgba(190,225,255,.5) 30%,rgba(255,255,255,.9) 52%,rgba(31,182,255,.5) 70%,transparent);transform:rotate(-6deg);pointer-events:none;"></div>
+      <canvas ref="{{ beadRef }}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
+      <sc-if value="{{ showBeadHint }}" hint-placeholder-val="{{ true }}">
+        <div style="position:absolute;right:18px;top:16px;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:.14em;color:var(--ink4);text-transform:uppercase;pointer-events:none;">Swipe the paint ↔</div>
+      </sc-if>
+      <div style="position:relative;max-width:980px;width:100%;margin:0 auto;padding:48px 20px 40px;display:flex;flex-direction:column;align-items:center;text-align:center;pointer-events:none;">
+        <button onClick="{{ scrollTimes }}" style="pointer-events:auto;display:flex;align-items:center;gap:9px;height:36px;padding:0 14px;border-radius:999px;background:var(--cyanSoft);border:1px solid var(--cyanBrd);font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.05em;color:var(--cyanInk);white-space:nowrap;max-width:100%;">{{ liveDot }}{{ baysShort }}</button>
+        <h1 style="margin:22px 0 0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(38px,10.5vw,124px);line-height:.88;letter-spacing:-.03em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">Hand washed.<br>Never<br>tunneled.</h1>
+        <p style="margin:22px 0 0;max-width:520px;font-size:17px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">Detailers wash every car by hand, one panel at a time. Members get 4 washes a month with the interior included, priority times and no booking fee.</p>
+        <div style="display:flex;gap:10px;margin-top:28px;flex-wrap:wrap;justify-content:center;pointer-events:auto;">
+          <button onClick="{{ goJoinVip }}" style="display:flex;align-items:center;gap:10px;height:58px;padding:0 24px;border-radius:17px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:16.5px;box-shadow:0 12px 34px rgba(31,182,255,.38),inset 0 1px 0 rgba(255,255,255,.55);">Become a member<span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:800;opacity:.75;">from $99</span></button>
+          <button onClick="{{ scrollTimes }}" style="height:58px;padding:0 22px;border-radius:17px;background:var(--btn2);border:1px solid var(--line);color:var(--ink);font-weight:700;font-size:16px;">Today's open times</button>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:30px;flex-wrap:wrap;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--ink3);text-transform:uppercase;">
+          <span>10+ years</span><span style="color:var(--ink4);">/</span><span>Hand wash only</span><span style="color:var(--ink4);">/</span><span>Tint · Detail</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 01 MEMBERSHIP -->
+    <section style="max-width:1120px;margin:0 auto;padding:92px 20px 40px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accentText);text-transform:uppercase;">01 · Membership</div>
+      <h2 style="margin:14px 0 0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(34px,9.5vw,80px);line-height:.9;letter-spacing:-.025em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">Members<br>go first.</h2>
+      <p style="margin:18px 0 0;max-width:560px;font-size:16.5px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">4 hand washes a month with the interior included. Mix and match them across the cars in your household.</p>
+      <div style="margin-top:28px;padding:20px;border-radius:24px;background:var(--card);border:1px solid var(--line);">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div style="font-weight:700;font-size:15px;">How often do you wash?</div>
+          <div style="display:flex;gap:4px;padding:4px;border-radius:14px;background:var(--inset);border:1px solid var(--line2);">
+            <sc-for list="{{ washOpts }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:18px;align-items:end;">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--ink3);">AS A GUEST</div>
+            <div style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:800;font-size:34px;letter-spacing:-.02em;margin-top:4px;color:var(--ink3);text-decoration:line-through;text-decoration-color:rgba(230,80,80,.75);text-decoration-thickness:3px;">{{ calcGuest }}</div>
+            <div style="font-size:12.5px;color:var(--ink3);margin-top:2px;">{{ calcGuestSub }}</div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--accentText);">GOLD MEMBER</div>
+            <div style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:800;font-size:34px;letter-spacing:-.02em;margin-top:4px;">$99</div>
+            <div style="font-size:12.5px;color:var(--ink3);margin-top:2px;">per month · no fees</div>
+          </div>
+          <div style="padding:14px 16px;border-radius:16px;background:var(--cyanSoft);border:1px solid var(--cyanBrd);">
+            <div style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:900;font-size:24px;color:var(--accentText);">{{ calcSave }}</div>
+            <div style="font-size:12.5px;color:var(--cyanInk);margin-top:3px;">{{ calcSaveSub }}</div>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:16px;">
+        <div style="padding:24px 22px;border-radius:26px;background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:26px;text-transform:uppercase;background:linear-gradient(180deg,#E8C46A,#A97F22 55%,#E9C875);-webkit-background-clip:text;background-clip:text;color:transparent;">Gold</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--ink3);">MOST CHOSEN</div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:14px;"><span style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:900;font-size:56px;letter-spacing:-.03em;line-height:1;">$99</span><span style="color:var(--ink3);font-weight:600;">/ month</span></div>
+          <div style="display:flex;flex-direction:column;gap:12px;margin:22px 0 24px;">
+            <sc-for list="{{ goldPerks }}" as="p" hint-placeholder-count="5"><div style="display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.4;color:var(--ink2);"><span style="flex:none;width:20px;height:20px;border-radius:6px;background:var(--cyanSoft);display:flex;align-items:center;justify-content:center;margin-top:1px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#1FB6FF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>{{ p }}</div></sc-for>
+          </div>
+          <button onClick="{{ goJoinGold }}" style="margin-top:auto;height:56px;border-radius:16px;background:var(--inv);color:var(--invInk);font-weight:800;font-size:16px;">Join Gold</button>
+        </div>
+        <div style="padding:1.5px;border-radius:27px;background:linear-gradient(150deg,#FFFFFF,#7C8893 30%,#1FB6FF 55%,#E9EEF2 80%,#59636D);box-shadow:0 30px 80px rgba(31,182,255,.18);">
+          <div style="height:100%;padding:24px 22px;border-radius:25.5px;background:radial-gradient(100% 60% at 100% 0%,rgba(31,182,255,.22),transparent 60%),linear-gradient(180deg,#0E1419,#07090C);color:#F2F5F7;display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:26px;text-transform:uppercase;background:linear-gradient(180deg,#FFFFFF,#9AA6B1 55%,#FFFFFF);-webkit-background-clip:text;background-clip:text;color:transparent;">VIP</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.12em;color:#00131D;background:#1FB6FF;padding:5px 9px;border-radius:7px;">PRIORITY BOOKING</div>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:6px;margin-top:14px;"><span style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:900;font-size:56px;letter-spacing:-.03em;line-height:1;">$169</span><span style="color:#8C97A1;font-weight:600;">/ month</span></div>
+            <div style="font-size:13.5px;color:#7FD6FF;font-weight:700;margin-top:8px;">Everything in Gold, plus:</div>
+            <div style="display:flex;flex-direction:column;gap:12px;margin:16px 0 24px;">
+              <sc-for list="{{ vipPerks }}" as="p" hint-placeholder-count="6"><div style="display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.4;color:#E3E9EE;"><span style="flex:none;width:20px;height:20px;border-radius:6px;background:#1FB6FF;display:flex;align-items:center;justify-content:center;margin-top:1px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#00131D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b style="font-weight:800;color:#FFFFFF;">{{ p.t }}</b><sc-if value="{{ p.s }}" hint-placeholder-val="{{ false }}"><span style="display:block;font-size:13px;color:#8C97A1;margin-top:2px;">{{ p.s }}</span></sc-if></span></div></sc-for>
+            </div>
+            <button onClick="{{ goJoinVip }}" style="margin-top:auto;height:56px;border-radius:16px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:16px;box-shadow:0 10px 30px rgba(31,182,255,.35);">Join VIP</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px;padding:16px 18px;border-radius:18px;border:1px dashed var(--line);">
+        <div style="flex:1;min-width:220px;font-size:14px;line-height:1.5;color:var(--ink3);">Guests can book with prices 20% higher and a <b style="color:var(--ink2);">$25 non-refundable booking fee</b>.</div>
+        <a href="#/membership" style="height:44px;padding:0 16px;display:flex;align-items:center;border-radius:12px;border:1px solid var(--line);font-weight:700;font-size:14px;color:var(--ink2);">Compare plans</a>
+      </div>
+    </section>
+
+    <!-- 02 OPEN TIMES -->
+    <section id="times" style="max-width:1120px;margin:0 auto;padding:72px 20px 40px;">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accentText);text-transform:uppercase;">02 · Open times</div>
+          <h2 style="margin:14px 0 0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(34px,9.5vw,80px);line-height:.9;letter-spacing:-.025em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">Pick a<br>time.</h2>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--ink3);letter-spacing:.08em;white-space:nowrap;">{{ clockLabel }}</div>
+      </div>
+      <sc-if value="{{ hasNext }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top:22px;display:flex;align-items:center;gap:14px;padding:16px 16px 16px 20px;border-radius:22px;background:linear-gradient(135deg,rgba(31,182,255,.18),rgba(31,182,255,.04));border:1px solid var(--cyanBrd);flex-wrap:wrap;">
+          <div style="flex:1;min-width:180px;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.14em;color:var(--accentText);">NEXT OPEN</div>
+            <div style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:900;font-size:28px;letter-spacing:-.02em;margin-top:4px;">{{ nextLabel }}</div>
+            <div style="font-size:13px;color:var(--ink3);margin-top:2px;">{{ nextSub }}</div>
+          </div>
+          <button onClick="{{ bookNext }}" style="height:52px;padding:0 22px;border-radius:15px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:15px;">Book it</button>
+        </div>
+      </sc-if>
+      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:14px;">
+        <sc-for list="{{ dayCards }}" as="d" hint-placeholder-count="5">
+          <button onClick="{{ d.onClick }}" style="{{ d.style }}">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.08em;opacity:.8;">{{ d.top }}</span>
+            <span style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:900;font-size:24px;line-height:1.1;">{{ d.num }}</span>
+            <span style="font-size:11px;font-weight:700;opacity:.85;">{{ d.count }}</span>
+          </button>
+        </sc-for>
+      </div>
+      <div style="margin-top:12px;border-radius:24px;background:#050608;border:1px solid rgba(255,255,255,.09);box-shadow:var(--shadow);overflow:hidden;color:#F2F5F7;">
+        <div style="display:flex;gap:6px;padding:12px;border-bottom:1px solid rgba(255,255,255,.07);overflow-x:auto;scrollbar-width:none;">
+          <sc-for list="{{ podChips }}" as="t" hint-placeholder-count="4"><button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button></sc-for>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.14em;color:#4F5A64;border-bottom:1px solid rgba(255,255,255,.05);">
+          <span style="width:113px;">TIME</span><span style="flex:1;">STATUS</span><span>BAYS</span><span style="width:22px;"></span>
+        </div>
+        <sc-for list="{{ boardRows }}" as="r" hint-placeholder-count="8">
+          <button onClick="{{ r.pick }}" style="{{ r.rowStyle }}">
+            <span style="display:flex;align-items:center;gap:2px;flex:none;">
+              <sc-for list="{{ r.timeCells }}" as="c" hint-placeholder-count="5"><span style="display:inline-flex;align-items:center;justify-content:center;width:19px;height:30px;border-radius:3px;background:linear-gradient(180deg,#191F26 0 49%,#0C1014 51% 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);font-family:'JetBrains Mono',monospace;font-weight:800;font-size:16px;color:{{ c.col }};">{{ c.ch }}</span></sc-for>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;color:#5E6A75;margin-left:4px;width:16px;">{{ r.ap }}</span>
+            </span>
+            <span style="display:flex;align-items:center;gap:2px;flex:1;min-width:0;overflow:hidden;">
+              <sc-for list="{{ r.stCells }}" as="c" hint-placeholder-count="7"><span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:30px;flex:none;border-radius:3px;background:linear-gradient(180deg,#191F26 0 49%,#0C1014 51% 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);font-family:'JetBrains Mono',monospace;font-weight:800;font-size:14px;color:{{ c.col }};">{{ c.ch }}</span></sc-for>
+            </span>
+            <span style="display:flex;gap:4px;flex:none;"><sc-for list="{{ r.bays }}" as="b" hint-placeholder-count="3"><span style="{{ b.style }}"></span></sc-for></span>
+            <span style="flex:none;width:22px;display:flex;justify-content:flex-end;color:{{ r.arrow }};"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </button>
+        </sc-for>
+        <sc-if value="{{ boardEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:30px 16px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.08em;color:#5E6A75;">NO TIMES IN THIS PART OF THE DAY</div></sc-if>
+        <sc-if value="{{ boardHasMore }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ toggleBoardAll }}" style="width:100%;height:52px;border-top:1px solid rgba(255,255,255,.07);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;letter-spacing:.1em;color:#7FD6FF;">{{ boardMoreLabel }}</button>
+        </sc-if>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--ink3);">
+        <span style="display:flex;align-items:center;gap:7px;"><span style="width:8px;height:8px;border-radius:2px;background:#2EE59D;"></span>Open</span>
+        <span style="display:flex;align-items:center;gap:7px;"><span style="width:8px;height:8px;border-radius:2px;background:#FFB547;"></span>Last bay</span>
+        <span style="display:flex;align-items:center;gap:7px;"><span style="width:8px;height:8px;border-radius:2px;background:var(--ink);"></span>VIP reserved</span>
+        <span style="display:flex;align-items:center;gap:7px;"><span style="width:8px;height:8px;border-radius:2px;background:#FF5A52;"></span>Booked</span>
+      </div>
+    </section>
+
+    <!-- 03 WASH SEQUENCE -->
+    <section ref="{{ washRef }}" style="position:relative;height:340vh;">
+      <div style="position:sticky;top:84px;height:calc(100svh - 84px);display:flex;flex-direction:column;max-width:1120px;margin:0 auto;padding:22px 20px;gap:16px;">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex:none;">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accentText);text-transform:uppercase;">03 · The wash</div>
+            <div style="margin-top:10px;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(24px,6.5vw,52px);line-height:.92;letter-spacing:-.02em;text-transform:uppercase;">{{ stageName }}</div>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:800;color:var(--ink3);flex:none;"><span style="color:var(--ink);">{{ stageNum }}</span> / 04</div>
+        </div>
+        <div style="position:relative;flex:1;min-height:0;border-radius:24px;overflow:hidden;padding:1px;background:linear-gradient(160deg,rgba(255,255,255,.5),rgba(255,255,255,.05) 35%,rgba(31,182,255,.4) 70%,rgba(255,255,255,.12));">
+          <canvas ref="{{ washCv }}" style="display:block;width:100%;height:100%;border-radius:23px;background:#0B1015;"></canvas>
+        </div>
+        <div style="flex:none;">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"><sc-for list="{{ stageBars }}" as="b" hint-placeholder-count="4"><div style="height:4px;border-radius:2px;background:var(--line);overflow:hidden;"><div style="{{ b.fill }}"></div></div></sc-for></div>
+          <p style="margin:14px 0 0;font-size:16px;line-height:1.5;color:var(--ink2);min-height:48px;text-wrap:pretty;">{{ stageText }}</p>
+        </div>
+      </div>
+    </section>
+  </sc-if>
+
+  <!-- SUBPAGE HERO -->
+  <sc-if value="{{ hasSubHero }}" hint-placeholder-val="{{ false }}">
+    <section style="max-width:1120px;margin:0 auto;padding:56px 20px 8px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accentText);text-transform:uppercase;">{{ sub.eyebrow }}</div>
+      <h1 style="margin:14px 0 0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(40px,11vw,112px);line-height:.88;letter-spacing:-.03em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">{{ sub.t1 }}<br>{{ sub.t2 }}</h1>
+      <p style="margin:18px 0 0;max-width:560px;font-size:17px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">{{ sub.p }}</p>
+    </section>
+  </sc-if>
+
+  <!-- MEMBERSHIP PAGE -->
+  <sc-if value="{{ isMembership }}" hint-placeholder-val="{{ false }}">
+    <section style="max-width:1120px;margin:0 auto;padding:24px 20px 20px;">
+      <div style="border-radius:24px;border:1px solid var(--line);background:var(--card);">
+        <div style="display:grid;grid-template-columns:minmax(0,1.3fr) repeat(3,minmax(0,1fr));border-bottom:1px solid var(--line);">
+          <div style="padding:16px;"></div>
+          <div style="padding:16px 6px;text-align:center;"><div style="font-weight:800;font-size:14px;">Guest</div><div style="font-size:11.5px;color:var(--ink3);margin-top:2px;">per visit</div></div>
+          <div style="padding:16px 6px;text-align:center;"><div style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:16px;text-transform:uppercase;background:linear-gradient(180deg,#E8C46A,#A97F22 55%,#E9C875);-webkit-background-clip:text;background-clip:text;color:transparent;">Gold</div><div style="font-size:11.5px;color:var(--ink3);margin-top:2px;">$99/mo</div></div>
+          <div style="padding:16px 6px;text-align:center;background:var(--cyanSoft);border-radius:0 23px 0 0;"><div style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:16px;text-transform:uppercase;color:var(--accentText);">VIP</div><div style="font-size:11.5px;color:var(--ink3);margin-top:2px;">$169/mo</div></div>
+        </div>
+        <sc-for list="{{ compRows }}" as="r" hint-placeholder-count="10">
+          <div style="display:grid;grid-template-columns:minmax(0,1.3fr) repeat(3,minmax(0,1fr));border-bottom:1px solid var(--line2);">
+            <div style="padding:13px 14px;font-size:14px;font-weight:700;line-height:1.3;">{{ r.f }}</div>
+            <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3">
+              <div style="{{ c.style }}">
+                <sc-if value="{{ c.ok }}" hint-placeholder-val="{{ false }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#1FB6FF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if>
+                <sc-if value="{{ c.no }}" hint-placeholder-val="{{ false }}"><span style="color:var(--ink4);font-weight:800;">–</span></sc-if>
+                <sc-if value="{{ c.t }}" hint-placeholder-val="{{ false }}"><span style="font-size:13px;font-weight:800;">{{ c.t }}</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+        <div style="display:grid;grid-template-columns:minmax(0,1.3fr) repeat(3,minmax(0,1fr));gap:0;padding:14px 0;">
+          <div></div>
+          <div style="padding:0 4px;"><button onClick="{{ openBookGuest }}" style="width:100%;height:46px;border-radius:12px;border:1px solid var(--line);font-weight:700;font-size:12.5px;">Book</button></div>
+          <div style="padding:0 4px;"><button onClick="{{ goJoinGold }}" style="width:100%;height:46px;border-radius:12px;background:var(--inv);color:var(--invInk);font-weight:800;font-size:12.5px;">Join</button></div>
+          <div style="padding:0 4px;"><button onClick="{{ goJoinVip }}" style="width:100%;height:46px;border-radius:12px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:12.5px;">Join</button></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:16px;">
+        <sc-for list="{{ memNotes }}" as="n" hint-placeholder-count="3">
+          <div style="padding:18px;border-radius:20px;background:var(--card);border:1px solid var(--line);"><div style="font-weight:800;font-size:15.5px;">{{ n.t }}</div><div style="font-size:14px;color:var(--ink2);margin-top:6px;line-height:1.5;">{{ n.d }}</div></div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-if>
+
+  <!-- WASH PAGE -->
+  <sc-if value="{{ isWash }}" hint-placeholder-val="{{ false }}">
+    <section style="max-width:1120px;margin:0 auto;padding:24px 20px 10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+      <sc-for list="{{ washCards }}" as="w" hint-placeholder-count="2">
+        <div style="padding:22px;border-radius:26px;background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--accentText);">{{ w.tag }}</div>
+          <div style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:26px;text-transform:uppercase;letter-spacing:-.01em;margin-top:8px;line-height:1;">{{ w.name }}</div>
+          <div style="display:flex;gap:16px;margin-top:14px;align-items:baseline;flex-wrap:wrap;"><span style="font-size:14px;color:var(--ink3);">Guest <b style="color:var(--ink2);">{{ w.g }}</b></span><span style="font-size:14px;color:var(--accentText);font-weight:800;">Included with membership</span></div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin:18px 0 22px;">
+            <sc-for list="{{ w.steps }}" as="st" hint-placeholder-count="6"><div style="display:flex;gap:12px;align-items:center;font-size:15px;color:var(--ink2);"><span style="flex:none;width:6px;height:6px;border-radius:50%;background:#1FB6FF;"></span>{{ st }}</div></sc-for>
+          </div>
+          <button onClick="{{ w.book }}" style="margin-top:auto;height:54px;border-radius:16px;background:var(--inv);color:var(--invInk);font-weight:800;font-size:15.5px;">Book this wash</button>
+        </div>
+      </sc-for>
+    </section>
+  </sc-if>
+
+  <!-- TINT PAGE -->
+  <sc-if value="{{ isTint }}" hint-placeholder-val="{{ false }}">
+    <section style="max-width:1120px;margin:0 auto;padding:24px 20px 10px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;align-items:start;">
+        <div style="padding:18px;border-radius:26px;background:var(--card);border:1px solid var(--line);">
+          <div ref="{{ tintRef }}" onPointerDown="{{ tintDown }}" onPointerMove="{{ tintMove }}" onPointerUp="{{ tintUp }}" onPointerCancel="{{ tintUp }}" style="position:relative;width:100%;aspect-ratio:16/10;cursor:ew-resize;touch-action:pan-y;user-select:none;-webkit-user-select:none;">
+            <div style="position:absolute;inset:0;clip-path:polygon(14% 100%,0% 34%,20% 0%,100% 0%,100% 100%);border-radius:6px;background:radial-gradient(40% 50% at 78% 18%,rgba(255,255,255,.95),rgba(255,255,255,0) 70%),linear-gradient(180deg,#9FD3F0 0%,#D9EEF9 44%,#C9CFD3 45%,#8A949C 62%,#4E5860 100%);">
+              <div style="position:absolute;left:0;right:0;top:45%;height:17%;background:repeating-linear-gradient(90deg,#5C666E 0 9%,#77818A 9% 13%,#4A535B 13% 24%,#8B959D 24% 27%,#636D75 27% 40%);opacity:.75;"></div>
+              <div style="position:absolute;inset:0;background:{{ tintColor }};clip-path:inset(0 0 0 {{ tintSplit }});transition:background .4s ease;"></div>
+              <div style="position:absolute;inset:0;background:linear-gradient(118deg,transparent 30%,rgba(255,255,255,.22) 38%,transparent 46%,transparent 62%,rgba(255,255,255,.1) 66%,transparent 72%);pointer-events:none;"></div>
+            </div>
+            <div style="position:absolute;top:-4px;bottom:-4px;left:{{ tintSplit }};width:2px;margin-left:-1px;background:#FFFFFF;box-shadow:0 0 14px rgba(31,182,255,.9);pointer-events:none;">
+              <div style="position:absolute;top:50%;left:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:#FFFFFF;box-shadow:0 6px 20px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#06080A;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            </div>
+            <div style="position:absolute;left:18%;bottom:10px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.12em;color:#06080A;background:rgba(255,255,255,.85);padding:4px 7px;border-radius:5px;pointer-events:none;">FACTORY</div>
+            <div style="position:absolute;right:10px;bottom:10px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.12em;color:#00131D;background:#1FB6FF;padding:4px 7px;border-radius:5px;pointer-events:none;">{{ tintTag }}</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:16px;">
+            <sc-for list="{{ vltOpts }}" as="o" hint-placeholder-count="5"><button onClick="{{ o.onClick }}" style="{{ o.style }}"><span style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:900;font-size:17px;">{{ o.label }}</span><span style="font-size:10.5px;font-weight:700;opacity:.75;">{{ o.sub }}</span></button></sc-for>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:4px;padding:4px;border-radius:15px;background:var(--inset);border:1px solid var(--line2);"><sc-for list="{{ filmOpts }}" as="o" hint-placeholder-count="2"><button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for></div>
+          <div style="font-size:14px;line-height:1.5;color:var(--ink2);">{{ filmDesc }}</div>
+          <div style="padding:18px;border-radius:20px;background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;gap:14px;">
+            <sc-for list="{{ tintStats }}" as="s" hint-placeholder-count="3">
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:700;"><span style="color:var(--ink2);">{{ s.label }}</span><span>{{ s.value }}</span></div>
+                <div style="height:6px;border-radius:3px;background:var(--inset);margin-top:7px;overflow:hidden;"><div style="height:100%;width:{{ s.pct }};background:linear-gradient(90deg,#1FB6FF,#BFEAFF);border-radius:3px;transition:width .6s cubic-bezier(.2,.8,.2,1);"></div></div>
+              </div>
+            </sc-for>
+            <div style="font-size:11.5px;color:var(--ink4);">Typical values. They vary by film and shade.</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;"><sc-for list="{{ vehOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px;border-radius:20px;background:var(--cyanSoft);border:1px solid var(--cyanBrd);flex-wrap:wrap;">
+            <div><div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.12em;color:var(--accentText);">{{ tintPriceLabel }}</div><div style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:900;font-size:28px;letter-spacing:-.02em;margin-top:4px;">{{ tintVip }}</div><div style="font-size:13px;color:var(--ink3);margin-top:2px;">Guest <span style="text-decoration:line-through;">{{ tintGuest }}</span> · <b style="color:var(--accentText);">{{ tintSave }}</b></div></div>
+            <a href="{{ tintSms }}" style="flex:none;height:50px;padding:0 18px;display:flex;align-items:center;border-radius:14px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:14.5px;">Text me a quote</a>
+          </div>
+          <div style="font-size:12.5px;line-height:1.5;color:var(--ink3);">New Jersey restricts tint on the windshield and front side windows. We'll tell you what's allowed for your car before we install.</div>
+        </div>
+      </div>
+    </section>
+  </sc-if>
+
+  <!-- DETAILING PAGE -->
+  <sc-if value="{{ isDetailing }}" hint-placeholder-val="{{ false }}">
+    <section style="max-width:1120px;margin:0 auto;padding:24px 20px 0;">
+      <div style="width:100%;aspect-ratio:16/9;max-height:560px;"><image-slot id="oasis-detail-hero" shape="rounded" radius="26" placeholder="Interior detail photo · leather, close-up"></image-slot></div>
+    </section>
+  </sc-if>
+
+  <!-- EXPERIENCE PAGE -->
+  <sc-if value="{{ isExperience }}" hint-placeholder-val="{{ false }}">
+    <section style="position:relative;height:min(84svh,780px);overflow:hidden;background:#030405;">
+      <div style="position:absolute;inset:0;"><image-slot id="oasis-exp-hero" shape="rect" placeholder="Hero photo · car rolling out of the bay"></image-slot></div>
+      <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(0deg,rgba(3,4,5,.92) 0%,rgba(3,4,5,.4) 45%,rgba(3,4,5,.1) 100%);"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;padding:0 20px 40px;pointer-events:none;">
+        <div style="max-width:1120px;margin:0 auto;color:#FFFFFF;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:#1FB6FF;">THE EXPERIENCE</div>
+          <h1 style="margin:14px 0 0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(44px,12vw,128px);line-height:.86;letter-spacing:-.03em;text-transform:uppercase;">Drive out<br>different.</h1>
+          <p style="margin:18px 0 0;max-width:520px;font-size:17px;line-height:1.55;color:#D5DCE2;">The best part of a wash is the first mile after it. We build the whole visit around that moment.</p>
+        </div>
+      </div>
+    </section>
+    <section style="max-width:1120px;margin:0 auto;padding:80px 20px 30px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accentText);">THE HAND-OFF</div>
+      <h2 style="margin:14px 0 0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(34px,9.5vw,80px);line-height:.9;letter-spacing:-.025em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">The last<br>ten minutes.</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:28px;">
+        <sc-for list="{{ ritual }}" as="r" hint-placeholder-count="4">
+          <div style="padding:22px 20px;border-radius:24px;background:var(--card);border:1px solid var(--line);">
+            <div style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:44px;line-height:1;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">{{ r.n }}</div>
+            <div style="font-weight:800;font-size:17px;margin-top:14px;">{{ r.t }}</div>
+            <div style="font-size:14.5px;color:var(--ink2);margin-top:6px;line-height:1.5;">{{ r.d }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+    <section style="max-width:1120px;margin:0 auto;padding:50px 20px 20px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;">
+        <div style="padding:24px 22px;border-radius:24px;border:1px dashed var(--line);">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--ink3);">A TUNNEL WASH</div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;font-size:15px;color:var(--ink3);line-height:1.45;">
+            <div>Spinning brushes touch every car before yours.</div><div>Grit trapped in them can leave swirl marks.</div><div>Air blowers leave water in the seams.</div><div>You drive out on a timer.</div>
+          </div>
+        </div>
+        <div style="padding:24px 22px;border-radius:24px;background:var(--card);border:1.5px solid var(--cyanBrd);">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--accentText);">OASIS, BY HAND</div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;font-size:15px;color:var(--ink);line-height:1.45;font-weight:600;">
+            <div>Soft mitts and two buckets, one panel at a time.</div><div>Foam lifts dirt before anything touches the paint.</div><div>Towel-dried by hand, jambs and mirrors included.</div><div>A detailer walks the car with you before you leave.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section style="max-width:1120px;margin:0 auto;padding:40px 20px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;">
+      <div style="aspect-ratio:4/5;"><image-slot id="oasis-exp-1" shape="rounded" radius="24" placeholder="Photo · water beading on paint"></image-slot></div>
+      <div style="aspect-ratio:4/5;"><image-slot id="oasis-exp-2" shape="rounded" radius="24" placeholder="Photo · owner receiving keys"></image-slot></div>
+    </section>
+  </sc-if>
+
+  <!-- VISIT PAGE -->
+  <sc-if value="{{ isVisit }}" hint-placeholder-val="{{ false }}">
+    <section style="max-width:1120px;margin:0 auto;padding:24px 20px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;align-items:start;">
+      <div style="padding:22px;border-radius:26px;background:var(--card);border:1px solid var(--line);">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--accentText);">ADDRESS</div>
+        <div style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:900;font-size:26px;line-height:1.1;margin-top:10px;">468 River Drive<br>Garfield, NJ 07026</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:18px;">
+          <a href="https://maps.google.com/?q=468+River+Drive+Garfield+NJ+07026" style="height:52px;display:flex;align-items:center;justify-content:center;border-radius:15px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:15px;">Get directions</a>
+          <a href="sms:+12015986304?&amp;body=WASH" style="height:52px;display:flex;align-items:center;justify-content:center;border-radius:15px;border:1px solid var(--line);color:var(--ink);font-weight:700;font-size:15px;">Text 201-598-6304</a>
+          <a href="tel:+12015986304" style="height:52px;display:flex;align-items:center;justify-content:center;border-radius:15px;border:1px solid var(--line);color:var(--ink);font-weight:700;font-size:15px;">Call</a>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--ink4);margin:22px 0 8px;">HOURS</div>
+        <sc-for list="{{ hoursList }}" as="h" hint-placeholder-count="3"><div style="display:flex;justify-content:space-between;gap:12px;font-size:14.5px;padding:6px 0;color:var(--ink3);"><span>{{ h.d }}</span><span style="color:var(--ink);font-weight:700;">{{ h.t }}</span></div></sc-for>
+      </div>
+      <div style="padding:22px;border-radius:26px;background:var(--card);border:1px solid var(--line);">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--accentText);">WHEN YOU ARRIVE</div>
+        <sc-for list="{{ arrive }}" as="a" hint-placeholder-count="3">
+          <div style="display:flex;gap:14px;padding:16px 0;border-bottom:1px solid var(--line2);">
+            <span style="flex:none;width:32px;height:32px;border-radius:10px;background:#1FB6FF;color:#00131D;display:flex;align-items:center;justify-content:center;font-weight:800;">{{ a.n }}</span>
+            <div><div style="font-weight:800;font-size:15.5px;">{{ a.t }}</div><div style="font-size:14px;color:var(--ink2);margin-top:4px;line-height:1.5;">{{ a.d }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ hasPrices }}" hint-placeholder-val="{{ false }}">
+    <section id="pricing" ref="{{ priceRef }}" style="max-width:1120px;margin:0 auto;padding:72px 20px 30px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accentText);text-transform:uppercase;">{{ prEyebrow }}</div>
+      <h2 style="margin:14px 0 0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(34px,9.5vw,80px);line-height:.9;letter-spacing:-.025em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">{{ prTitle1 }}<br>{{ prTitle2 }}</h2>
+      <p style="margin:16px 0 0;max-width:560px;font-size:16px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">Everyone sees guest pricing. Here's what the same visit costs as a VIP member.</p>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:22px;padding:14px 16px;border-radius:18px;background:var(--cyanSoft);border:1px solid var(--cyanBrd);">
+        <div style="flex:1;min-width:0;"><div style="font-weight:800;font-size:15.5px;">Booking fee</div><div style="font-size:12.5px;color:var(--ink3);margin-top:2px;">Every guest visit · non-refundable</div></div>
+        <div style="width:64px;flex:none;text-align:right;"><div style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:800;font-size:17px;color:var(--ink2);">$25</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--ink3);">GUEST</div></div>
+        <div style="width:104px;flex:none;text-align:right;"><div style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:900;font-size:20px;color:var(--accentText);">$0</div><div style="display:inline-block;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;letter-spacing:.08em;color:#00131D;background:#1FB6FF;padding:2px 6px;border-radius:5px;margin-top:2px;">SAVE $25</div></div>
+      </div>
+      <sc-for list="{{ prGroups }}" as="g" hint-placeholder-count="4">
+        <div style="margin-top:34px;">
+          <div style="display:flex;align-items:flex-end;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--line);">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;color:var(--accentText);">{{ g.n }}</span>
+            <span style="flex:1;min-width:0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:800;font-size:{{ g.size }};letter-spacing:-.01em;text-transform:uppercase;line-height:1.05;">{{ g.title }}</span>
+            <sc-if value="{{ g.cols }}" hint-placeholder-val="{{ true }}">
+              <span style="width:64px;flex:none;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--ink3);">GUEST</span>
+              <span style="width:104px;flex:none;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--accentText);">AS VIP</span>
+            </sc-if>
+          </div>
+          <sc-if value="{{ g.note }}" hint-placeholder-val="{{ false }}"><div style="font-size:13px;color:var(--ink3);padding:10px 0 2px;">{{ g.note }}</div></sc-if>
+          <sc-for list="{{ g.rows }}" as="p" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:10px;padding:15px 0;border-bottom:1px solid var(--line2);">
+              <div style="flex:1;min-width:0;">
+                <div style="font-weight:800;font-size:{{ p.nameSize }};line-height:1.25;">{{ p.name }}</div>
+                <div style="font-size:13px;color:var(--ink3);margin-top:3px;line-height:1.4;">{{ p.sub }}</div>
+              </div>
+              <sc-if value="{{ p.priced }}" hint-placeholder-val="{{ true }}">
+                <div style="width:64px;flex:none;text-align:right;"><div style="font-size:10.5px;color:var(--ink3);font-weight:700;">{{ p.pre }}</div><div style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:800;font-size:17px;color:var(--ink2);white-space:nowrap;">{{ p.g }}</div></div>
+                <div style="width:104px;flex:none;height:54px;perspective:600px;">
+                  <div style="position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .8s cubic-bezier(.2,.9,.25,1.15);transition-delay:{{ p.delay }};transform:rotateX({{ prRot }});">
+                    <div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;">
+                      <span style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:900;font-size:20px;color:var(--ink3);white-space:nowrap;">{{ p.g }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--ink4);margin-top:2px;">GUEST</span>
+                    </div>
+                    <div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:rotateX(180deg);display:flex;flex-direction:column;align-items:flex-end;justify-content:center;">
+                      <span style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:900;font-size:{{ p.vSize }};color:var(--accentText);white-space:nowrap;">{{ p.v }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;letter-spacing:.08em;color:#00131D;background:#1FB6FF;padding:2px 6px;border-radius:5px;margin-top:3px;white-space:nowrap;">{{ p.save }}</span>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ g.quoteCta }}" hint-placeholder-val="{{ false }}">
+            <a href="{{ g.quoteHref }}" style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:10px;height:54px;border-radius:16px;border:1px solid var(--line);font-weight:800;font-size:15px;color:var(--ink);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H9l-5 4z" stroke="#1FB6FF" stroke-width="2.2" stroke-linejoin="round"/></svg>Text us a photo for a quote</a>
+          </sc-if>
+        </div>
+      </sc-for>
+      <sc-if value="{{ prShowMonth }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:34px;padding:1.5px;border-radius:26px;background:linear-gradient(150deg,#FFFFFF,#7C8893 30%,#1FB6FF 55%,#E9EEF2 80%,#59636D);">
+          <div style="padding:22px 20px;border-radius:24.5px;background:radial-gradient(90% 60% at 100% 0%,rgba(31,182,255,.22),transparent 60%),linear-gradient(180deg,#0E1419,#07090C);color:#F2F5F7;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.14em;color:#7FD6FF;">A VIP MONTH, PRICED AS A GUEST</div>
+            <div style="margin-top:12px;">
+              <sc-for list="{{ vipMonth }}" as="l" hint-placeholder-count="6"><div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:14.5px;border-bottom:1px solid rgba(255,255,255,.06);"><span style="color:#B7C0C8;">{{ l.label }}</span><span style="font-weight:700;color:#D5DCE2;">{{ l.value }}</span></div></sc-for>
+            </div>
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:16px;flex-wrap:wrap;">
+              <div>
+                <div style="font-size:13px;color:#8C97A1;">Guest total <span style="text-decoration:line-through;color:#B7C0C8;font-weight:700;">{{ vipMonthGuest }}</span> · VIP $169</div>
+                <div style="font-family:'Archivo',sans-serif;font-stretch:118%;font-weight:900;font-size:clamp(30px,8vw,46px);letter-spacing:-.02em;color:#1FB6FF;margin-top:4px;">{{ vipMonthSave }}</div>
+              </div>
+              <button onClick="{{ goJoinVip }}" style="height:54px;padding:0 22px;border-radius:16px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:15.5px;">Join VIP</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+    <!-- 05 THE REVEAL -->
+    <section ref="{{ revealRef }}" style="position:relative;height:260vh;margin-top:40px;">
+      <div style="position:sticky;top:84px;height:calc(100svh - 84px);overflow:hidden;background:#030405;">
+        <div style="position:absolute;inset:0;"><image-slot id="oasis-reveal" shape="rect" placeholder="Full-bleed photo · finished car under low light"></image-slot></div>
+        <div ref="{{ revealMask }}" style="position:absolute;inset:0;pointer-events:none;background:rgba(3,4,5,.97);"></div>
+        <div ref="{{ revealBar }}" style="position:absolute;top:-10%;bottom:-10%;left:-10%;width:160px;margin-left:-80px;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14) 42%,rgba(255,255,255,.95) 50%,rgba(255,255,255,.14) 58%,transparent);transform:skewX(-12deg);mix-blend-mode:screen;"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:120px 20px 34px;pointer-events:none;background:linear-gradient(0deg,rgba(3,4,5,.9),transparent);">
+          <div style="max-width:1120px;margin:0 auto;color:#FFFFFF;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:#1FB6FF;text-transform:uppercase;">05 · The reveal</div>
+            <div style="margin-top:12px;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(52px,15vw,180px);line-height:.85;letter-spacing:-.03em;text-transform:uppercase;perspective:900px;display:flex;flex-wrap:wrap;column-gap:.22em;">
+              <span style="display:inline-flex;"><span data-l="0" style="display:inline-block;transform-origin:50% 50% -30px;">H</span><span data-l="1" style="display:inline-block;transform-origin:50% 50% -30px;">E</span><span data-l="2" style="display:inline-block;transform-origin:50% 50% -30px;">A</span><span data-l="3" style="display:inline-block;transform-origin:50% 50% -30px;">D</span><span data-l="4" style="display:inline-block;transform-origin:50% 50% -30px;">S</span></span>
+              <span style="display:inline-flex;"><span data-l="5" style="display:inline-block;transform-origin:50% 50% -30px;">T</span><span data-l="6" style="display:inline-block;transform-origin:50% 50% -30px;">U</span><span data-l="7" style="display:inline-block;transform-origin:50% 50% -30px;">R</span><span data-l="8" style="display:inline-block;transform-origin:50% 50% -30px;">N</span><span data-l="9" style="display:inline-block;transform-origin:50% 50% -30px;color:#1FB6FF;">.</span></span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:18px;font-size:clamp(17px,4.4vw,24px);font-weight:600;line-height:1.35;color:#E3E9EE;">
+              <div data-ln="0">The door closes with that new-car sound.</div>
+              <div data-ln="1">The glass disappears.</div>
+              <div data-ln="2">At the light, someone looks twice.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 TINT TEASER -->
+    <section style="max-width:1120px;margin:0 auto;padding:80px 20px 30px;">
+      <a href="#/tint" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;align-items:center;padding:20px;border-radius:26px;background:var(--card);border:1px solid var(--line);color:var(--ink);">
+        <div style="position:relative;aspect-ratio:16/10;clip-path:polygon(14% 100%,0% 34%,20% 0%,100% 0%,100% 100%);border-radius:6px;background:radial-gradient(40% 50% at 78% 18%,rgba(255,255,255,.95),rgba(255,255,255,0) 70%),linear-gradient(180deg,#9FD3F0 0%,#D9EEF9 44%,#C9CFD3 45%,#8A949C 62%,#4E5860 100%);">
+          <div style="position:absolute;inset:0;background:rgba(4,10,16,.78);clip-path:inset(0 0 0 46%);"></div>
+          <div style="position:absolute;top:0;bottom:0;left:46%;width:2px;background:#FFFFFF;box-shadow:0 0 14px rgba(31,182,255,.9);"></div>
+        </div>
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accentText);">06 · WINDOW TINT</div>
+          <div style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(28px,7vw,48px);line-height:.92;letter-spacing:-.02em;text-transform:uppercase;margin-top:10px;">Try the shade<br>before it's on.</div>
+          <div style="font-size:15px;color:var(--ink2);margin-top:12px;line-height:1.5;">Carbon and ceramic film. VIP from $229, guest from $275.</div>
+          <div style="display:inline-flex;align-items:center;gap:8px;margin-top:16px;font-weight:800;color:var(--accentText);">Open the simulator <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+      </a>
+    </section>
+
+    <!-- 07 TEXT TO BOOK -->
+    <section style="max-width:1120px;margin:0 auto;padding:72px 20px 40px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:26px;align-items:center;">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accentText);text-transform:uppercase;">07 · Text to book</div>
+          <h2 style="margin:14px 0 0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(34px,9.5vw,80px);line-height:.9;letter-spacing:-.025em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">Or just<br>text us.</h2>
+          <p style="margin:16px 0 0;max-width:460px;font-size:16px;line-height:1.55;color:var(--ink2);">No app needed. Text WASH and we'll reply with open times. Members get priority replies.</p>
+          <a href="sms:+12015986304?&amp;body=WASH" style="margin-top:24px;display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:20px;background:var(--inv);color:var(--invInk);max-width:440px;">
+            <span style="flex:none;width:46px;height:46px;border-radius:13px;background:var(--invInk);display:flex;align-items:center;justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H9l-5 4z" stroke="#1FB6FF" stroke-width="2.2" stroke-linejoin="round"/></svg></span>
+            <span style="flex:1;"><span style="display:block;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.12em;opacity:.6;">TEXT “WASH” TO</span><span style="display:block;font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:900;font-size:26px;margin-top:2px;">201-598-6304</span></span>
+          </a>
+        </div>
+        <div ref="{{ smsRef }}" style="max-width:400px;width:100%;justify-self:center;padding:18px 16px 16px;border-radius:30px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);">
+          <div style="display:flex;align-items:center;gap:10px;padding:0 4px 14px;border-bottom:1px solid var(--line2);">
+            <img src="/assets/oasis-logo.png" alt="" style="width:40px;height:40px;object-fit:contain;border-radius:11px;background:#06080A;">
+            <div style="flex:1;"><div style="font-weight:800;font-size:14.5px;">Oasis Auto Spa</div><div style="font-size:12px;color:var(--ink3);">201-598-6304</div></div>
+            <button onClick="{{ replaySms }}" style="height:34px;padding:0 12px;border-radius:10px;border:1px solid var(--line);font-size:12px;font-weight:700;color:var(--ink2);">Replay</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;padding-top:14px;min-height:340px;">
+            <sc-for list="{{ smsShown }}" as="m" hint-placeholder-count="3"><div style="{{ m.wrap }}"><div style="{{ m.bubble }}">{{ m.t }}</div></div></sc-for>
+            <sc-if value="{{ smsTyping }}" hint-placeholder-val="{{ false }}">{{ typingEl }}</sc-if>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 08 FAQ -->
+    <section style="max-width:760px;margin:0 auto;padding:60px 20px 50px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accentText);text-transform:uppercase;">08 · Questions</div>
+      <div style="margin-top:18px;border-top:1px solid var(--line);">
+        <sc-for list="{{ faqs }}" as="f" hint-placeholder-count="4">
+          <div style="border-bottom:1px solid var(--line);">
+            <button onClick="{{ f.toggle }}" style="width:100%;display:flex;align-items:center;gap:14px;min-height:64px;padding:14px 0;text-align:left;">
+              <span style="flex:1;font-weight:800;font-size:16.5px;line-height:1.35;">{{ f.q }}</span>
+              <span style="{{ f.icon }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></span>
+            </button>
+            <sc-if value="{{ f.open }}" hint-placeholder-val="{{ false }}"><div style="padding:0 40px 18px 0;font-size:15px;line-height:1.6;color:var(--ink2);">{{ f.a }}</div></sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ isSub }}" hint-placeholder-val="{{ false }}">
+    <section style="max-width:1120px;margin:0 auto;padding:50px 20px 70px;">
+      <div style="position:relative;overflow:hidden;padding:34px 22px;border-radius:30px;background:radial-gradient(80% 70% at 50% 120%,rgba(31,182,255,.35),transparent 70%),linear-gradient(180deg,#0E1419,#05070A);border:1px solid rgba(255,255,255,.1);text-align:center;color:#FFFFFF;">
+        <div style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(30px,8.5vw,64px);line-height:.9;letter-spacing:-.02em;text-transform:uppercase;background:linear-gradient(180deg,#FFFFFF 0%,#DCE3E9 40%,#7C8893 53%,#EEF2F5 64%,#A9B4BE 100%);-webkit-background-clip:text;background-clip:text;color:transparent;">Turn heads<br>this week.</div>
+        <p style="margin:14px auto 0;max-width:440px;font-size:15.5px;line-height:1.55;color:#B7C0C8;">VIP members book first and pay $0 for their washes. Guests can book any open time.</p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px;">
+          <button onClick="{{ goJoinVip }}" style="height:56px;padding:0 24px;border-radius:16px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:16px;">Join VIP · $169/mo</button>
+          <button onClick="{{ openBookAny }}" style="height:56px;padding:0 22px;border-radius:16px;border:1px solid rgba(255,255,255,.18);color:#FFFFFF;font-weight:700;font-size:16px;">Book a time</button>
+        </div>
+      </div>
+    </section>
+  </sc-if>
+
+  <!-- FOOTER -->
+  <sc-if value="{{ notJoin }}" hint-placeholder-val="{{ true }}">
+    <footer style="border-top:1px solid var(--line2);background:var(--bg2);">
+      <div style="max-width:1120px;margin:0 auto;padding:48px 20px 140px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:28px;">
+        <div>
+          <img src="/assets/oasis-logo.png" alt="Oasis Auto Spa" style="height:110px;width:auto;display:block;">
+          <div style="font-size:14px;line-height:1.6;color:var(--ink3);margin-top:12px;">468 River Drive<br>Garfield, NJ 07026</div>
+          <a href="https://maps.google.com/?q=468+River+Drive+Garfield+NJ+07026" style="display:inline-block;margin-top:10px;font-weight:700;font-size:14px;">Get directions</a>
+        </div>
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--ink4);margin-bottom:12px;">EXPLORE</div>
+          <div style="display:flex;flex-direction:column;gap:9px;font-size:14px;">
+            <sc-for list="{{ menuLinks }}" as="l" hint-placeholder-count="7"><a href="{{ l.href }}" style="color:var(--ink2);">{{ l.label }}</a></sc-for>
+          </div>
+        </div>
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--ink4);margin-bottom:12px;">HOURS</div>
+          <sc-for list="{{ hoursList }}" as="h" hint-placeholder-count="3"><div style="display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:5px 0;color:var(--ink3);"><span>{{ h.d }}</span><span style="color:var(--ink);font-weight:600;">{{ h.t }}</span></div></sc-for>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--ink4);margin:20px 0 12px;">CONTACT</div>
+          <div style="display:flex;flex-direction:column;gap:9px;font-size:14px;">
+            <a href="tel:+12015986304">201-598-6304</a>
+            <a href="sms:+12015986304?&amp;body=WASH">Text WASH to book</a>
+            <a href="mailto:support@oasisautospanj.com">support@oasisautospanj.com</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </sc-if>
+
+  <sc-if value="{{ isJoin }}" hint-placeholder-val="{{ false }}">
+    <div style="min-height:100svh;display:flex;flex-direction:column;">
+      <div style="position:sticky;top:0;z-index:50;background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line2);">
+        <div style="height:76px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 14px;">
+          <div><sc-if value="{{ jv.canBack }}" hint-placeholder-val="{{ false }}"><button onClick="{{ jv.back }}" aria-label="Back" style="width:46px;height:46px;border-radius:14px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></sc-if></div>
+          <img src="/assets/oasis-logo.png" alt="Oasis Auto Spa" style="height:64px;width:auto;">
+          <div style="display:flex;justify-content:flex-end;"><button onClick="{{ jv.close }}" aria-label="Close" style="width:46px;height:46px;border-radius:14px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button></div>
+        </div>
+        <div style="height:3px;background:var(--line2);"><div style="height:100%;width:{{ jv.progress }};background:#1FB6FF;box-shadow:0 0 12px rgba(31,182,255,.8);transition:width .5s cubic-bezier(.2,.8,.2,1);"></div></div>
+      </div>
+
+      <div style="flex:1;max-width:1080px;width:100%;margin:0 auto;padding:30px 20px 150px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:30px;align-items:start;">
+        <div style="min-width:0;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;letter-spacing:.16em;color:var(--accentText);">{{ jv.eyebrow }}</div>
+          <h1 style="margin:12px 0 0;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(36px,9.5vw,76px);line-height:.9;letter-spacing:-.025em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">{{ jv.t1 }}<br>{{ jv.t2 }}</h1>
+          <p style="margin:14px 0 0;max-width:480px;font-size:16px;line-height:1.55;color:var(--ink2);">{{ jv.sub }}</p>
+
+          <sc-if value="{{ jv.s0 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:24px;">
+              <sc-for list="{{ jv.tiers }}" as="t" hint-placeholder-count="2">
+                <button onClick="{{ t.onClick }}" style="{{ t.style }}">
+                  <span style="display:flex;align-items:center;gap:12px;width:100%;">
+                    <span style="{{ t.radio }}"></span>
+                    <span style="flex:1;text-align:left;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:24px;text-transform:uppercase;">{{ t.name }}</span>
+                    <span style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:900;font-size:24px;">{{ t.price }}<span style="font-size:12px;color:var(--ink3);font-weight:700;">/mo</span></span>
+                  </span>
+                  <span style="display:flex;flex-direction:column;gap:7px;margin-top:14px;padding-left:34px;">
+                    <sc-for list="{{ t.perks }}" as="p" hint-placeholder-count="4"><span style="display:block;text-align:left;font-size:14px;color:var(--ink2);line-height:1.4;">{{ p }}</span></sc-for>
+                  </span>
+                  <sc-if value="{{ t.badge }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-10px;right:16px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.1em;color:#00131D;background:#1FB6FF;padding:4px 9px;border-radius:7px;">{{ t.badge }}</span></sc-if>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ jv.s1 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:24px;">
+              <sc-for list="{{ jv.vehicles }}" as="v" hint-placeholder-count="1">
+                <div style="padding:16px;border-radius:20px;background:var(--card);border:1px solid var(--line);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--ink3);">{{ v.label }}</span><sc-if value="{{ v.canRemove }}" hint-placeholder-val="{{ false }}"><button onClick="{{ v.remove }}" style="font-size:13px;font-weight:700;color:var(--ink3);">Remove</button></sc-if></div>
+                  <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:8px;">
+                    <input value="{{ v.car }}" onInput="{{ v.setCar }}" placeholder="Year, make, model" style="height:52px;padding:0 14px;border-radius:14px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;min-width:0;">
+                    <input value="{{ v.plate }}" onInput="{{ v.setPlate }}" placeholder="Plate" style="height:52px;padding:0 14px;border-radius:14px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;text-transform:uppercase;min-width:0;">
+                  </div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ jv.canAddVeh }}" hint-placeholder-val="{{ true }}"><button onClick="{{ jv.addVeh }}" style="height:56px;border-radius:18px;border:1.5px dashed var(--line);font-weight:700;font-size:15px;color:var(--ink2);">+ Add another vehicle</button></sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ jv.s2 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:24px;">
+              <input value="{{ jv.name }}" onInput="{{ jv.setName }}" autocomplete="name" placeholder="Full name" style="height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;">
+              <input value="{{ jv.phone }}" onInput="{{ jv.setPhone }}" inputmode="tel" autocomplete="tel" placeholder="Mobile number" style="height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;">
+              <input value="{{ jv.email }}" onInput="{{ jv.setEmail }}" inputmode="email" autocomplete="email" placeholder="Email (for receipts)" style="height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;">
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ jv.s3 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:24px;">
+              <input value="{{ jv.card }}" onInput="{{ jv.setCard }}" inputmode="numeric" autocomplete="cc-number" placeholder="Card number" style="height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;letter-spacing:.04em;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <input value="{{ jv.exp }}" onInput="{{ jv.setExp }}" inputmode="numeric" autocomplete="cc-exp" placeholder="MM / YY" style="height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;min-width:0;">
+                <input value="{{ jv.cvc }}" onInput="{{ jv.setCvc }}" inputmode="numeric" autocomplete="cc-csc" placeholder="CVC" style="height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;min-width:0;">
+              </div>
+              <button onClick="{{ jv.toggleAgree }}" style="display:flex;gap:12px;align-items:flex-start;text-align:left;padding:8px 2px;">
+                <span style="{{ jv.agreeBox }}"><sc-if value="{{ jv.agree }}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#00131D" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if></span>
+                <span style="font-size:13.5px;line-height:1.45;color:var(--ink2);">{{ jv.agreeText }}</span>
+              </button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ jv.err }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px;font-size:13.5px;font-weight:700;color:#E5533D;">{{ jv.err }}</div></sc-if>
+
+          <sc-if value="{{ jv.s4 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:26px;max-width:440px;">
+              <button onClick="{{ jv.bookFirst }}" style="height:60px;border-radius:18px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:17px;box-shadow:0 12px 34px rgba(31,182,255,.35);">Book your first wash</button>
+              <a href="sms:+12015986304?&amp;body=Hi%2C%20I%20just%20joined" style="height:56px;display:flex;align-items:center;justify-content:center;border-radius:18px;border:1px solid var(--line);color:var(--ink);font-weight:700;font-size:15.5px;">Text our member line</a>
+              <a href="#/" style="text-align:center;padding:10px;font-weight:700;font-size:14px;color:var(--ink3);">Back to home</a>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="position:sticky;top:110px;order:{{ jv.cardOrder }};min-width:0;">
+          <div onPointerMove="{{ jv.cardMove }}" onPointerLeave="{{ jv.cardLeave }}" style="perspective:1100px;max-width:460px;margin:0 auto;">
+            <div ref="{{ cardRef }}" style="position:relative;width:100%;aspect-ratio:1.586;border-radius:22px;overflow:hidden;transform-style:preserve-3d;transition:transform .25s ease-out;box-shadow:0 30px 70px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.14);background:{{ jv.cardBg }};animation:{{ jv.cardAnim }};color:#FFFFFF;">
+              <div style="position:absolute;inset:0;background:repeating-linear-gradient(115deg,rgba(255,255,255,.025) 0 2px,transparent 2px 9px);pointer-events:none;"></div>
+              <div ref="{{ shineRef }}" style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(60% 80% at 30% 20%,rgba(255,255,255,.22),transparent 60%);"></div>
+              <div style="position:absolute;inset:0;padding:20px 22px;display:flex;flex-direction:column;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;"><img src="/assets/oasis-logo.png" alt="" style="height:58px;width:auto;"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.16em;color:rgba(255,255,255,.7);">MEMBER</span></div>
+                <div style="flex:1;"></div>
+                <div style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(30px,8vw,40px);line-height:1;text-transform:uppercase;letter-spacing:.02em;background:{{ jv.tierInk }};-webkit-background-clip:text;background-clip:text;color:transparent;">{{ jv.tierName }}</div>
+                <div style="display:flex;justify-content:space-between;gap:10px;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.1em;color:rgba(255,255,255,.82);"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ jv.cardName }}</span><span>•••• 0427</span></div>
+              </div>
+            </div>
+          </div>
+          <sc-if value="{{ jv.showSummary }}" hint-placeholder-val="{{ true }}">
+            <div style="max-width:460px;margin:16px auto 0;padding:16px 18px;border-radius:20px;background:var(--card);border:1px solid var(--line);">
+              <sc-for list="{{ jv.lines }}" as="l" hint-placeholder-count="4"><div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:14.5px;"><span style="color:var(--ink3);">{{ l.label }}</span><span style="font-weight:800;color:{{ l.col }};">{{ l.value }}</span></div></sc-for>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;padding-top:12px;border-top:1px solid var(--line);"><span style="font-weight:800;">Due today</span><span style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:900;font-size:26px;">{{ jv.due }}</span></div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <sc-if value="{{ jv.hasCta }}" hint-placeholder-val="{{ true }}">
+        <div style="position:fixed;left:0;right:0;bottom:0;z-index:55;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line2);">
+          <div style="max-width:1080px;margin:0 auto;display:flex;gap:10px;justify-content:flex-end;">
+            <button onClick="{{ jv.next }}" style="flex:1;max-width:460px;height:60px;border-radius:18px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:17px;box-shadow:0 12px 34px rgba(31,182,255,.35);">{{ jv.ctaLabel }}</button>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- STICKY CTA -->
+  <sc-if value="{{ stickyOn }}" hint-placeholder-val="{{ true }}">
+    <div style="position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:60;display:flex;justify-content:center;pointer-events:none;">
+      <div style="pointer-events:auto;width:100%;max-width:560px;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 16px;border-radius:20px;background:rgba(14,19,24,.92);color:#F2F5F7;backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);border:1px solid rgba(255,255,255,.12);box-shadow:0 18px 50px rgba(0,0,0,.45);transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .3s;transform:translateY({{ barY }});opacity:{{ barOpacity }};">
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:900;font-size:16px;white-space:nowrap;">VIP · $169<span style="font-size:12px;color:#8C97A1;font-weight:700;">/mo</span></div>
+          <div style="font-size:12px;color:#8C97A1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Priority times · Gold from $99</div>
+        </div>
+        <button onClick="{{ openBookAny }}" style="flex:none;height:48px;padding:0 15px;border-radius:14px;border:1px solid rgba(255,255,255,.16);font-weight:700;font-size:14px;">Book</button>
+        <button onClick="{{ goJoinVip }}" style="flex:none;height:48px;padding:0 20px;border-radius:14px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:14.5px;">Join</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column;overflow-y:auto;animation:oaIn .3s cubic-bezier(.2,.8,.2,1);">
+      <div style="position:sticky;top:0;z-index:5;flex:none;background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line2);">
+        <div style="height:76px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 14px;">
+          <div><sc-if value="{{ sh.canBack }}" hint-placeholder-val="{{ false }}"><button onClick="{{ sh.back }}" aria-label="Back" style="width:46px;height:46px;border-radius:14px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></sc-if></div>
+          <img src="/assets/oasis-logo.png" alt="Oasis Auto Spa" style="height:64px;width:auto;">
+          <div style="display:flex;justify-content:flex-end;"><button onClick="{{ closeSheet }}" aria-label="Close" style="width:46px;height:46px;border-radius:14px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button></div>
+        </div>
+        <div style="height:3px;background:var(--line2);"><div style="height:100%;width:{{ sh.progress }};background:#1FB6FF;box-shadow:0 0 12px rgba(31,182,255,.8);transition:width .5s cubic-bezier(.2,.8,.2,1);"></div></div>
+      </div>
+      <div style="flex:1;max-width:1080px;width:100%;margin:0 auto;padding:30px 20px 150px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:30px;align-items:start;">
+        <div style="min-width:0;display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;letter-spacing:.16em;color:var(--accentText);">{{ sh.eyebrow }}</div>
+            <h1 style="margin:12px 0 8px;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(32px,8.5vw,64px);line-height:.92;letter-spacing:-.025em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;">{{ sh.title }}</h1>
+          </div>
+          <sc-if value="{{ sh.bWho }}" hint-placeholder-val="{{ false }}">
+            <sc-if value="{{ sh.slotChosen }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:var(--inset);font-size:14px;color:var(--ink2);"><span style="font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--ink);">{{ sh.slotLabel }}</span>is open</div></sc-if>
+            <div style="padding:18px;border-radius:20px;background:var(--card);border:1.5px solid var(--cyanBrd);">
+              <div style="font-weight:800;font-size:17px;">I'm a member</div>
+              <div style="font-size:13.5px;color:var(--ink3);margin-top:3px;">Sign in with your mobile number</div>
+              <div style="display:flex;gap:8px;margin-top:14px;">
+                <input value="{{ bkPhone }}" onInput="{{ setBkPhone }}" inputmode="tel" placeholder="(201) 555-0123" style="flex:1;min-width:0;height:52px;padding:0 14px;border-radius:14px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;">
+                <button onClick="{{ memberContinue }}" style="flex:none;height:52px;padding:0 18px;border-radius:14px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:15px;">Continue</button>
+              </div>
+              <sc-if value="{{ sh.phoneErr }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px;color:#E5533D;margin-top:8px;font-weight:700;">Enter a 10-digit mobile number.</div></sc-if>
+            </div>
+            <button onClick="{{ goJoinVip }}" style="display:flex;align-items:center;gap:14px;text-align:left;padding:18px;border-radius:20px;background:var(--cyanSoft);border:1px solid var(--cyanBrd);">
+              <span style="flex:1;"><span style="display:block;font-weight:800;font-size:17px;">Become a member</span><span style="display:block;font-size:13.5px;color:var(--cyanInk);margin-top:3px;line-height:1.4;">This wash is included. Gold $99 or VIP $169 a month.</span></span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#1FB6FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button onClick="{{ guestContinue }}" style="display:flex;align-items:center;gap:14px;text-align:left;padding:16px 18px;border-radius:20px;border:1px solid var(--line);">
+              <span style="flex:1;"><span style="display:block;font-weight:700;font-size:15.5px;color:var(--ink2);">Continue as guest</span><span style="display:block;font-size:13px;color:var(--ink3);margin-top:3px;">Guest prices · $25 non-refundable booking fee</span></span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </sc-if>
+
+          <sc-if value="{{ sh.bSvc }}" hint-placeholder-val="{{ false }}">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.12em;color:var(--ink4);">VEHICLE</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;"><sc-for list="{{ sh.vehicles }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for></div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.12em;color:var(--ink4);margin-top:6px;">WASH</div>
+            <sc-for list="{{ sh.washes }}" as="w" hint-placeholder-count="2">
+              <button onClick="{{ w.onClick }}" style="{{ w.style }}">
+                <span style="{{ w.radio }}"></span>
+                <span style="flex:1;text-align:left;"><span style="display:block;font-weight:800;font-size:16px;">{{ w.name }}</span><span style="display:block;font-size:13px;color:var(--ink3);margin-top:3px;">{{ w.sub }}</span></span>
+                <span style="text-align:right;"><span style="display:block;font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:900;font-size:18px;">{{ w.price }}</span><span style="display:block;font-size:11px;color:var(--accentText);font-weight:700;margin-top:2px;">{{ w.note }}</span></span>
+              </button>
+            </sc-for>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.12em;color:var(--ink4);margin-top:6px;">ADD DURING YOUR WASH</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <sc-for list="{{ sh.addons }}" as="a" hint-placeholder-count="6"><button onClick="{{ a.onClick }}" style="{{ a.style }}"><span style="display:block;font-weight:700;font-size:14px;line-height:1.25;">{{ a.name }}</span><span style="display:block;font-size:12.5px;color:{{ a.priceCol }};font-weight:700;margin-top:4px;">{{ a.price }}</span></button></sc-for>
+            </div>
+            <div style="font-size:12.5px;color:var(--ink3);">Need tint or a full detail? <a href="{{ tintSms }}">Text us for a quote.</a></div>
+          </sc-if>
+
+          <sc-if value="{{ sh.bTime }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px;">
+              <sc-for list="{{ sh.dayChips }}" as="d" hint-placeholder-count="5"><button onClick="{{ d.onClick }}" style="{{ d.style }}"><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.1em;">{{ d.top }}</span><span style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:900;font-size:22px;margin-top:2px;">{{ d.num }}</span></button></sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+              <sc-for list="{{ sh.slots }}" as="t" hint-placeholder-count="9"><button onClick="{{ t.onClick }}" style="{{ t.style }}"><span style="font-weight:800;font-size:15px;">{{ t.label }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:800;letter-spacing:.08em;margin-top:3px;color:{{ t.tagCol }};">{{ t.tag }}</span></button></sc-for>
+            </div>
+            <sc-if value="{{ sh.lockNote }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:var(--cyanSoft);border:1px solid var(--cyanBrd);">
+                <div style="flex:1;font-size:13.5px;line-height:1.45;color:var(--cyanInk);">{{ sh.lockNote }}</div>
+                <button onClick="{{ goJoinVip }}" style="flex:none;height:42px;padding:0 14px;border-radius:12px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:13.5px;">Join VIP</button>
+              </div>
+            </sc-if>
+          </sc-if>
+
+          <sc-if value="{{ sh.bReview }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:16px 18px;border-radius:20px;background:var(--inset);">
+              <div style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:900;font-size:20px;">{{ sh.when }}</div>
+              <div style="font-size:13.5px;color:var(--ink3);margin-top:4px;">{{ sh.vehLabel }} · 468 River Dr, Garfield</div>
+              <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px;">
+                <sc-for list="{{ sh.lines }}" as="l" hint-placeholder-count="3"><div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:14.5px;"><span style="color:{{ l.lc }};">{{ l.label }}</span><span style="font-weight:800;color:{{ l.vc }};">{{ l.value }}</span></div></sc-for>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;padding-top:12px;border-top:1px solid var(--line);"><span style="font-weight:800;">{{ sh.dueLabel }}</span><span style="font-family:'Archivo',sans-serif;font-stretch:112%;font-weight:900;font-size:26px;">{{ sh.due }}</span></div>
+              <div style="font-size:12.5px;color:var(--ink3);margin-top:4px;">{{ sh.dueSub }}</div>
+            </div>
+            <sc-if value="{{ sh.isGuest }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ sh.toggleAck }}" style="display:flex;gap:12px;align-items:flex-start;text-align:left;padding:4px 2px;">
+                <span style="{{ sh.ackBox }}"><sc-if value="{{ sh.ack }}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#00131D" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if></span>
+                <span style="font-size:13.5px;line-height:1.45;color:var(--ink2);">I understand the $25 booking fee is non-refundable, including if I cancel or don't show.</span>
+              </button>
+              <div style="padding:16px 18px;border-radius:20px;background:linear-gradient(135deg,rgba(31,182,255,.16),rgba(31,182,255,.04));border:1px solid var(--cyanBrd);">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.12em;color:var(--accentText);">AS A VIP THIS VISIT IS $0</div>
+                <div style="font-weight:800;font-size:16px;margin-top:6px;line-height:1.35;">{{ sh.upsell }}</div>
+                <button onClick="{{ goJoinVip }}" style="margin-top:12px;height:46px;padding:0 16px;border-radius:13px;background:#1FB6FF;color:#00131D;font-weight:800;font-size:14px;">Join and book</button>
+              </div>
+            </sc-if>
+          </sc-if>
+
+          <sc-if value="{{ sh.bDone }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:center;padding:16px 0 6px;">
+              <div style="width:72px;height:72px;margin:0 auto;border-radius:50%;background:#1FB6FF;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 10px rgba(31,182,255,.12),0 0 50px rgba(31,182,255,.5);"><svg width="34" height="34" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#00131D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <div style="font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:30px;text-transform:uppercase;margin-top:20px;">You're booked</div>
+              <div style="font-size:16px;font-weight:700;margin-top:8px;">{{ sh.when }}</div>
+              <div style="font-size:14px;color:var(--ink3);margin-top:4px;line-height:1.5;">{{ sh.doneSub }}</div>
+            </div>
+            <div style="padding:14px 16px;border-radius:16px;background:var(--inset);font-size:13.5px;line-height:1.5;color:var(--ink2);">We'll text a reminder the day before. Reply <b style="color:var(--ink);">C</b> to change your time.</div>
+          </sc-if>
+        </div>
+        <div style="position:sticky;top:100px;min-width:0;">
+          <div style="max-width:460px;margin:0 auto;padding:1.5px;border-radius:26px;background:linear-gradient(150deg,rgba(255,255,255,.6),rgba(124,136,147,.4) 30%,#1FB6FF 55%,rgba(233,238,242,.5) 80%,rgba(89,99,109,.6));">
+            <div style="padding:20px;border-radius:24.5px;background:radial-gradient(90% 60% at 100% 0%,rgba(31,182,255,.2),transparent 60%),linear-gradient(180deg,#0E1419,#07090C);color:#F2F5F7;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.14em;color:#7FD6FF;">YOUR BOOKING</span><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.1em;color:#00131D;background:#1FB6FF;padding:3px 8px;border-radius:6px;">{{ sh.sumWho }}</span></div>
+              <div style="font-family:'Archivo',sans-serif;font-stretch:115%;font-weight:900;font-size:26px;letter-spacing:-.01em;margin-top:12px;">{{ sh.sumWhen }}</div>
+              <div style="font-size:13.5px;color:#8C97A1;margin-top:3px;">468 River Drive, Garfield</div>
+              <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px;">
+                <sc-for list="{{ sh.sumLines }}" as="l" hint-placeholder-count="3"><div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:14px;"><span style="color:#B7C0C8;">{{ l.label }}</span><span style="font-weight:800;color:{{ l.col }};">{{ l.value }}</span></div></sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <sc-if value="{{ sh.hasCta }}" hint-placeholder-val="{{ false }}">
+        <div style="position:fixed;left:0;right:0;bottom:0;z-index:6;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line2);">
+          <div style="max-width:1080px;margin:0 auto;display:flex;justify-content:flex-end;"><div style="flex:1;max-width:460px;"><button onClick="{{ sh.cta }}" style="{{ sh.ctaStyle }}">{{ sh.ctaLabel }}</button></div></div>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:95;max-width:calc(100vw - 32px);padding:13px 18px;border-radius:14px;background:var(--inv);color:var(--invInk);font-weight:700;font-size:14px;box-shadow:0 14px 40px rgba(0,0,0,.35);">{{ toast }}</div>
+  </sc-if>
+</div>

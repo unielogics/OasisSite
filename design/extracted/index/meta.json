@@ -1,0 +1,108 @@
+{
+  "slug": "index",
+  "route": "/",
+  "name": "Oasis Site v2",
+  "sourceFile": "original/Oasis Site v2.dc.html",
+  "sourceSha256": "ab6f3b4d4e33ed9b29f278007e1d1d0fd8b4d5786173df8c16813f2f529ca569",
+  "source": "raw",
+  "dataProps": {
+    "theme": {
+      "editor": "enum",
+      "options": [
+        "dark",
+        "light"
+      ],
+      "default": "dark",
+      "tsType": "'dark' | 'light'"
+    },
+    "beads": {
+      "editor": "boolean",
+      "default": true,
+      "tsType": "boolean"
+    },
+    "stickyBar": {
+      "editor": "boolean",
+      "default": true,
+      "tsType": "boolean"
+    }
+  },
+  "propDefaults": {
+    "theme": "dark",
+    "beads": true,
+    "stickyBar": true
+  },
+  "preview": null,
+  "title": "Oasis Auto Spa · Concierge Hand Wash · Garfield, NJ",
+  "label": "Oasis Site v2",
+  "templateChars": 102217,
+  "logicChars": 55395,
+  "helmets": [
+    {
+      "index": 0,
+      "file": "helmet.0.css",
+      "fontFace": false,
+      "chars": 2577
+    }
+  ],
+  "helmetLinks": [
+    {
+      "tag": "meta",
+      "attrs": {
+        "name": "viewport",
+        "content": "width=device-width, initial-scale=1, viewport-fit=cover"
+      }
+    },
+    {
+      "tag": "link",
+      "attrs": {
+        "rel": "preconnect",
+        "href": "https://fonts.googleapis.com"
+      }
+    },
+    {
+      "tag": "link",
+      "attrs": {
+        "rel": "preconnect",
+        "href": "https://fonts.gstatic.com",
+        "crossorigin": ""
+      }
+    },
+    {
+      "tag": "link",
+      "attrs": {
+        "href": "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap",
+        "rel": "stylesheet"
+      }
+    }
+  ],
+  "helmetScripts": 1,
+  "helmetScriptSrcs": [
+    "/assets/image-slot.js"
+  ],
+  "fontSheets": [
+    {
+      "file": "helmet.fonts.0.css",
+      "href": "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap",
+      "chars": 14370,
+      "files": [
+        "archivo-vietnamese.woff2",
+        "archivo-latin-ext.woff2",
+        "archivo-latin.woff2",
+        "hanken-grotesk-cyrillic-ext.woff2",
+        "hanken-grotesk-vietnamese.woff2",
+        "hanken-grotesk-latin-ext.woff2",
+        "hanken-grotesk-latin.woff2",
+        "jetbrains-mono-cyrillic-ext.woff2",
+        "jetbrains-mono-cyrillic.woff2",
+        "jetbrains-mono-greek.woff2",
+        "jetbrains-mono-vietnamese.woff2",
+        "jetbrains-mono-latin-ext.woff2",
+        "jetbrains-mono-latin.woff2"
+      ]
+    }
+  ],
+  "helmetAtomics": false,
+  "xImports": 0,
+  "frames": [],
+  "runtimeSha256": "8fe7df74405f3c55f49b7249c74ea1397e65d07dea2b1bd3b4a489bec2e28cbe"
+}

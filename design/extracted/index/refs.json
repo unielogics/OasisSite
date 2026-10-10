@@ -1,0 +1,67 @@
+{
+  "refs": [
+    {
+      "uuid": "image-slot.js",
+      "where": "attribute",
+      "tag": "script",
+      "attr": "src",
+      "tpl": 6
+    },
+    {
+      "uuid": "assets/oasis-logo.png",
+      "where": "attribute",
+      "tag": "img",
+      "attr": "src",
+      "tpl": 19
+    },
+    {
+      "uuid": "assets/oasis-logo.png",
+      "where": "attribute",
+      "tag": "img",
+      "attr": "src",
+      "tpl": 26
+    },
+    {
+      "uuid": "assets/oasis-logo.png",
+      "where": "attribute",
+      "tag": "img",
+      "attr": "src",
+      "tpl": 496
+    },
+    {
+      "uuid": "assets/oasis-logo.png",
+      "where": "attribute",
+      "tag": "img",
+      "attr": "src",
+      "tpl": 531
+    },
+    {
+      "uuid": "assets/oasis-logo.png",
+      "where": "attribute",
+      "tag": "img",
+      "attr": "src",
+      "tpl": 560
+    },
+    {
+      "uuid": "assets/oasis-logo.png",
+      "where": "attribute",
+      "tag": "img",
+      "attr": "src",
+      "tpl": 631
+    },
+    {
+      "uuid": "assets/oasis-logo.png",
+      "where": "attribute",
+      "tag": "img",
+      "attr": "src",
+      "tpl": 669
+    },
+    {
+      "uuid": "support.js",
+      "where": "head",
+      "tag": "script",
+      "attr": "src"
+    }
+  ],
+  "unreferenced": []
+}

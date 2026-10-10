@@ -1,0 +1,144 @@
+{
+  "sources": [
+    {
+      "href": "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap",
+      "css": "google-0.css",
+      "sha256": "15d4e0f469340263f4f517de4aa976d988130be7032e10844eb4ca9eb277780d",
+      "faces": 41,
+      "fetchedAt": "2026-10-10T04:07:41.275Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+    }
+  ],
+  "files": {
+    "archivo-latin-ext.woff2": {
+      "url": "https://fonts.gstatic.com/s/archivo/v25/k3kQo8UDI-1M0wlSfdfoLnnA.woff2",
+      "sha256": "5717f37059660ca5c899bad6c48ee22c3ac55cb3c484055241689d0f905a1a86",
+      "bytes": 86240,
+      "family": "Archivo",
+      "subset": "latin-ext",
+      "weight": "400 900",
+      "style": "normal",
+      "stretch": "62% 125%"
+    },
+    "archivo-latin.woff2": {
+      "url": "https://fonts.gstatic.com/s/archivo/v25/k3kQo8UDI-1M0wlSfdnoLg.woff2",
+      "sha256": "e3a28eade21a900c7155a247757f4b2834c07bb7ef07ad7efa55cebaac1e8f5e",
+      "bytes": 90104,
+      "family": "Archivo",
+      "subset": "latin",
+      "weight": "400 900",
+      "style": "normal",
+      "stretch": "62% 125%"
+    },
+    "archivo-vietnamese.woff2": {
+      "url": "https://fonts.gstatic.com/s/archivo/v25/k3kQo8UDI-1M0wlSfdboLnnA.woff2",
+      "sha256": "332e6f66de84927cdffc60894e4e186ced783f5cb4b3e88200f45b7c1d306810",
+      "bytes": 34464,
+      "family": "Archivo",
+      "subset": "vietnamese",
+      "weight": "400 900",
+      "style": "normal",
+      "stretch": "62% 125%"
+    },
+    "hanken-grotesk-cyrillic-ext.woff2": {
+      "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpQ59CjCQ.woff2",
+      "sha256": "7ba47c78279dc529afe577dc2476bc8fd3c0e32f78efa26dca9f9382d49a157d",
+      "bytes": 1668,
+      "family": "Hanken Grotesk",
+      "subset": "cyrillic-ext",
+      "weight": "400",
+      "style": "normal",
+      "stretch": null
+    },
+    "hanken-grotesk-latin-ext.woff2": {
+      "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpT59CjCQ.woff2",
+      "sha256": "768af2923e0ab1549f1dfba0a5c8ea749c4c01f01d8e77ffaf7fcd12f57a0a24",
+      "bytes": 19588,
+      "family": "Hanken Grotesk",
+      "subset": "latin-ext",
+      "weight": "400",
+      "style": "normal",
+      "stretch": null
+    },
+    "hanken-grotesk-latin.woff2": {
+      "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpd59A.woff2",
+      "sha256": "e9201eddf1d41d0b62253295d869ce3cf65768f7102b797f02c7f8c876b4a9d5",
+      "bytes": 34704,
+      "family": "Hanken Grotesk",
+      "subset": "latin",
+      "weight": "400",
+      "style": "normal",
+      "stretch": null
+    },
+    "hanken-grotesk-vietnamese.woff2": {
+      "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpS59CjCQ.woff2",
+      "sha256": "992b5d147edde9d637ce22e7bb9cc9e6909c05410226b36a2e581ada9877eb4a",
+      "bytes": 9320,
+      "family": "Hanken Grotesk",
+      "subset": "vietnamese",
+      "weight": "400",
+      "style": "normal",
+      "stretch": null
+    },
+    "jetbrains-mono-cyrillic-ext.woff2": {
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx3cwhsk.woff2",
+      "sha256": "62213be8a78b42f1e29d1452d91e2f8b3e745572a9dd98d3941e39fa00b37d76",
+      "bytes": 1640,
+      "family": "JetBrains Mono",
+      "subset": "cyrillic-ext",
+      "weight": "500",
+      "style": "normal",
+      "stretch": null
+    },
+    "jetbrains-mono-cyrillic.woff2": {
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxTcwhsk.woff2",
+      "sha256": "e17cfd15fb96909d64095015f958207063a0c07191da3512df7d560a781aebdf",
+      "bytes": 8872,
+      "family": "JetBrains Mono",
+      "subset": "cyrillic",
+      "weight": "500",
+      "style": "normal",
+      "stretch": null
+    },
+    "jetbrains-mono-greek.woff2": {
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxPcwhsk.woff2",
+      "sha256": "0a557721b1f8b36d3f3f84442689a71ca4a744300abcb46a1953f51bfc663b66",
+      "bytes": 6836,
+      "family": "JetBrains Mono",
+      "subset": "greek",
+      "weight": "500",
+      "style": "normal",
+      "stretch": null
+    },
+    "jetbrains-mono-latin-ext.woff2": {
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx7cwhsk.woff2",
+      "sha256": "db5ff4db83e580426280e9337a58dc57d3a83784a1b03ad80914651594441d52",
+      "bytes": 11624,
+      "family": "JetBrains Mono",
+      "subset": "latin-ext",
+      "weight": "500",
+      "style": "normal",
+      "stretch": null
+    },
+    "jetbrains-mono-latin.woff2": {
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2",
+      "sha256": "83c005d49d8a6a50474c73a5a36ac0468076e9c4a29da7bdb14995d80560a5be",
+      "bytes": 31432,
+      "family": "JetBrains Mono",
+      "subset": "latin",
+      "weight": "500",
+      "style": "normal",
+      "stretch": null
+    },
+    "jetbrains-mono-vietnamese.woff2": {
+      "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx_cwhsk.woff2",
+      "sha256": "c89b9cc0bc6262bd4f8d8494b6961601f3aefa829d08c2e3635f4d501d3a47c2",
+      "bytes": 5888,
+      "family": "JetBrains Mono",
+      "subset": "vietnamese",
+      "weight": "500",
+      "style": "normal",
+      "stretch": null
+    }
+  }
+}

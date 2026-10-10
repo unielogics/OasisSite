@@ -1,7 +1,25 @@
 {
-  "files": {},
+  "files": {
+    "assets/oasis-logo.png": {
+      "sha256": "",
+      "mime": "image/png",
+      "bytes": 0,
+      "kind": "asset",
+      "loose": null,
+      "missing": true
+    },
+    "scripts/image-slot.js": {
+      "sha256": "fff26d081c8d9d60870f86c7539a5d179b9cdab15e67f2b205508a068e7c7ff6",
+      "mime": "text/javascript",
+      "bytes": 65350,
+      "kind": "script",
+      "loose": "image-slot.js"
+    }
+  },
   "uuidToPathPerPage": {
-    "settings": {},
-    "payments": {}
+    "index": {
+      "image-slot.js": "/assets/image-slot.js",
+      "assets/oasis-logo.png": "/assets/oasis-logo.png"
+    }
   }
 }

@@ -1,4 +1,12 @@
-# Intake: from a Claude Design bundle to `design/extracted/`
+# Intake: from a Claude Design page to `design/extracted/`
+
+Two source formats are read, both into the same `design/extracted/` layout and `meta.json`:
+
+- a **raw `.dc.html` document** ("Oasis Site v2", what Claude Design saves for a project): `<head>` loads
+  `./support.js` (the dc runtime), `<x-dc>` holds the `<helmet>` and the template, `<script type="text/x-dc"
+  data-dc-script data-props>` the logic. Its loose files sit beside it in `design/original/loose/` (`support.js`,
+  `image-slot.js`, `assets/<file>`). See "Raw documents" below.
+- a **"Bundled Page"** (the dashboard's three bundles, kept as fixtures for the pipeline's tests).
 
 A Claude Design "Bundled Page" is one HTML file that carries every resource of the page in a manifest
 (`<script type="__bundler/manifest">`: uuid → `{mime, compressed, data}`), the CDN resources it replaced
@@ -12,11 +20,15 @@ The intake does the same decoding offline, generically, and writes stable files.
 ## Files
 
 `design/pages.json` lists the pages: `[{ "slug", "route", "file", "name" }]` (`file` relative to `design/`;
-`route` is the clean URL, `/` for the index). `design/original/` holds the real bundle(s) and `design/original/loose/`
-the loose files that came with the design (`oasis-logo.png`, `image-slot.js`, `support.js`): a manifest entry whose
-sha256 matches a loose file takes its name. `design/fixtures/` holds the dashboard's three bundles for the tests.
+`route` is the clean URL, `/` for the index): today `[{ "slug": "index", "route": "/", "file": "original/Oasis Site
+v2.dc.html" }]`. `design/original/` holds the design and `design/original/loose/` the loose files that came with it
+(`support.js`, `image-slot.js`, `assets/oasis-logo.png` once supplied); for a bundle, a manifest entry whose sha256
+matches a loose file takes its name. `design/fonts/` holds the vendored Google Fonts, `design/probe/` the Chromium
+probe, `design/fixtures/` the dashboard's three bundles for the tests. `design/CHECKSUMS.sha256` covers all of it
+(`pnpm design:verify` runs in check and build; `pnpm design:checksums` after an intake).
 
 ```bash
+pnpm intake:fonts           # once per design: vendor the helmet's Google Fonts into design/fonts (network)
 pnpm intake                 # design/pages.json -> design/extracted/ (the directory is replaced)
 pnpm intake:inventory       # docs/intake-report.md + design/extracted/<slug>/inventory.json
 pnpm intake:probe           # design/probe/<slug>.json from the ORIGINAL in pinned Chromium (needs the browser)
@@ -56,6 +68,35 @@ there is no "exactly two styles" assumption), `meta.json` (route, name, `data-pr
 Two things the HTML parser decides for the runtime and therefore for us: a self-closing `<x-import .../>` is an
 open tag, so its following siblings become its children (the browser's `innerHTML` and parse5 agree); and
 `<template>` elements are refused.
+
+## Raw documents (`tools/intake/raw.ts`)
+
+The runtime boots a raw document twice: first from `<x-dc>.innerHTML` (the browser's body parse), then — when no
+bundler resource map exists — from a re-fetch of the page's own source, slicing the text between the `<x-dc>` open
+tag and the LAST `</x-dc>` (`parseDcText`). The second compile is the one that stays mounted, so the intake takes
+the same raw slice as `template.html`; `logic.original.js` is the script's text byte for byte; `head.html` the
+document's `<head>` with `./support.js` rewritten to `/runtime/dc-runtime.js`.
+
+Resources are the relative references of the template (`src`, `href`, `url()`), the head (`script src`) and the
+logic (quoted strings), resolved against the loose files: the runtime (`// src/boot.ts`) → `runtime/dc-runtime.js`,
+other scripts (`./image-slot.js`) → `scripts/<name>` at `/assets/<name>`, `assets/<file>` → `assets/<file>` at
+`/assets/<file>`. A referenced image that does not exist yet (the logo the owner has not supplied) is recorded with
+`missing: true` in `assets.json`; the build substitutes a placeholder (DEVIATIONS.md DV-LOGO) and the intake accepts
+the real file the moment it appears under `design/original/loose/assets/`.
+
+`meta.json` additionally carries `source: "raw"`, `propDefaults` (every data-props entry's `default`, what the
+runtime's StandaloneRoot passes as props), `title` (the helmet's `<title>`), `helmetScriptSrcs` and `fontSheets`.
+
+### Fonts (`pnpm intake:fonts`, once)
+
+A raw document links Google Fonts from its helmet. `tools/intake/fonts.ts` downloads, ONCE, the CSS exactly as
+Google serves it to a current Chrome (variable fonts with the axes the query asks for, unicode-range subsets) and
+every woff2 it references, into `design/fonts/` (`google-<n>.css` verbatim, `<family>-<subset>.woff2`,
+`manifest.json` with every source URL and sha256). It is the only step of the pipeline that touches the network;
+`pnpm intake` then builds `helmet.fonts.<n>.css` (the same CSS with `url(/fonts/<file>)`) from it and fails when the
+helmet links a stylesheet the manifest does not cover. The compiler folds the font sheets into the page CSS before
+the helmet's own styles; the helmet's preconnects and stylesheet link are dropped by a `head.drop` patch
+(DEVIATIONS.md DV-FONTS). The parity harness answers the original's Google Fonts requests from the same files.
 
 ## `tools/intake/inventory.ts`
 
