@@ -150,12 +150,15 @@ details → checkout → terms → back). The submits are sms: navigations in th
 
 1. determinism (original vs original, every scenario, both themes, zero diff; inert scenarios flagged);
 2. sensitivity (a 1 px padding change, a static label change and a `renderVals` change must fail exactly the checks
-   that can see them; the per-page edit targets live in `selftest.ts` `TEXT_EDIT`/`VALS_EDIT` and must be added for a
+   that can see them; the per-page edit targets live in `selftest.ts` `TEXT_EDIT`/`VALS_EDIT`, plus `CSS_EDIT` for a design
+   whose first static padding is in a view the `initial` scenario does not show (the site's is), and must be added for a
    new design);
 3. swaps (a text swap on the baseline plus the same edit in the port is zero diff; without the swap it fails);
 4. stale entries (an allow-list entry that matches nothing fails the run, a swap that matches nothing aborts it);
 5. port driver (`PortDriver` against `mock-port.ts`, the originals served at the pages' routes with the ready flag and
-   the hook; a 1 px change behind that URL fails dom, style and pixels).
+   the hook; a 1 px change behind that URL fails dom, style and pixels). A raw original standing in for the port
+   loads React and the fonts from the network, so this gate passes `cdn: true` (`PortTarget`), which gives the port
+   context the same pinned intercepts as the original's; the real port never gets them.
 
 `--quick` runs gate 1 on `initial` and gate 2 on the first page only.
 

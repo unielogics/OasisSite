@@ -33,8 +33,12 @@ import { loadTolerances, type Tolerances } from './tolerances'
 import type { UnitResult } from './types'
 
 export type PortTarget =
-  /** an already running server (serve:dist or production) */
-  | { kind: 'url'; url: string }
+  /**
+   * An already running server (serve:dist or production). `cdn: true` answers the runtime's unpkg React and the
+   * Google Fonts URLs from the pinned local copies, for a port that IS a raw original document (the self-test's mock
+   * port); the real port never needs it and keeps every external request a blocked-request console difference.
+   */
+  | { kind: 'url'; url: string; cdn?: boolean }
   /** dist-parity served in-process by serve-dist (the default of pnpm parity) */
   | { kind: 'dist'; serve?: DistServerOptions }
   /** serve another original bundle (optionally mutated) and use it as the "port": self-tests and dry runs */
@@ -135,7 +139,9 @@ export async function runHarness(opts: HarnessOptions): Promise<HarnessResult> {
     const ctx: RunContext = {
       makeOriginal: (): Driver => new OriginalDriver(browser, origServer, 'orig'),
       makePort: (): Driver =>
-        portServer ? new OriginalDriver(browser, portServer, 'port') : new PortDriver(browser, portUrl),
+        portServer
+          ? new OriginalDriver(browser, portServer, 'port')
+          : new PortDriver(browser, portUrl, { cdn: opts.port.kind === 'url' && !!opts.port.cdn }),
       allowlist,
       tolerances,
       consoleBaseline,

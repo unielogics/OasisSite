@@ -326,12 +326,18 @@ export class PortDriver extends PageDriver {
   constructor(
     browser: Browser,
     private readonly baseUrl: string,
+    private readonly opts: { cdn?: boolean } = {},
   ) {
     super(browser)
   }
 
   protected allowedOrigins(): string[] {
     return [new URL(this.baseUrl).origin]
+  }
+
+  /** Only a raw original standing in for the port (the self-test's mock port) loads React and fonts from the network. */
+  protected async prepare(): Promise<Partial<ParityContextOptions>> {
+    return this.opts.cdn ? { intercepts: defaultIntercepts() } : {}
   }
 
   protected urlFor(o: OpenOptions): string {

@@ -46,6 +46,15 @@ const VALS_EDIT: Record<string, [string, string]> = {
   payments: ["'Net revenue'", "'Net revenue!'"],
   settings: ["'Working hours'", "'Working hours!'"],
 }
+/**
+ * The 1 px CSS edit must land on an element the `initial` scenario renders. The raw site document's first static
+ * `padding:Npx` sits inside a hash-route view that the home view never shows (a mutation the harness cannot see is a
+ * false negative of the gate, not of the harness), so the site names a unique inline style of its sticky header; pages
+ * without an entry fall back to the first static padding after the helmet (the dashboard fixtures).
+ */
+const CSS_EDIT: Record<string, [string, string]> = {
+  index: ['padding:0 14px;background:var(--glass)', 'padding:0 15px;background:var(--glass)'],
+}
 const editFor = (table: Record<string, [string, string]>, page: string): [string, string] => {
   const e = table[page]
   if (!e) throw new Error(`selftest: no mutation configured for page ${page} (tools/parity/selftest.ts)`)
@@ -55,7 +64,9 @@ const editFor = (table: Record<string, [string, string]>, page: string): [string
 const MUTATIONS: Record<string, { transform: Transform; mustFail: CheckName[]; mustPass: CheckName[] }> = {
   'css-1px': {
     // first static `padding:Npx` after the helmet becomes N+1 px: an inline style attribute and the layout both change
-    transform: (_page, t) => {
+    transform: (page, t) => {
+      const named = CSS_EDIT[page]
+      if (named) return replaceOnce(t, named[0], named[1], 'css-1px')
       const cut = t.indexOf('</helmet>')
       const re = /(style="[^"{]*?padding:)(\d+)(px)/
       const rest = t.slice(cut)
@@ -306,7 +317,7 @@ async function portDriverGate(browser: Awaited<ReturnType<typeof launchBrowser>>
     ]
     const clean = await runHarness({
       scenarios,
-      port: { kind: 'url', url: mock.url },
+      port: { kind: 'url', url: mock.url, cdn: true },
       allowlist: [],
       tolerances: { pixels: [] },
       outDir: path.join(REPORTS_DIR, 'selftest', 'port-driver', 'clean'),
@@ -324,7 +335,7 @@ async function portDriverGate(browser: Awaited<ReturnType<typeof launchBrowser>>
     const bad = await runHarness({
       scenarios: selectScenarios({ page: SLUGS[0]!, scenario: 'initial' }),
       theme: 'light',
-      port: { kind: 'url', url: mutated.url },
+      port: { kind: 'url', url: mutated.url, cdn: true },
       allowlist: [],
       tolerances: { pixels: [] },
       outDir: path.join(REPORTS_DIR, 'selftest', 'port-driver', 'mutated'),
