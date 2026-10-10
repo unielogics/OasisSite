@@ -43,6 +43,17 @@ interface Api {
   stack?: Stack
 }
 
+/**
+ * The owner's decision of 2026-10-10 (DEVIATIONS.md DV-CONTACT): people TEXT the shop at 862-388-5827 and CALL it at
+ * 201-598-6304. site.config.json contact.smsE164 / phoneE164 must say the same.
+ */
+const SMS_E164 = '+18623885827'
+const TEL_E164 = '+12015986304'
+const SMS_DISPLAY = '862-388-5827'
+const TEL_DISPLAY = '201-598-6304'
+const CONTACT = (JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'utf8')) as { contact: Record<string, string> }).contact
+const reSms = (body: string) => new RegExp(`^sms:${SMS_E164.replace('+', '\\+')}\\?&body=${body}`)
+
 const PHONES = {
   guest: '+12015550141',
   member: '+12015550142',
@@ -203,7 +214,10 @@ async function newPage(browser: Browser, origin: string, timezoneId = 'America/N
     t.blocked.push(route.request().url())
     return route.abort()
   })
-  await ctx.addInitScript(`window.__oasisNavigate = function (u) { (window.__oasisNavigations = window.__oasisNavigations || []).push(u) }`)
+  // __name: tsx's keepNames helper, referenced by named functions inside the page.evaluate callbacks (as in the harness)
+  await ctx.addInitScript(
+    `if (!window.__name) window.__name = function (f) { return f }; window.__oasisNavigate = function (u) { (window.__oasisNavigations = window.__oasisNavigations || []).push(u) }`,
+  )
   const page = await ctx.newPage()
   page.on('console', (m) => {
     if (m.type() === 'error') t.errors.push(m.text())
@@ -229,6 +243,35 @@ const ready = async (page: Page): Promise<void> => {
   await page.waitForTimeout(600)
 }
 const btn = (page: Page, re: RegExp) => page.locator('#dc-root button').filter({ hasText: re })
+
+/**
+ * Every sms:/tel: link of the current view and every visible text node that names one of the two numbers, with
+ * whether that text sits inside a tel: link (the only place the calling number may be shown).
+ */
+interface ContactAudit {
+  sms: string[]
+  tel: string[]
+  texts: { text: string; inTel: boolean; inSms: boolean }[]
+}
+const auditContacts = (page: Page): Promise<ContactAudit> =>
+  page.evaluate(
+    ({ a, b }) => {
+      const root = document.getElementById('dc-root')!
+      const hrefs = (scheme: string) =>
+        Array.from(root.querySelectorAll(`a[href^="${scheme}"]`)).map((e) => e.getAttribute('href') ?? '')
+      const texts: { text: string; inTel: boolean; inSms: boolean }[] = []
+      const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        const t = n.textContent ?? ''
+        if (!t.includes(a) && !t.includes(b)) continue
+        const el = n.parentElement
+        texts.push({ text: t.trim(), inTel: !!el?.closest('a[href^="tel:"]'), inSms: !!el?.closest('a[href^="sms:"]') })
+      }
+      return { sms: hrefs('sms:'), tel: hrefs('tel:'), texts }
+    },
+    { a: SMS_DISPLAY, b: TEL_DISPLAY },
+  )
+const audits: { view: string; audit: ContactAudit }[] = []
 const settle = (page: Page) => page.waitForTimeout(250)
 
 // ---- the run --------------------------------------------------------------------------------------------------------------
@@ -477,6 +520,7 @@ async function main(): Promise<number> {
       await btn(page, /^\s*I agree to be billed/).click()
       await btn(page, /^\s*Start Gold/).click()
       await page.waitForSelector('#dc-root :text("checkout link is on its way")', { timeout: 20_000 })
+      audits.push({ view: 'join welcome (live)', audit: await auditContacts(page) })
       const resp = t.responses.find((r) => r.url.includes('/public/memberships'))
       const body = resp ? (JSON.parse(resp.body) as Record<string, any>) : null
       check('join: 201 pending_payment, checkout link by sms', resp?.status === 201 && body?.status === 'pending_payment' && body?.next === 'checkout_link_by_sms', resp?.body.slice(0, 200))
@@ -541,15 +585,15 @@ async function main(): Promise<number> {
     await btn(page, /^\s*Book\s*$/).last().click()
     await settle(page)
     const navs = await navigations(page)
-    check('sms mode: Book composes an sms: link with the booking', navs.length === 1 && /^sms:\+12015986304\?&body=WASH%20booking%3A/.test(navs[0]!), navs[0])
+    check('sms mode: Book composes an sms: link to the texting number with the booking', navs.length === 1 && reSms('WASH%20booking%3A').test(navs[0]!), navs[0])
     check('sms mode: the composed text names the wash, the vehicle and the time', /Signature%20Hand%20Wash/.test(navs[0] ?? '') && /Sedan/.test(decodeURIComponent(navs[0] ?? '')) && /(AM|PM)/.test(decodeURIComponent(navs[0] ?? '')), decodeURIComponent(navs[0] ?? ''))
     // the design's own text links (the hero's "Text WASH to …", the footer) live on the home view
     // (the pricing section's quote link comes first in the document: every link must carry the number, and the
     // "Text WASH" links of the 07 section and the footer must be there)
     const hrefs = await page.locator('#dc-root a[href^="sms:"]').evaluateAll((els) => els.map((e) => e.getAttribute('href') ?? ''))
     check(
-      'sms mode: the design\'s own text links keep the configured number',
-      hrefs.length > 0 && hrefs.every((h) => h.startsWith('sms:+12015986304?&body=')) && hrefs.filter((h) => h === 'sms:+12015986304?&body=WASH').length >= 2,
+      'sms mode: the design\'s own text links carry the texting number',
+      hrefs.length > 0 && hrefs.every((h) => h.startsWith(`sms:${SMS_E164}?&body=`)) && hrefs.filter((h) => h === `sms:${SMS_E164}?&body=WASH`).length >= 2,
       hrefs.join(' | '),
     )
     await bookPage.ctx.close()
@@ -570,7 +614,7 @@ async function main(): Promise<number> {
     await btn(page, /^\s*Start VIP/).click()
     await settle(page)
     const navs2 = await navigations(page)
-    check('sms mode: Join composes an sms: link with the plan, name, phone and car', navs2.length === 1 && /^sms:\+12015986304\?&body=JOIN%20VIP%3A/.test(navs2[0]!) && /Sam%20Lee/.test(navs2[0]!) && /Audi/.test(navs2[0]!), navs2[0])
+    check('sms mode: Join composes an sms: link to the texting number with the plan, name, phone and car', navs2.length === 1 && reSms('JOIN%20VIP%3A').test(navs2[0]!) && /Sam%20Lee/.test(navs2[0]!) && /Audi/.test(navs2[0]!), navs2[0])
     check('sms mode: no API write was attempted', smsProxy.log.filter((l) => l.method === 'POST').length === posts0, JSON.stringify(smsProxy.log.filter((l) => l.method === 'POST')))
     await joinPage.ctx.close()
     // 8b. a visitor in another time zone: the page shows the shop's wall clock and hydrates without a mismatch
@@ -587,6 +631,43 @@ async function main(): Promise<number> {
     check('time zone: a visitor in Los Angeles sees the shop clock', want.test(label), `${label} (shop ${part('weekday')} ${part('hour')} ${part('dayPeriod')})`)
     check('time zone: no hydration error in Los Angeles', far.t.errors.length === 0, far.t.errors.slice(0, 2).join(' | '))
     await far.ctx.close()
+
+    // 8c. texting vs calling (DV-CONTACT): every view's sms: links, tel: links and visible numbers
+    const tour = await newPage(browser, smsProxy.origin)
+    trackers.push(tour.t)
+    await tour.page.goto(`${smsProxy.origin}/`, { waitUntil: 'load' })
+    await ready(tour.page)
+    audits.push({ view: 'home', audit: await auditContacts(tour.page) })
+    await tour.page.locator('#dc-root button[aria-label="Menu"]').click()
+    await settle(tour.page)
+    audits.push({ view: 'menu', audit: await auditContacts(tour.page) })
+    await tour.page.locator('#dc-root button[aria-label="Close"]').click()
+    for (const view of ['membership', 'wash', 'tint', 'detailing', 'experience', 'visit', 'join']) {
+      await tour.page.evaluate((h) => (location.hash = h), `#/${view}`)
+      await tour.page.waitForTimeout(400)
+      audits.push({ view: `#/${view}`, audit: await auditContacts(tour.page) })
+    }
+    await tour.ctx.close()
+    const allSms = audits.flatMap((a) => a.audit.sms.map((h) => ({ view: a.view, h })))
+    const allTel = audits.flatMap((a) => a.audit.tel.map((h) => ({ view: a.view, h })))
+    const allTexts = audits.flatMap((a) => a.audit.texts.map((t) => ({ view: a.view, ...t })))
+    check('contact: site.config.json texts at 862-388-5827 and calls at 201-598-6304', CONTACT.smsE164 === SMS_E164 && CONTACT.smsDisplay === SMS_DISPLAY && CONTACT.phoneE164 === TEL_E164 && CONTACT.phoneDisplay === TEL_DISPLAY, JSON.stringify(CONTACT))
+    const badSms = allSms.filter((x) => !x.h.startsWith(`sms:${SMS_E164}?`) || x.h.includes(TEL_E164.slice(2)))
+    check(`contact: every sms: link on every view goes to ${SMS_E164} and none to the old number (${allSms.length} links over ${audits.length} views)`, allSms.length >= 8 && badSms.length === 0, badSms.slice(0, 3).map((x) => `${x.view}: ${x.h}`).join(' | '))
+    const badTel = allTel.filter((x) => x.h !== `tel:${TEL_E164}` || x.h.includes(SMS_E164.slice(2)))
+    check(`contact: every tel: link goes to ${TEL_E164} and none to the texting number (${allTel.length} links)`, allTel.length >= 2 && badTel.length === 0, badTel.slice(0, 3).map((x) => `${x.view}: ${x.h}`).join(' | '))
+    const wanted = ['body=WASH', 'body=Quote%20request', 'body=Tint%20quote', 'body=Hi%2C%20I%20just%20joined']
+    const missing = wanted.filter((w) => !allSms.some((x) => x.h.includes(w)))
+    check('contact: the Text WASH links, the pricing quote, the tint quote and the member line are all there', missing.length === 0, missing.join(', '))
+    const callShown = allTexts.filter((t) => t.text.includes(TEL_DISPLAY))
+    check('contact: the calling number is only shown on tel: links', callShown.length > 0 && callShown.every((t) => t.inTel && !t.inSms), callShown.filter((t) => !t.inTel || t.inSms).slice(0, 3).map((t) => `${t.view}: ${t.text}`).join(' | '))
+    const textShown = allTexts.filter((t) => t.text.includes(SMS_DISPLAY))
+    const textWants = [`Text WASH to ${SMS_DISPLAY}`, `Text ${SMS_DISPLAY}`, `Or text HERE to ${SMS_DISPLAY}.`]
+    check(
+      'contact: "Text WASH to …", the visit page\'s "Text …" button, the 07 section and the check-in step show the texting number, never on a tel: link',
+      textWants.every((w) => textShown.some((t) => t.text.includes(w))) && textShown.every((t) => !t.inTel),
+      textShown.map((t) => `${t.view}: ${t.text}`).slice(0, 8).join(' | '),
+    )
   } finally {
     await smsProxy.close()
     await browser.close()

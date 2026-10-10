@@ -13,9 +13,12 @@ export interface CopyEntry {
    *  removals, so both sides number elements identically); logic: the logic script text */
   scope: 'template' | 'logic' | 'source'
   from: string
-  /** the replacement; or `toConfig`, a dotted path into site.config.json resolved at load time (contact strings) */
+  /** the replacement; or `toConfig`, a dotted path into site.config.json resolved at load time (contact strings); or
+   *  `toFormat`, a string whose `${dotted.path}` placeholders are site.config.json strings (a link with its scheme,
+   *  a sentence around a number) */
   to: string
   toConfig?: string
+  toFormat?: string
   /** Exact number of occurrences that must be replaced; anything else fails the build (exit 3). */
   count: number
   /** the DEVIATIONS.md id that explains the change */
@@ -94,7 +97,7 @@ export function loadPatchConfig(root: string, page: string): PatchConfig {
   h.update(href.raw).update('\0').update(copy.raw).update('\0').update(own.raw)
   const entries = (copy.json.entries ?? [])
     .filter((e) => e.page === page)
-    .map((e) => (e.toConfig ? { ...e, to: configValue(root, e.toConfig, `copy-map ${e.id}`) } : e))
+    .map((e) => (e.toConfig || e.toFormat ? { ...e, to: resolveCopyTo(root, e) } : e))
   const ops = own.json.ops ?? []
   const headDrops = own.json.head?.drop ?? []
   const hrefMap = href.json.map ?? {}
@@ -133,6 +136,20 @@ export function configValue(root: string, dotted: string, what: string): string 
   }
   guard(typeof cur === 'string' && cur.length > 0, `${what}: site.config.json has no string at ${dotted}`)
   return cur as string
+}
+
+/**
+ * The replacement of a copy-map entry: `toConfig` (one site.config.json string), `toFormat` (`${dotted.path}`
+ * placeholders filled from site.config.json, so "sms:${contact.smsE164}" keeps the scheme in the map and the number
+ * in the config), else the literal `to`.
+ */
+export function resolveCopyTo(root: string, e: Pick<CopyEntry, 'id' | 'to' | 'toConfig' | 'toFormat'>): string {
+  if (e.toConfig) return configValue(root, e.toConfig, `copy-map ${e.id}`)
+  if (e.toFormat !== undefined) {
+    guard(/\$\{[A-Za-z0-9_.]+\}/.test(e.toFormat), `copy-map ${e.id}: toFormat has no \${config.path} placeholder`)
+    return e.toFormat.replace(/\$\{([A-Za-z0-9_.]+)\}/g, (_m, p: string) => configValue(root, p, `copy-map ${e.id}`))
+  }
+  return e.to
 }
 
 /** Every id a page's patches reference must have a `DV-...` line in DEVIATIONS.md (exit 3 otherwise). */

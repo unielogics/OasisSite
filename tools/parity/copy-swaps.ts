@@ -3,7 +3,7 @@
 // contact fact whose configured value equals the design's) produce no swap.
 import fs from 'node:fs'
 import path from 'node:path'
-import { configValue } from '../dc-compile/patches'
+import { resolveCopyTo } from '../dc-compile/patches'
 import type { CopyEntry } from '../dc-compile/patches'
 import type { SwapSpec } from './bundle'
 
@@ -14,7 +14,7 @@ export function copyMapSwaps(root: string, slug: string): SwapSpec[] {
   const out: SwapSpec[] = []
   for (const e of entries) {
     if (e.page !== slug) continue
-    const to = e.toConfig ? configValue(root, e.toConfig, `copy-map ${e.id}`) : e.to
+    const to = resolveCopyTo(root, e)
     if (to === e.from) continue
     out.push({
       id: `${e.dv}-copy-${e.id}`,

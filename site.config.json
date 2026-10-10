@@ -30,6 +30,8 @@
   "contact": {
     "phoneE164": "+12015986304",
     "phoneDisplay": "201-598-6304",
+    "smsE164": "+18623885827",
+    "smsDisplay": "862-388-5827",
     "email": "support@oasisautospanj.com",
     "smsKeyword": "WASH",
     "address": {

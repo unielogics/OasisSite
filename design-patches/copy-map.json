@@ -1,39 +1,84 @@
 {
   "entries": [
     {
-      "id": "contact-phone-display-tpl",
+      "id": "contact-sms-href-tpl",
       "page": "index",
       "scope": "template",
-      "from": "201-598-6304",
-      "toConfig": "contact.phoneDisplay",
+      "from": "sms:+12015986304",
+      "toFormat": "sms:${contact.smsE164}",
       "count": 5,
       "dv": "DV-CONTACT"
     },
     {
-      "id": "contact-phone-display-logic",
+      "id": "contact-sms-href-logic",
       "page": "index",
       "scope": "logic",
-      "from": "201-598-6304",
-      "toConfig": "contact.phoneDisplay",
+      "from": "sms:+12015986304",
+      "toFormat": "sms:${contact.smsE164}",
+      "count": 2,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-sms-menu-tpl",
+      "page": "index",
+      "scope": "template",
+      "from": "Text WASH to 201-598-6304",
+      "toFormat": "Text WASH to ${contact.smsDisplay}",
       "count": 1,
       "dv": "DV-CONTACT"
     },
     {
-      "id": "contact-phone-e164-tpl",
+      "id": "contact-sms-visit-tpl",
       "page": "index",
       "scope": "template",
-      "from": "+12015986304",
-      "toConfig": "contact.phoneE164",
-      "count": 7,
+      "from": "Text 201-598-6304",
+      "toFormat": "Text ${contact.smsDisplay}",
+      "count": 1,
       "dv": "DV-CONTACT"
     },
     {
-      "id": "contact-phone-e164-logic",
+      "id": "contact-sms-text-section-src",
+      "page": "index",
+      "scope": "source",
+      "from": "margin-top:2px;\">201-598-6304</span>",
+      "toFormat": "margin-top:2px;\">${contact.smsDisplay}</span>",
+      "count": 1,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-sms-thread-src",
+      "page": "index",
+      "scope": "source",
+      "from": "color:var(--ink3);\">201-598-6304</div>",
+      "toFormat": "color:var(--ink3);\">${contact.smsDisplay}</div>",
+      "count": 1,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-sms-checkin-logic",
       "page": "index",
       "scope": "logic",
-      "from": "+12015986304",
-      "toConfig": "contact.phoneE164",
+      "from": "text HERE to 201-598-6304",
+      "toFormat": "text HERE to ${contact.smsDisplay}",
+      "count": 1,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-tel-href-tpl",
+      "page": "index",
+      "scope": "template",
+      "from": "tel:+12015986304",
+      "toFormat": "tel:${contact.phoneE164}",
       "count": 2,
+      "dv": "DV-CONTACT"
+    },
+    {
+      "id": "contact-tel-footer-src",
+      "page": "index",
+      "scope": "source",
+      "from": "<a href=\"tel:+12015986304\">201-598-6304</a>",
+      "toFormat": "<a href=\"tel:+12015986304\">${contact.phoneDisplay}</a>",
+      "count": 1,
       "dv": "DV-CONTACT"
     },
     {

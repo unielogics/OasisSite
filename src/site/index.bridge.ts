@@ -43,7 +43,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
   const DAYS = env.availabilityDays || 5
   const fetchDays = DAYS + 2
   const api = (p: string): string => env.apiOrigin.replace(/\/$/, '') + p
-  const smsUrl = (body: string): string => `sms:${env.contact.phoneE164}?&body=${encodeURIComponent(body)}`
+  // texts go to the texting number (DV-CONTACT: contact.smsE164); calls stay on contact.phoneE164
+  const smsUrl = (body: string): string => `sms:${env.contact.smsE164}?&body=${encodeURIComponent(body)}`
 
   class SiteComponent extends Base {
     __mounted = false
@@ -233,11 +234,11 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const sh = v.sh || {}
       v.site = {
         boardEmptyText: unknown
-          ? `TEXT ${env.contact.smsKeyword} TO ${env.contact.phoneDisplay} TO CHECK TIMES`
+          ? `TEXT ${env.contact.smsKeyword} TO ${env.contact.smsDisplay} TO CHECK TIMES`
           : 'NO TIMES IN THIS PART OF THE DAY',
         timeNote:
           sh.bTime && unknown
-            ? `We can't show live times right now. Text ${env.contact.smsKeyword} to ${env.contact.phoneDisplay} and we'll reply with open times.`
+            ? `We can't show live times right now. Text ${env.contact.smsKeyword} to ${env.contact.smsDisplay} and we'll reply with open times.`
             : '',
         guestDetails: !!(sh.bReview && sh.isGuest && env.booking === 'live'),
         name: this.state.bk?.name || '',
@@ -501,7 +502,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         } else this.flash(problem?.title || (res.status === 429 ? 'Too many tries. Please wait a minute.' : 'Something went wrong. Try again or text us.'))
         return null
       } catch {
-        this.flash(`No connection. Text ${env.contact.smsKeyword} to ${env.contact.phoneDisplay} instead.`)
+        this.flash(`No connection. Text ${env.contact.smsKeyword} to ${env.contact.smsDisplay} instead.`)
         return null
       } finally {
         this.__busy = false

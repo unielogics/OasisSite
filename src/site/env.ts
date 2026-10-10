@@ -7,8 +7,12 @@ import type { Availability } from './availability'
 export type BookingMode = 'sms' | 'live'
 
 export interface ContactConfig {
+  /** the number people CALL (tel: links, the visible call number, the JSON-LD telephone is business.telephone) */
   phoneE164: string
   phoneDisplay: string
+  /** the number people TEXT (every sms: link, the composed booking/join texts, "Text WASH to …" lines) */
+  smsE164: string
+  smsDisplay: string
   email: string
   smsKeyword: string
   address: { line1: string; city: string; region: string; postalCode: string; country: string }

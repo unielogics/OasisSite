@@ -52,6 +52,9 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
   if (booking !== 'sms' && booking !== 'live') throw new Error(`SITE_BOOKING must be sms or live, got ${booking}`)
   if (!s.contact || !s.catalog || !s.booking || !s.availability)
     throw new Error('site.config.json needs contact, catalog, booking and availability sections')
+  for (const k of ['phoneE164', 'phoneDisplay', 'smsE164', 'smsDisplay'] as const)
+    if (typeof s.contact[k] !== 'string' || !s.contact[k])
+      throw new Error(`site.config.json contact.${k} is required (calls use phone*, texts use sms*)`)
   return {
     booking,
     apiOrigin: (i.apiOrigin ?? '').replace(/\/+$/, ''),

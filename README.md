@@ -4,7 +4,7 @@ The marketing site at https://oasisautospanj.com, built from the owner's Claude 
 (`design/original/Oasis Site v2.dc.html`, a raw design document with its loose files) with the same fidelity rule as the
 dashboard: the design is followed pixel for pixel, every deviation is listed in `design-patches/DEVIATIONS.md` with a
 DV id (the owner's decisions of 2026-10-10: live hours with Sunday closed, real availability and booking with an SMS
-fallback, no card capture, placeholder photos, self-hosted fonts), and a parity harness proves zero difference between
+fallback, no card capture, placeholder photos, self-hosted fonts, a separate texting number), and a parity harness proves zero difference between
 the original and `dist/` (DOM, computed style and rects, pixels at threshold 0, `renderVals`, console) at 390x844 and
 1440x900 in both themes, with the owner's decisions applied to the original as text swaps.
 
@@ -61,7 +61,8 @@ Environment for the heavy scripts on the shared host: `NODE_OPTIONS=--max-old-sp
 
 - `assets/oasis-logo.png` (DV-LOGO): drop it in `design/original/loose/assets/`, run `pnpm intake && pnpm design:checksums`.
 - Photos for the five `<image-slot>`s (DV-IMG): a `src` on the slot renders the photo in the same frame.
-- Contact corrections (DV-CONTACT): `site.config.json` `contact` and `business`.
+- Contact corrections (DV-CONTACT): `site.config.json` `contact` (`smsE164`/`smsDisplay` = the number people text,
+  `phoneE164`/`phoneDisplay` = the number people call) and `business` (the JSON-LD telephone).
 - `SITE_BOOKING=live` in the deploy once the SMS tablet is live (until then Book/Join open the design's sms: texts).
 
 ## Layout

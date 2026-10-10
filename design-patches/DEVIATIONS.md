@@ -24,16 +24,25 @@ of every entry below.
   `SITE_AVAILABILITY_JSON`, refreshed after mount and whenever the chosen wash or add-ons change) instead of the
   design's generated pattern (`rng()` seeded by the date). `vip` slots render as the design's "VIP"/"members" state.
   Without availability (no `SITE_AVAILABILITY_JSON` and no API yet) the board shows the open days from the hours with
-  "text us" counts, the empty-board line reads "TEXT WASH TO 201-598-6304 TO CHECK TIMES" and the sheet's time step
+  "text us" counts, the empty-board line reads "TEXT WASH TO 862-388-5827 TO CHECK TIMES" (the texting number, DV-CONTACT) and the sheet's time step
   carries a note with the same advice (an added, design-styled note; hidden when slots exist). The pill counts the
   open bays of the next bookable half hour ("OPEN NOW · TEXT TO CHECK TIMES" when unknown), the design's
   `1 + floor(minutes/11) % 3` is gone. The parity build and the harness's fixture endpoint feed the port the design's
   own pattern (`designAvailability`, `src/site/availability.ts`) so the board matches the original slot for slot; the
   pill text is allow-listed (`DV-AVAIL-pill`).
 - **DV-CONTACT** Every contact fact (phone, e-mail, address lines, the Google Maps link) is a copy-map entry resolved
-  from `site.config.json` `contact` (`toConfig`), so an owner correction changes one file. Today the values equal the
-  design's. The placeholder phone "(201) 555-0123" of the member sign-in field becomes "Mobile number" (the design's
-  own wording for the join flow). The text keyword "WASH" stays as designed.
+  from `site.config.json` `contact` (`toConfig`, or `toFormat` with `${contact.…}` placeholders), so an owner correction
+  changes one file. **Texting and calling are two numbers** (owner decision of 2026-10-10): every way the site lets a
+  visitor TEXT the shop uses `contact.smsE164` / `smsDisplay` (**+1 862-388-5827**): the design's five `sms:` links (the
+  menu's and the visit page's "Text WASH", the 07 section, the footer's "Text WASH to book", the post-join member line),
+  the pricing quote and tint quote links of the logic, the bridge's composed booking/join texts (sms mode) and every
+  line that says which number to text ("Text WASH to …" in the menu, the visit page's "Text …" button, the 07 section's
+  big number and the SMS thread header under it, the check-in step's "Or text HERE to …", the bridge's empty-board line,
+  time-step note and offline toast). CALLS stay on `contact.phoneE164` / `phoneDisplay` (**+1 201-598-6304**): the two
+  `tel:` links, the footer's visible call number and the JSON-LD `telephone` (`business.telephone`). The design shows
+  201-598-6304 everywhere; the harness applies the same entries to the original as text swaps. E-mail and address
+  values equal the design's. The placeholder phone "(201) 555-0123" of the member sign-in field becomes "Mobile number"
+  (the design's own wording for the join flow). The text keyword "WASH" stays as designed.
 
 ## Booking and membership
 
@@ -45,7 +54,7 @@ of every entry below.
   design's toast and the time step reloads availability. The done step shows the real booking reference ("Ref
   OAS-00042", plus the deposit due) and the note reads "We'll text your confirmation and a reminder the day before."
   With **`SITE_BOOKING=sms`** (the launch default, until the SMS tablet is live) the same sheet composes the booking
-  as a text (wash, vehicle, time, add-ons, guest/member) and opens `sms:201-598-6304?&body=…` instead of calling the
+  as a text (wash, vehicle, time, add-ons, guest/member) and opens `sms:+18623885827?&body=…` (the texting number, DV-CONTACT) instead of calling the
   API; nothing else changes. Test hook: `window.__oasisNavigate(url)` receives the sms:/tel: URL when defined.
 - **DV-OTP** Members identify by phone + one-time code (live mode): "I'm a member · Continue" posts
   `/api/v1/public/otp`, an added **code step** (design-styled, after the who step) verifies it through

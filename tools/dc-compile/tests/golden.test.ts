@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { CompileError } from '../errors'
-import { applyCopy, applyCopyToTree, applyPatches } from '../patches'
+import { applyCopy, applyCopyToTree, applyPatches, resolveCopyTo } from '../patches'
 import type { PatchConfig } from '../patches'
 import { parseTemplate } from '../parse'
 import { Emitter } from '../emit'
@@ -527,6 +528,24 @@ describe('patch layer', () => {
     expect(() => applyCopyToTree(fresh('<p>WhatsApp</p>'), [{ ...entry, count: 2 }])).toThrow(/expected 2/)
     expect(applyCopy('a WhatsApp b', [{ ...entry, scope: 'logic', count: 1 }], 'logic')).toBe('a SMS b')
     expect(() => applyCopy('x', [{ ...entry, scope: 'logic', count: 1 }], 'logic')).toThrow(CompileError)
+  })
+
+  it('copy-map replacements come from site.config.json: toConfig (one string) and toFormat (placeholders)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-copy-to-'))
+    fs.writeFileSync(
+      path.join(dir, 'site.config.json'),
+      JSON.stringify({ contact: { smsE164: '+18623885827', smsDisplay: '862-388-5827', phoneE164: '+12015986304' } }),
+    )
+    const e = { id: 'c', to: '' }
+    expect(resolveCopyTo(dir, { ...e, toConfig: 'contact.smsDisplay' })).toBe('862-388-5827')
+    expect(resolveCopyTo(dir, { ...e, toFormat: 'sms:${contact.smsE164}' })).toBe('sms:+18623885827')
+    expect(resolveCopyTo(dir, { ...e, toFormat: 'Text ${contact.smsDisplay} or call ${contact.phoneE164}' })).toBe(
+      'Text 862-388-5827 or call +12015986304',
+    )
+    expect(resolveCopyTo(dir, { ...e, to: 'literal' })).toBe('literal')
+    expect(() => resolveCopyTo(dir, { ...e, toFormat: 'sms:${contact.nope}' })).toThrow(/no string at contact.nope/)
+    expect(() => resolveCopyTo(dir, { ...e, toFormat: 'no placeholder' })).toThrow(/no \$\{config.path\} placeholder/)
+    fs.rmSync(dir, { recursive: true, force: true })
   })
 })
 

@@ -25,7 +25,7 @@ Written by the build, imported by the bridge and the prerender, bundled into the
 | `buildNow` | `SITE_BUILD_NOW` / `PRERENDER_NOW` / now | the prerender instant; the client's first render is pinned to it (DV-CLOCK) |
 | `hours`, `hoursSource` | `SITE_HOURS_JSON` or `src/data/hours.fallback.json` | the public hours payload (Sunday closed) |
 | `availability`, `availabilitySource` | `SITE_AVAILABILITY_JSON` or none | the public availability payload baked into the board |
-| `contact`, `catalog`, `fee` | `site.config.json` | phone, e-mail, address, maps link; the design's service and add-on ids → catalog keys; the booking fee text |
+| `contact`, `catalog`, `fee` | `site.config.json` | the calling number (`phoneE164`/`phoneDisplay`), the texting number (`smsE164`/`smsDisplay`), e-mail, address, maps link; the design's service and add-on ids → catalog keys; the booking fee text |
 
 ## What the bridge replaces
 
@@ -39,7 +39,7 @@ Written by the build, imported by the bridge and the prerender, bundled into the
   payload's `now {baysFree, baysTotal}` when present, else the next bookable slot's bays. After mount, and whenever the
   sheet opens or the chosen wash/add-ons change, the bridge fetches `/api/v1/public/availability?days=7&service=<key>&addons=…`.
   Without any availability (no snapshot, no API) the board lists the open days with "text us" counts, the empty line
-  reads "TEXT WASH TO 201-598-6304 TO CHECK TIMES" and the sheet's time step shows a note (`site.timeNote`).
+  reads "TEXT WASH TO 862-388-5827 TO CHECK TIMES" and the sheet's time step shows a note (`site.timeNote`).
 - **Booking (DV-BOOK, DV-OTP).** The sheet's steps are the design's. `SITE_BOOKING=live`: the guest review step adds
   name and mobile fields; "Book" posts `/api/v1/public/bookings` with an `Idempotency-Key` minted when the sheet opens
   (`{name, phone, vehicle:{label}, serviceKey, addonKeys, date, startMin, smsConsent:true, memberToken?, website:''}`);
@@ -48,7 +48,8 @@ Written by the build, imported by the bridge and the prerender, bundled into the
   added code step verifies through `/public/otp/verify`, the token travels with the booking (no fee), the member's
   tier sets the prices. `SITE_BOOKING=sms`: the same sheet composes the booking as a text
   ("WASH booking: Signature Hand Wash · Sedan / Coupe · Today 11:30 AM · + Hand wax · Guest") and opens
-  `sms:+12015986304?&body=…`; no API call is made.
+  `sms:+18623885827?&body=…` (the texting number `contact.smsE164`; calls stay on `contact.phoneE164`, DV-CONTACT); no
+  API call is made.
 - **Join (DV-JOIN).** Steps plan → vehicles → details → checkout (terms only, no card fields) → welcome. `live`: posts
   `/api/v1/public/memberships`; the welcome step says the Squarespace checkout link is on its way by text. `sms`: composes
   "JOIN VIP: name · phone · email · cars". "Book your first wash" (live) opens the sheet at the member sign-in.
