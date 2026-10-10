@@ -1,8 +1,9 @@
 // Assembles the final HTML document of a page. The <head> order follows the probe of the original: the design's
 // charset and viewport first, then the SEO slots, the helmet's links, the font preloads, the page stylesheet
-// (atomics / pseudo / FULL_PAGE_CSS / helmet sheets in the runtime's order) and the JSON-LD data block. The body is
-// <div id="dc-root"> with the prerendered markup, then the theme patch script, the hours script and the hydration
-// bundle, all external files (no executable inline script).
+// (atomics / pseudo / FULL_PAGE_CSS / helmet sheets in the runtime's order) and the JSON-LD data block. The theme script
+// (DV-THEME) is a plain external script in <head> right before the stylesheet: it decides the theme before <body> exists
+// and patches the markup as the parser inserts it. The body is <div id="dc-root"> with the prerendered markup, then the
+// hours script and the hydration bundle, all external files (no executable inline script).
 import type { CompiledPageMeta } from '../dc-compile/compile'
 import type { PageSeo } from './seo'
 
@@ -65,12 +66,13 @@ export function buildDocument(d: DocumentInput): string {
   }
   for (const f of d.fontPreloads)
     h.push(`<link rel="preload" href="${esc(f)}" as="font" type="font/woff2" crossorigin>`)
+  // DV-THEME: parser-blocking on purpose (no defer/async), before anything of the body can be painted
+  if (d.themeHref) h.push(`<script src="${esc(d.themeHref)}"></script>`)
   h.push(`<link rel="stylesheet" href="${esc(d.cssHref)}">`)
   if (d.jsonLd) h.push(`<script type="application/ld+json">${jsonBlock(d.jsonLd)}</script>`)
 
   const b: string[] = []
   b.push(`<div id="dc-root"${d.parityStatic ? ' data-oasis-ready="1"' : ''}>${d.bodyHtml}</div>`)
-  if (d.themeHref) b.push(`<script src="${esc(d.themeHref)}"></script>`)
   if (d.parityVals !== undefined)
     b.push(`<script type="application/json" id="__oasis-vals">${jsonBlock(d.parityVals)}</script>`)
   if (d.hoursHref) b.push(`<script src="${esc(d.hoursHref)}" defer></script>`)
@@ -80,14 +82,19 @@ export function buildDocument(d: DocumentInput): string {
 }
 
 /**
- * The 404 page in the design's tokens (dark theme, the chrome wordmark gradient, Archivo/Hanken Grotesk/JetBrains Mono
- * from the page stylesheet, the design's button). Inline style attributes only (the CSP allows them), no script.
+ * The 404 page in the design's tokens (the chrome wordmark gradient, Archivo/Hanken Grotesk/JetBrains Mono from the page
+ * stylesheet, the design's button). Inline style attributes only (the CSP allows them). Its theme follows the device and
+ * the visitor's stored choice like the home page (DV-THEME): the same external theme script in <head> patches the
+ * baked default (`data-theme="dark"`, the design's) and sets the page background before the first paint; without
+ * JavaScript it stays in the design's default theme.
  */
 export function notFoundDocument(o: {
   lang: string
   siteName: string
   cssHref: string | null
   homeHref: string
+  /** the pre-paint theme script (DV-THEME); null renders the design's default theme */
+  themeHref?: string | null
   logoHref?: string | null
   icons?: { rel: string; href: string; type?: string; sizes?: string }[]
 }): string {
@@ -109,9 +116,9 @@ export function notFoundDocument(o: {
 <title>Page not found · ${esc(o.siteName)}</title>
 <meta name="robots" content="noindex">
 ${icons}
-${style}
+${o.themeHref ? `<script src="${esc(o.themeHref)}"></script>\n` : ''}${style}
 </head>
-<body style="margin:0;background:#06080A;">
+<body style="margin:0;">
 <div id="not-found" data-oa="1" data-theme="dark" style="min-height:100vh;background:var(--bg,#06080A);color:var(--ink,#F2F5F7);font-family:'Hanken Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;">
 <header style="height:84px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 14px;border-bottom:1px solid var(--line2,rgba(255,255,255,.06));"><div></div>${logo}<div></div></header>
 <main style="flex:1;max-width:980px;width:100%;margin:0 auto;padding:72px 20px 80px;display:flex;flex-direction:column;align-items:center;text-align:center;">

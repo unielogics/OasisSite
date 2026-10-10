@@ -2,9 +2,10 @@
 // (dark). The visitor's device decides the theme (prefers-color-scheme: light -> light, dark or no preference -> the
 // default) unless the visitor picked one with the design's own controls, which is remembered on the device
 // (localStorage, `storageKey`) and wins on later visits. React 18 hydration does not reconcile attribute differences, so
-// the decision is applied to the markup before hydrateRoot by a tiny external script placed right after #dc-root
-// (theme.entry.ts; the CSP allows no inline script), which also sets the body background the way the design's
-// componentDidUpdate does and exposes the decision as `window.__oasisTheme`; boot passes it to the logic as the design's
+// the decision is applied to the markup before hydrateRoot, and before anything of the body is painted, by a small
+// external script in <head> (theme.entry.ts; the CSP allows no inline script) that patches the markup as the parser
+// inserts it, sets the page background the way the design's componentDidUpdate does and exposes the decision as
+// `window.__oasisTheme`; boot passes it to the logic as the design's
 // theme prop (`prop`), so the first client render equals the patched DOM. The bridge then follows live changes of the
 // device setting while nothing is stored, and stores the visitor's own choice (src/site/index.bridge.ts).
 export interface ThemeConfig {

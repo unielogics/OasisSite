@@ -136,17 +136,41 @@ export function checkDist(dist: string, marker: string): CheckResult {
       if (!set.has(f)) problems.push(`manifest.json lists ${f} which is missing`)
     for (const p of manifest.pages ?? [])
       if (!set.has(p.file)) problems.push(`manifest.json page ${p.file} is missing`)
-    // DV-THEME: the pre-hydration theme script must run on the markup before the first paint and before hydration:
-    // a plain (blocking) external script right after #dc-root on every hydrated page
+    // DV-THEME: the theme script must decide before anything of the page can be painted, also on a slow network: a
+    // plain (parser-blocking, no defer/async/module) external script in <head>, before the stylesheet, exactly once,
+    // on every hydrated page and on the 404 page
     const theme = manifest.themeScript?.file
-    if (theme)
-      for (const p of (manifest.pages ?? []).filter((x) => x.hydrated && set.has(x.file))) {
-        const html = fs.readFileSync(path.join(dist, p.file), 'utf8')
-        if (!html.includes(`</div>\n<script src="/${theme}"></script>`))
-          problems.push(`${p.file}: the theme script /${theme} is not a blocking script right after #dc-root`)
-      }
+    if (theme) {
+      const targets = [...(manifest.pages ?? []).filter((x) => x.hydrated).map((x) => x.file), '404.html'].filter((f) => set.has(f))
+      for (const f of targets) problems.push(...themeScriptProblems(f, fs.readFileSync(path.join(dist, f), 'utf8'), `/${theme}`))
+    }
   }
   return { ok: problems.length === 0, problems, files: files.length, pages }
+}
+
+/** Where the theme script sits in one document: the problems, empty when it is a blocking script in <head> before the stylesheet. */
+export function themeScriptProblems(file: string, html: string, src: string): string[] {
+  const doc = parse(html)
+  const htmlEl = (doc.childNodes as Node[]).find((n) => 'tagName' in n && (n as El).tagName === 'html') as El | undefined
+  const head = htmlEl?.childNodes.find((n) => 'tagName' in n && (n as El).tagName === 'head') as El | undefined
+  const body = htmlEl?.childNodes.find((n) => 'tagName' in n && (n as El).tagName === 'body') as El | undefined
+  const out: string[] = []
+  const inHead: El[] = []
+  const inBody: El[] = []
+  if (head) walk(head as unknown as Node, (e) => e.tagName === 'script' && attr(e, 'src') === src && inHead.push(e))
+  if (body) walk(body as unknown as Node, (e) => e.tagName === 'script' && attr(e, 'src') === src && inBody.push(e))
+  if (inBody.length) out.push(`${file}: the theme script ${src} is in <body> (it must decide in <head>, before the first paint)`)
+  if (inHead.length !== 1) out.push(`${file}: expected the theme script ${src} once in <head>, found ${inHead.length}`)
+  const s = inHead[0]
+  if (s) {
+    for (const a of ['defer', 'async']) if (s.attrs.some((x) => x.name === a)) out.push(`${file}: the theme script ${src} must not be ${a}`)
+    const type = (attr(s, 'type') ?? '').toLowerCase()
+    if (type && type !== 'text/javascript') out.push(`${file}: the theme script ${src} must be a classic script (type=${type})`)
+    const kids = head!.childNodes.filter((n) => 'tagName' in n) as El[]
+    const sheet = kids.findIndex((e) => e.tagName === 'link' && attr(e, 'rel') === 'stylesheet')
+    if (sheet >= 0 && kids.indexOf(s) > sheet) out.push(`${file}: the theme script ${src} must come before the stylesheet`)
+  }
+  return out
 }
 
 function main(argv: string[]): number {

@@ -370,6 +370,8 @@ export async function buildSite(o: BuildOptions): Promise<BuildResult> {
         siteName: site.name,
         cssHref: indexPage ? (cssUrl.get(indexPage.slug) ?? null) : null,
         homeHref: '/',
+        // the 404 follows the device and the stored choice like the home page (DV-THEME)
+        themeHref: themeUrl,
         logoHref: iconUrl,
         icons,
       }),

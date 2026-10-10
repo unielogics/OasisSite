@@ -134,11 +134,13 @@ comment); hydration needs them and keeps them. The parity DOM check drops whites
 `site.config.json` `icon`, the helmet's links, `<link rel=preload>` for the latin font files, one stylesheet per page
 (`[atomics][pseudo][FULL_PAGE_CSS unless $preview][helmet sheets in order]`, the runtime's head order; BASE_CSS is
 omitted because it only styles placeholders, streaming states and print), the LocalBusiness JSON-LD data block,
-then `<div id="dc-root">` + the theme patch script + (static pages only) the hours script + the page bundle.
+the theme script (DV-THEME: parser-blocking, in `<head>` right before the stylesheet), then `<div id="dc-root">` + (static
+pages only) the hours script + the page bundle.
 
 `src/client/boot.tsx` hydrates with `hydrateRoot` (recoverable errors go to `console.error`, which the parity console
-check catches) and starts the hours refresh. `src/client/theme.entry.ts` is a 0.5 KB external script placed right after
-`#dc-root`: React 18 does not reconcile attribute differences while hydrating, so the stored theme is written into
-every `[data-theme="<default>"]` element before the bundle runs. `src/client/hours.ts` fetches
+check catches) and starts the hours refresh. `src/client/theme.entry.ts` is a small external script in `<head>`:
+React 18 does not reconcile attribute differences while hydrating, so the decided theme (stored choice, else the device)
+is written into every `[data-theme="<default>"]` element the moment the parser inserts it (a MutationObserver), before
+anything of the body is painted and before the bundle runs. `src/client/hours.ts` fetches
 `/api/v1/public/hours` with a 3 s `AbortController` timeout and re-applies the formatted strings; any failure leaves
 the baked strings.

@@ -35,7 +35,8 @@ See `docs/intake.md`, `docs/compiler.md`, `docs/site.md` (the bridge: hours, ava
 - Every other file is a content-hashed asset under **`dist/assets/<name>.<hash>.<ext>`** (CSS, 13 self-hosted woff2 files,
   the logo and icons, one JS bundle). `/assets/` can be cached as immutable, HTML as `no-cache`.
 - **No inline `<script>` with executable content** (the only inline script is the LocalBusiness JSON-LD data block; the
-  pre-hydration theme script, DV-THEME, is the external `/assets/theme.<hash>.js` right after `#dc-root`);
+  theme script, DV-THEME, is the external `/assets/theme.<hash>.js`, a parser-blocking script in `<head>` before the
+  stylesheet, on the home page and the 404 page; `pnpm check:dist` enforces the placement);
   **no external request** of any kind (fonts, scripts and images are all under `/assets/`).
 - Environment read at build time: `SITE_URL`, `SITE_HOURS_JSON` (fallback: `src/data/hours.fallback.json`, Sunday
   closed), `SITE_AVAILABILITY_JSON`, `SITE_BOOKING` (`sms` default | `live`), `SITE_API_ORIGIN` (default same origin),
@@ -53,11 +54,12 @@ pnpm intake             # design/pages.json -> design/extracted   pnpm intake:in
 pnpm parity --page index --scenario sheet-guest          pnpm parity:all     # every scenario, both themes, both viewports (the gate)
 pnpm parity:selftest    # determinism + sensitivity gates  pnpm parity:phone  # dist at 390x844 and 768x1024
 pnpm e2e:site --api fixture | --stack site               # the booking flows against the fixture API or a live stack (docs/e2e.md)
+pnpm e2e:theme-paint                                     # every painted frame with theme.js held back 1 s: no dark frame on a light device
 ```
 
 Environment for the heavy scripts on the shared host: `NODE_OPTIONS=--max-old-space-size=2048`,
 `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-arm64` (set by the harness itself on arm64 Linux). Ports: static server
-3301, e2e sms host 3302, fixture API 3303, original server 4320.
+3301, e2e sms host 3302, fixture API 3303, theme-paint host 3305 and its fixture API 3306, original server 4320.
 
 ## Owner inputs still open
 

@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { parse } from 'parse5'
 import { describe, expect, it } from 'vitest'
-import { checkDist } from '../../scripts/check-dist'
+import { checkDist, themeScriptProblems } from '../../scripts/check-dist'
 import { formatHours, validatePublicHours } from '../../src/hours/format'
 import type { PublicHours } from '../../src/hours/format'
 import { root } from '../intake/fixtures'
@@ -155,8 +155,28 @@ describe('head and seo', () => {
         parityStatic: false,
       }),
     ).toMatch(
-      /content="width=device-width, initial-scale=1"[\s\S]*noindex[\s\S]*<div id="dc-root"><\/div>\n<script src="\/t.js"><\/script>\n<script src="\/b.js" defer><\/script>/,
+      /content="width=device-width, initial-scale=1"[\s\S]*noindex[\s\S]*<script src="\/t.js"><\/script>\n<link rel="stylesheet" href="\/a.css">\n<\/head>\n<body>\n<div id="dc-root"><\/div>\n<script src="\/b.js" defer><\/script>/,
     )
+  })
+
+  it('check:dist accepts the theme script only as a blocking <head> script before the stylesheet (DV-THEME)', () => {
+    const doc = (head: string, body: string) =>
+      `<!DOCTYPE html>\n<html lang="en">\n<head>\n<title>t</title>\n${head}\n</head>\n<body>\n${body}\n</body>\n</html>\n`
+    const t = '<script src="/assets/theme.abcdef12.js"></script>'
+    const css = '<link rel="stylesheet" href="/assets/i.abcdef12.css">'
+    const root = '<div id="dc-root"></div>'
+    expect(themeScriptProblems('a.html', doc(`${t}\n${css}`, root), '/assets/theme.abcdef12.js')).toEqual([])
+    // the pre-fix placement: right after #dc-root (the browser paints the dark markup while the script loads)
+    expect(themeScriptProblems('a.html', doc(css, `${root}\n${t}`), '/assets/theme.abcdef12.js')).toEqual([
+      'a.html: the theme script /assets/theme.abcdef12.js is in <body> (it must decide in <head>, before the first paint)',
+      'a.html: expected the theme script /assets/theme.abcdef12.js once in <head>, found 0',
+    ])
+    expect(themeScriptProblems('a.html', doc(`${css}\n${t}`, root), '/assets/theme.abcdef12.js')).toEqual([
+      'a.html: the theme script /assets/theme.abcdef12.js must come before the stylesheet',
+    ])
+    expect(
+      themeScriptProblems('a.html', doc(`${t.replace('></script>', ' defer></script>')}\n${css}`, root), '/assets/theme.abcdef12.js'),
+    ).toEqual(['a.html: the theme script /assets/theme.abcdef12.js must not be defer'])
   })
 
   it('seoFor merges default and page entries; JSON-LD has no Sunday when the shop is closed', () => {
@@ -256,8 +276,11 @@ describe('build on the configured page (design/pages.json: the raw Oasis Site v2
     expect(index).toMatch(/<img src="\/assets\/oasis-logo\.[0-9a-f]{8}\.png" alt="Oasis Auto Spa"/)
     expect(index).toMatch(/<script src="\/assets\/page-index\.[0-9a-f]{8}\.js" defer><\/script>/)
     expect((index.match(/<script/g) ?? []).length).toBe(3) // the JSON-LD data block, the theme script and the bundle
-    // the theme script runs right after the markup it patches, before the deferred bundle
-    expect(index).toMatch(/<\/div>\n<script src="\/assets\/theme\.[0-9a-f]{8}\.js"><\/script>\n<script src="\/assets\/page-index\./)
+    // the theme script decides in <head>, parser-blocking, before the stylesheet (DV-THEME: nothing of the body can be
+    // painted before it ran); the body ends with the markup and the deferred bundle
+    expect(index).toMatch(/<script src="\/assets\/theme\.[0-9a-f]{8}\.js"><\/script>\n<link rel="stylesheet" href="\/assets\/index\.[0-9a-f]{8}\.css">[\s\S]*<\/head>/)
+    expect(index.indexOf('/assets/theme.')).toBeLessThan(index.indexOf('<body>'))
+    expect(index).toMatch(/<\/div>\n<script src="\/assets\/page-index\.[0-9a-f]{8}\.js" defer><\/script>\n<\/body>/)
     expect(index).toContain('"dayOfWeek":"https://schema.org/Monday","opens":"08:00","closes":"18:00"')
     expect(index).not.toContain('schema.org/Sunday')
     expect(index).toMatch(/Sunday<\/span><\/span><span style="color:var\(--ink\);font-weight:600"><span class="sc-interp">Closed<\/span>/)
@@ -283,7 +306,12 @@ describe('build on the configured page (design/pages.json: the raw Oasis Site v2
     expect(Object.keys(manifest.files)).toContain('404.html')
     const notFound = fs.readFileSync(path.join(out, '404.html'), 'utf8')
     expect(notFound).toContain('Wrong<br>turn.')
-    expect(notFound).not.toContain('<script')
+    // the 404 follows the device and the stored choice too (DV-THEME): the same theme script in its <head>, no hard-coded
+    // dark page background (the baked data-theme is the design's default, patched by the script)
+    expect(notFound).toContain(`<script src="/${manifest.themeScript.file}"></script>`)
+    expect(notFound.indexOf('/assets/theme.')).toBeLessThan(notFound.indexOf('</head>'))
+    expect(notFound).not.toMatch(/<body[^>]*#06080A/)
+    expect((notFound.match(/<script/g) ?? []).length).toBe(1)
     expect(fs.readFileSync(path.join(out, 'robots.txt'), 'utf8')).toContain(
       'Sitemap: https://oasisautospanj.com/sitemap.xml',
     )

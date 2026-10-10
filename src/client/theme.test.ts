@@ -4,6 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyTheme, decideTheme, deviceTheme, readStoredTheme, storeTheme, type ThemeConfig } from './theme'
 import { withThemeDecision } from './boot'
+import { startTheme } from './theme.entry'
 
 const cfg: ThemeConfig = {
   storageKey: 'oasis-theme',
@@ -112,5 +113,63 @@ describe('the pre-hydration script and boot', () => {
     expect(withThemeDecision(props, theme, undefined)).toBe(props)
     expect(withThemeDecision(props, theme, { theme: 'neon' })).toBe(props)
     expect(withThemeDecision(props, null, { theme: 'light' })).toBe(props)
+  })
+})
+
+describe('the theme script in <head> (DV-THEME: decided before anything of the body can be painted)', () => {
+  /** A document the way the parser has it while the head script runs: <html> and <head>, no <body> yet. */
+  const parsing = () => {
+    const doc = document.implementation.createHTMLDocument('t')
+    doc.documentElement.removeChild(doc.body)
+    return doc
+  }
+  const win = (light: boolean, stored: string | null) =>
+    ({
+      localStorage: { getItem: () => stored },
+      matchMedia: mm(light),
+      MutationObserver: window.MutationObserver,
+    }) as unknown as Window
+  const tick = () => new Promise((r) => setTimeout(r, 0))
+
+  it('marks <html> and paints the canvas at once, then patches the body and the wrapper the moment the parser inserts them', async () => {
+    const doc = parsing()
+    const w = win(true, null)
+    expect(startTheme(cfg, doc, w)).toEqual({ theme: 'light', stored: false })
+    expect((w as unknown as { __oasisTheme?: unknown }).__oasisTheme).toEqual({ theme: 'light', stored: false })
+    expect(doc.documentElement.getAttribute('data-oasis-theme')).toBe('light')
+    expect(doc.documentElement.style.background).toBe('rgb(242, 243, 241)')
+    // the parser inserts <body>, #dc-root and the design's wrapper baked dark
+    const body = doc.createElement('body')
+    doc.documentElement.appendChild(body)
+    body.innerHTML = '<div id="dc-root"><div class="sc-host"><div data-oa="1" data-theme="dark"></div></div></div>'
+    await tick()
+    expect(body.querySelector('[data-oa]')!.getAttribute('data-theme')).toBe('light')
+    expect(body.style.background).toBe('rgb(242, 243, 241)')
+    // the body's background paints the canvas now: <html> keeps no inline style (the design's html has none)
+    expect(doc.documentElement.hasAttribute('style')).toBe(false)
+    // done: the observer is disconnected (a later element is the logic's business, not the script's)
+    body.insertAdjacentHTML('beforeend', '<div data-theme="dark" id="late"></div>')
+    await tick()
+    expect(doc.getElementById('late')!.getAttribute('data-theme')).toBe('dark')
+  })
+
+  it('a dark device keeps the baked dark markup and gets the dark canvas; a stored choice wins over the device', async () => {
+    const dark = parsing()
+    startTheme(cfg, dark, win(false, null))
+    expect(dark.documentElement.getAttribute('data-oasis-theme')).toBe('dark')
+    expect(dark.documentElement.style.background).toBe('rgb(6, 8, 10)')
+    const b1 = dark.createElement('body')
+    dark.documentElement.appendChild(b1)
+    b1.innerHTML = '<div id="not-found" data-oa="1" data-theme="dark"></div>'
+    await tick()
+    expect(b1.querySelector('[data-oa]')!.getAttribute('data-theme')).toBe('dark')
+    expect(b1.style.background).toBe('rgb(6, 8, 10)')
+    const stored = parsing()
+    expect(startTheme(cfg, stored, win(false, 'light'))).toEqual({ theme: 'light', stored: true })
+    const b2 = stored.createElement('body')
+    stored.documentElement.appendChild(b2)
+    b2.innerHTML = '<div id="not-found" data-oa="1" data-theme="dark"></div>'
+    await tick()
+    expect(b2.querySelector('[data-oa]')!.getAttribute('data-theme')).toBe('light')
   })
 })
