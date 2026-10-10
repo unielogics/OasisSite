@@ -2,8 +2,9 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { AddressInfo } from 'node:net'
-import { DESIGN_DIR, PAGES } from './config'
+import { DESIGN_DIR, PAGES, ROOT } from './config'
 import { PLACEHOLDER_SIZE, transparentPng } from '../prerender/placeholder'
+import { copyMapSwaps } from './copy-swaps'
 import { buildBundle } from './serve-original'
 import { serializeVals } from './vals-serialize'
 
@@ -11,7 +12,8 @@ import { serializeVals } from './vals-serialize'
  * A stand-in for the real port, used by the self-test: it serves every page's ORIGINAL bundle at the page's clean route
  * and adds the two things the port contract requires: `#dc-root[data-oasis-ready="1"]` once the page has mounted and
  * `window.__oasisParity.getVals()` returning serializeVals(renderVals()). This proves the port-side plumbing (routes,
- * hash, ready flag, hook) independently of the build.
+ * hash, ready flag, hook) independently of the build. Like every dry-run port it carries the owner's copy decisions
+ * (design-patches/copy-map.json) as pre-render swaps, since the baseline renders with them (docs/parity.md).
  */
 const HOOK = `<script>(function () {
   var ser = ${serializeVals.toString()};
@@ -56,7 +58,7 @@ export async function startMockPort(
 ): Promise<MockPort> {
   const pages = new Map<string, string>()
   for (const p of PAGES) {
-    const { html } = buildBundle(p.slug, path.join(DESIGN_DIR, p.file), [], opts.transform)
+    const { html } = buildBundle(p.slug, path.join(DESIGN_DIR, p.file), copyMapSwaps(ROOT, p.slug), opts.transform)
     pages.set(
       p.route,
       html.replace('<head>', () => `<head>${HOOK}`),

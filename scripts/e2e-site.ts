@@ -142,22 +142,31 @@ async function managerSession(stack: Stack): Promise<string> {
  * owner sets it in the dashboard (PUT /settings/hours with the current version). Returns what was done.
  */
 async function ensureSundayClosed(stack: Stack): Promise<string> {
+  const reasons: string[] = []
   for (const first of ['amara', 'rafael']) {
     const r = await fetch(`${stack.apiUrl}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: stack.webUrl },
       body: JSON.stringify({ email: `${first}@oasisautospa.com`, password: stack.devPassword }),
     })
-    if (!r.ok) continue
+    if (!r.ok) {
+      reasons.push(`${first}: login ${r.status}`)
+      continue
+    }
     const cookie = r.headers.getSetCookie?.().map((c) => c.split(';')[0]).join('; ') ?? ''
+    // writes carry the session's CSRF token (answered by the login) in x-csrf-token, like the dashboard does
+    const csrf = String(((await r.json()) as { csrfToken?: string }).csrfToken ?? '')
     const cur = await getJson(`${stack.apiUrl}/api/v1/settings/hours`, { headers: { cookie } })
-    if (cur.status !== 200) continue
+    if (cur.status !== 200) {
+      reasons.push(`${first}: GET /settings/hours ${cur.status}`)
+      continue
+    }
     const days = cur.body.days as { weekday: number; open: boolean; from: string; to: string }[]
     const sunday = days.find((d) => d.weekday === 0)
     if (sunday && !sunday.open) return 'Sunday was already closed in the stack Settings'
     const put = await getJson(`${stack.apiUrl}/api/v1/settings/hours`, {
       method: 'PUT',
-      headers: { 'content-type': 'application/json', cookie, origin: stack.webUrl, 'if-match': `"${cur.body.version}"` },
+      headers: { 'content-type': 'application/json', cookie, origin: stack.webUrl, 'x-csrf-token': csrf, 'if-match': `"${cur.body.version}"` },
       body: JSON.stringify({
         version: cur.body.version,
         days: days.map((d) => ({ weekday: d.weekday, open: d.weekday === 0 ? false : d.open, from: d.from, to: d.to })),
@@ -165,8 +174,9 @@ async function ensureSundayClosed(stack: Stack): Promise<string> {
     })
     if (put.status === 200) return `Sunday set closed through PUT /settings/hours as ${first} (version ${cur.body.version} -> ${put.body.version})`
     if (put.status !== 403) throw new Error(`PUT /settings/hours as ${first}: ${put.status} ${JSON.stringify(put.body).slice(0, 200)}`)
+    reasons.push(`${first}: PUT /settings/hours 403`)
   }
-  throw new Error('no seeded user could set Sunday closed through the Settings API')
+  throw new Error(`no seeded user could set Sunday closed through the Settings API (${reasons.join('; ')})`)
 }
 
 async function snapshotText(stack: Stack, cookie: string): Promise<string> {
@@ -384,8 +394,13 @@ async function main(): Promise<number> {
       await page.goto(`${proxy.origin}/`, { waitUntil: 'load' })
       await ready(page)
       await page.waitForTimeout(1500)
-      // board rows: flap cells are separate spans, so Playwright sees "11:30AMOPEN" (no space before AM/PM)
-      const rows = await page.locator('#dc-root button').filter({ hasText: /^\d+:\d\d(AM|PM)(OPEN|LAST 1|VIP|BOOKED)/ }).allInnerTexts()
+      // board rows: every flap cell is its own span (" ", "8", ":", "0", "0", "AM", "B", "O", "O", "K", "E", "D", " "), so the
+      // rows are read as their text content with the whitespace removed: "8:00AMBOOKED", "11:30AMLAST1"
+      const rows = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('#dc-root button'))
+          .map((b) => (b.textContent ?? '').replace(/\s+/g, ''))
+          .filter((t) => /^\d{1,2}:\d\d(AM|PM)(OPEN|LAST|VIP|BOOKED)/.test(t)),
+      )
       check('board: reloaded rows reflect the fresh availability (LAST/BOOKED present or the slot gone)', rows.length > 0 && (rows.some((r) => /LAST|BOOKED/.test(r)) || !after), rows.slice(0, 3).join(' | '))
       await ctx.close()
     }
