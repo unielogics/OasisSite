@@ -2,9 +2,10 @@
 // environment, and writes it as .generated/<variant>/site-env.js (an ES module the compiled logic imports).
 //   SITE_BOOKING=sms|live           Book/Join compose sms: links (default) or call the public booking API
 //   SITE_API_ORIGIN                 API origin for the browser ('' = same origin through nginx)
-//   SITE_HOURS_JSON                 GET /api/v1/public/hours body (else src/data/hours.fallback.json + a warning)
-//   SITE_AVAILABILITY_JSON          GET /api/v1/public/availability body (else no slots: the board shows the hours and
-//                                   "text to check times")
+//   SITE_HOURS_JSON                 GET /api/v1/public/hours body, inline or the path of a file holding it (the deploy
+//                                   kit's site-deploy.sh passes a file); else src/data/hours.fallback.json + a warning
+//   SITE_AVAILABILITY_JSON          GET /api/v1/public/availability body, inline or a file path (else no slots: the
+//                                   board shows the hours and "text to check times")
 //   SITE_BUILD_NOW / PRERENDER_NOW  the build instant (default: now); the parity build pins it to the harness's clock
 import fs from 'node:fs'
 import path from 'node:path'
@@ -12,6 +13,17 @@ import type { PublicHours } from '../../src/hours/format'
 import { validateAvailability, type Availability } from '../../src/site/availability'
 import type { SiteEnv } from '../../src/site/env'
 import type { SiteConfig } from './seo'
+
+/**
+ * A snapshot given through the environment: the JSON itself, or the path of a file holding it (site-deploy.sh writes
+ * the API's answer to a file and passes the path). Throws with a readable message when neither parses.
+ */
+export function readSnapshot(value: string): unknown {
+  const v = value.trim()
+  if (v.startsWith('{') || v.startsWith('[')) return JSON.parse(v)
+  if (!fs.existsSync(v)) throw new Error(`neither JSON nor an existing file: ${v.slice(0, 80)}`)
+  return JSON.parse(fs.readFileSync(v, 'utf8'))
+}
 
 export interface SiteEnvInput {
   site: SiteConfig
@@ -30,7 +42,7 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
   let availabilitySource: SiteEnv['availabilitySource'] = 'none'
   if (i.availabilityJson) {
     try {
-      availability = validateAvailability(JSON.parse(i.availabilityJson))
+      availability = validateAvailability(readSnapshot(i.availabilityJson))
       availabilitySource = 'SITE_AVAILABILITY_JSON'
     } catch (e) {
       i.warn(`SITE_AVAILABILITY_JSON is not a valid availability payload (${e instanceof Error ? e.message : String(e)}); the board shows the hours only`)

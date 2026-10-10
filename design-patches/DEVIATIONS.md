@@ -81,6 +81,10 @@ of every entry below.
   pins `Date` to the build instant, and the browser's first render is pinned to the same instant until the host is
   about to mount (hydration must match); the bridge then re-renders with the real time, exactly the design's own
   first-paint sequence.
+  The page's clock is also the **shop's** clock for every visitor: the design and the bridge read it through local
+  getters and the page is prerendered in the shop's zone, so `Date.now()` and `new Date()` are shifted by the gap
+  between the visitor's and the shop's UTC offsets (zero in New Jersey). A visitor elsewhere sees the shop's "today",
+  clock label and opening times, and hydration matches the markup (src/client/boot.tsx `installShopClock`).
 - **DV-HASH** `#/membership`, `#/wash`, … are client-side views of the one document. The home view is prerendered;
   a hash in the URL is applied right after mount (the design's own `hashchange` handler). The sitemap lists `/` only.
 - **DV-HEAD** Additions outside `#dc-root`: `<html lang="en">`, description, canonical, Open Graph (image = the

@@ -194,8 +194,8 @@ interface Tracker {
   responses: { url: string; status: number; body: string }[]
 }
 
-async function newPage(browser: Browser, origin: string): Promise<{ ctx: BrowserContext; page: Page; t: Tracker }> {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, timezoneId: 'America/New_York', locale: 'en-US' })
+async function newPage(browser: Browser, origin: string, timezoneId = 'America/New_York'): Promise<{ ctx: BrowserContext; page: Page; t: Tracker }> {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, timezoneId, locale: 'en-US' })
   const t: Tracker = { errors: [], blocked: [], fiveHundreds: [], navigations: [], responses: [] }
   await ctx.route('**/*', (route) => {
     const u = new URL(route.request().url())
@@ -573,6 +573,20 @@ async function main(): Promise<number> {
     check('sms mode: Join composes an sms: link with the plan, name, phone and car', navs2.length === 1 && /^sms:\+12015986304\?&body=JOIN%20VIP%3A/.test(navs2[0]!) && /Sam%20Lee/.test(navs2[0]!) && /Audi/.test(navs2[0]!), navs2[0])
     check('sms mode: no API write was attempted', smsProxy.log.filter((l) => l.method === 'POST').length === posts0, JSON.stringify(smsProxy.log.filter((l) => l.method === 'POST')))
     await joinPage.ctx.close()
+    // 8b. a visitor in another time zone: the page shows the shop's wall clock and hydrates without a mismatch
+    // (DEVIATIONS.md DV-CLOCK; React logs a recoverable error and re-renders on the client otherwise)
+    const far = await newPage(browser, smsProxy.origin, 'America/Los_Angeles')
+    trackers.push(far.t)
+    await far.page.goto(`${smsProxy.origin}/`, { waitUntil: 'load' })
+    await ready(far.page)
+    await settle(far.page)
+    const label = await far.page.evaluate(() => (document.body.innerText.match(/[A-Z]{3} [A-Z]{3} \d{1,2} · \d{1,2}:\d{2} [AP]M/) || [''])[0])
+    const shopNow = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', hour12: true }).formatToParts(new Date())
+    const part = (t: string) => shopNow.find((p) => p.type === t)?.value ?? ''
+    const want = new RegExp(`^${part('weekday').toUpperCase()} .* · ${part('hour')}:\\d{2} ${part('dayPeriod').toUpperCase()}$`)
+    check('time zone: a visitor in Los Angeles sees the shop clock', want.test(label), `${label} (shop ${part('weekday')} ${part('hour')} ${part('dayPeriod')})`)
+    check('time zone: no hydration error in Los Angeles', far.t.errors.length === 0, far.t.errors.slice(0, 2).join(' | '))
+    await far.ctx.close()
   } finally {
     await smsProxy.close()
     await browser.close()
