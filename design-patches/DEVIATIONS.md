@@ -123,7 +123,9 @@ of every entry below.
   (`backdrop-filter: blur(16px)`) rasterises a 13-row band over the content it overlaps with channel differences of
   at most 3/255 on the guest review and terms steps (about 4.9k of 390x128 pixels), while DOM, computed style, rects
   and vals are identical and the original is deterministic against itself. A pixel tolerance capped at 5200 for
-  those two steps; everything else stays at threshold 0.
+  those two steps in the dark theme and at 6200 in the light theme (since DV-THEME the light runs render light: the
+  same rows 3390-3474 of the bar, 1-2/255 per channel, measured 5603 and 5479 px); everything else stays at
+  threshold 0.
 
 ## Fixture configuration (the dashboard bundles the pipeline's tests still run on)
 

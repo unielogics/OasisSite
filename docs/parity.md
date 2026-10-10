@@ -120,8 +120,9 @@ before serialising, on both sides; a declaration that really differs still diffe
 One case, documented as `DV-PARITY-blur` in DEVIATIONS.md: at the phone width the booking sheet's glass CTA bar
 (`backdrop-filter: blur(16px)`) rasterises a 13-row band with channel differences of at most 3/255 on the guest
 review and terms steps while DOM, computed style, rects and vals are identical and the original is deterministic
-against itself (`pnpm parity --scenario sheet-guest --against-original`). Capped at 5200 pixels on those two steps;
-every other step stays at threshold 0.
+against itself (`pnpm parity --scenario sheet-guest --against-original`). Capped at 5200 pixels on those two steps in
+the dark theme and 6200 in the light theme (the light runs render light since DV-THEME: the same band, 1-2/255 per
+channel, measured 5603/5479 px); every other step stays at threshold 0.
 
 ## Dry runs and the self-tests
 
