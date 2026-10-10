@@ -44,9 +44,12 @@ are redacted) and the pending membership row.
    snapshot (`"seq": N`) that the seeded manager reads (fixture: in its state).
 3. The booked slot has one bay fewer (or is gone) in a fresh availability payload, and the reloaded board shows it.
 4. The member path: menu → Book a time → mobile → Continue → the code step → the code → Verify → "1 of 4 this
-   month" → a time → Confirm booking → 201 with `deposit.dueCents = 0` and `member: true`.
-5. `#/join?gold` → vehicles → details → the checkout step has no card field → terms → Start Gold → 201
-   `pending_payment`, `next: checkout_link_by_sms`; a pending membership row exists for the number.
+   month" → a time → the review asks for the full name (no mobile field) → Confirm booking → 201 with
+   `deposit.dueCents = 0` and `member: true`, booked under the typed name (fixture). A verified number without an active
+   membership gets guest prices ("guest price", no "1 of 4 this month").
+5. `#/join?gold` → vehicles → details (Continue without the e-mail is refused on that step: "Add your email for the
+   receipts.") → the checkout step has no card field → terms → Start Gold → 201 `pending_payment`,
+   `next: checkout_link_by_sms`; a pending membership row exists for the number.
 6. The honeypot (`website` non-empty) answers 202 with a fake reference and creates nothing.
 7. SMS mode: Book composes `sms:+18623885827?&body=WASH booking: …` (wash, vehicle, time), Join composes
    `JOIN VIP: name · phone · car`, the design's own text links carry the texting number, and no POST reaches the API.
@@ -60,3 +63,15 @@ are redacted) and the pending membership row.
    device change and a reload on a device that says otherwise; the menu's Appearance Light on a dark device is stored
    and kept after a reload; no hydration error in any of them.
 9. Over every page: no console error or page error, no request to another origin, no 5xx.
+
+## The theme before the first paint (`pnpm e2e:theme-paint`)
+
+`scripts/e2e-theme-paint.ts [--dist dist] [--delay 1000]` serves a build through the same proxy (port 3305, the fixture
+API on 3306), holds every request for `/assets/theme.<hash>.js` back by `--delay` ms and records every frame the
+compositor produces from the navigation on (CDP `Page.startScreencast`), classified by pixels (most pixels near
+`#06080A` = dark, near `#F2F3F1` = light). Six cases: the home page on a light and on a dark device with nothing stored,
+with the opposite theme stored on each, and the 404 page on a light and a dark device. It fails when a frame in the
+wrong theme is ever painted, when the first painted frame or the final screenshot is not the expected theme, or when no
+page frame was seen. Against the build before the head script (the theme script after `#dc-root`), the light device
+painted the dark markup for the whole delay.
+

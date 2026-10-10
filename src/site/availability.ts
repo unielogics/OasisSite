@@ -1,4 +1,4 @@
-// The public availability contract (GET /api/v1/public/availability?days=5&service=<key>&addons=a,b) and its two
+// The public availability contract (GET /api/v1/public/availability?days=7&service=<key>) and its two
 // uses: converting a payload into the `days` structure the design's logic reads (the open-times board, the day cards,
 // NEXT OPEN, the hero pill, the booking sheet and the SMS mock all derive from it), and the fixture generator that
 // reproduces the design's own mulberry32 pattern for the parity harness (where the port must match the original's
@@ -84,20 +84,24 @@ export const dayWord = (i: number, d: Date): string => (i === 0 ? 'Today' : i ==
 
 /**
  * Payload -> the design's `days` (at most `max` days with slots, like the design's getter). Days whose slots are all
- * gone are dropped the way the design drops them (`if (slots.length) out.push(...)`).
+ * gone are dropped the way the design drops them (`if (slots.length) out.push(...)`). The payload is a snapshot (baked
+ * at deploy, or fetched minutes ago): today's starts that are no longer in the future are dropped against `now`.
  */
 export function daysFromAvailability(a: Availability, now: Date, max = 5): DesignDay[] {
   const out: DesignDay[] = []
+  const nm = now.getHours() * 60 + now.getMinutes()
   for (const day of a.days) {
     if (day.closed || !day.slots.length) continue
     const d = localDate(day.date)
     const i = dayDiff(d, now)
     if (i < 0) continue
+    const slots = i === 0 ? day.slots.filter((s) => s.startMin > nm) : day.slots
+    if (!slots.length) continue
     out.push({
       d,
       i,
       word: dayWord(i, d),
-      slots: day.slots.map((s) => ({ m: s.startMin, st: s.state === 'vip' ? 'members' : s.state, bays: s.bays })),
+      slots: slots.map((s) => ({ m: s.startMin, st: s.state === 'vip' ? 'members' : s.state, bays: s.bays })),
     })
     if (out.length >= max) break
   }

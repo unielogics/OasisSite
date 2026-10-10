@@ -527,6 +527,12 @@ async function main(): Promise<number> {
       await settle(page)
       const cta = await btn(page, /Confirm booking/).count()
       check('member: the review CTA is "Confirm booking" (no fee line)', cta === 1 && (await page.locator('#dc-root :text("Booking fee · non-refundable")').count()) === 0)
+      // the member books under the name they type (the API keeps a verified member's name as given: the first name from
+      // the code check is never sent back as the name); the number is the verified one, no mobile field
+      const nameFields = await page.locator('#dc-root input[placeholder="Full name"]').count()
+      const phoneFields = await page.locator('#dc-root input[placeholder="Mobile number"]').count()
+      check('member: the review asks for the full name and not for the number', nameFields === 1 && phoneFields === 0, `name ${nameFields}, mobile ${phoneFields}`)
+      await page.locator('#dc-root input[placeholder="Full name"]').fill('Dana Whitfield')
       await btn(page, /^\s*Confirm booking/).click()
       try {
         await page.waitForSelector('#dc-root :text("You\'re booked")', { timeout: 20_000 })
@@ -537,6 +543,36 @@ async function main(): Promise<number> {
       const resp = t.responses.find((r) => r.url.includes('/public/bookings'))
       const body = resp ? (JSON.parse(resp.body) as Record<string, any>) : null
       check('member: booked with no deposit', resp?.status === 201 && body?.deposit?.dueCents === 0 && body?.member === true, resp?.body.slice(0, 200))
+      if (api.kind === 'fixture') {
+        const s = await getJson(`${api.origin}/__fixture/state`)
+        const b = (s.body.bookings as { bookingRef: string; name: string }[]).find((x) => x.bookingRef === body?.bookingRef)
+        check('member: booked under the typed full name (not the first name from the code check)', b?.name === 'Dana Whitfield', b?.name)
+      }
+      await ctx.close()
+    }
+
+    // 5b. a verified number without an active membership books as a guest (guest prices, the fee and its terms)
+    {
+      const { ctx, page, t } = await newPage(browser, proxy.origin)
+      trackers.push(t)
+      await page.goto(`${proxy.origin}/`, { waitUntil: 'load' })
+      await ready(page)
+      await page.locator('#dc-root button[aria-label="Menu"]').click()
+      await btn(page, /^\s*Book a time\s*$/).click()
+      await settle(page)
+      await page.locator('#dc-root input[placeholder="Mobile number"]').fill(PHONES.member)
+      await btn(page, /^\s*Continue\s*$/).click()
+      await page.waitForSelector('#dc-root :text("Enter the code we texted")', { timeout: 20_000 })
+      const otp = t.responses.find((r) => r.url.endsWith('/public/otp'))
+      const challengeId = otp ? (JSON.parse(otp.body) as { challengeId: string }).challengeId : ''
+      await page.locator('#dc-root input[placeholder="123456"]').fill(await codeFor(api, challengeId, PHONES.member))
+      await btn(page, /^\s*Verify\s*$/).click()
+      await page.waitForSelector('#dc-root :text("Choose your wash")', { timeout: 20_000 })
+      const verify = t.responses.find((r) => r.url.endsWith('/public/otp/verify'))
+      const active = verify ? (JSON.parse(verify.body) as { member: { active: boolean } }).member.active : null
+      const guestPrices = await page.locator('#dc-root :text("guest price")').count()
+      const memberPrices = await page.locator('#dc-root :text("1 of 4 this month")').count()
+      check('non-member: a verified number without an active membership gets guest prices (the fee applies), not member pricing', active === false && guestPrices >= 1 && memberPrices === 0, `active=${active} guest=${guestPrices} member=${memberPrices}`)
       await ctx.close()
     }
 
@@ -552,6 +588,10 @@ async function main(): Promise<number> {
       await btn(page, /^\s*Continue\s*$/).click()
       await page.locator('#dc-root input[placeholder="Full name"]').fill('Jo Park')
       await page.locator('#dc-root input[placeholder="Mobile number"]').fill(PHONES.join)
+      // the API needs the receipts e-mail: asked for on this step, not refused after the terms
+      await btn(page, /^\s*Continue\s*$/).click()
+      await settle(page)
+      check('join: the details step asks for the e-mail before going on', (await page.locator('#dc-root :text("Add your email for the receipts.")').count()) === 1)
       await page.locator('#dc-root input[placeholder="Email (for receipts)"]').fill('jo@example.com')
       await btn(page, /^\s*Continue\s*$/).click()
       await settle(page)

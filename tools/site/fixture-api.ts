@@ -37,7 +37,7 @@ export interface FixtureState {
   tokens: Map<string, { phone: string; member: { firstName: string; tier: 'gold' | 'vip' | null; washesLeft: number | null; active: boolean } }>
   bookings: { bookingRef: string; phone: string; name: string; date: string; startMin: number; serviceKey: string; addonKeys: string[]; member: boolean }[]
   memberships: { memberRef: string; phone: string; tier: string; name: string }[]
-  idem: Map<string, { status: number; body: unknown }>
+  idem: Map<string, { status: number; body: unknown; sig: string }>
   /** phones that are members (the seeded ones) */
   members: Map<string, { firstName: string; tier: 'gold' | 'vip'; washesLeft: number }>
 }
@@ -179,11 +179,14 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
     const key = req.headers['idempotency-key']
     if (p === '/api/v1/public/bookings' || p === '/api/v1/public/memberships') {
       if (typeof key !== 'string' || !key) return problem(res, 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key is required.')
-      const hit = state.idem.get(`${p}|${key}`)
+      // keys are the caller's (the API scopes them per caller, not per route): a key used for another request is refused
+      const hit = state.idem.get(String(key))
+      if (hit && hit.sig !== `${p}|${JSON.stringify(body)}`)
+        return problem(res, 422, 'IDEMPOTENCY_MISMATCH', 'Idempotency key reused')
       if (hit) return json(res, hit.status, hit.body, { 'idempotent-replayed': 'true' })
     }
     const remember = (status: number, out: unknown) => {
-      state.idem.set(`${p}|${String(key)}`, { status, body: out })
+      state.idem.set(String(key), { status, body: out, sig: `${p}|${JSON.stringify(body)}` })
       return json(res, status, out)
     }
     if (p === '/api/v1/public/bookings') {
@@ -234,6 +237,9 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
       const tier = String(body.tier ?? '')
       if (!phone || !['gold', 'vip'].includes(tier) || !String(body.name ?? '').trim() || body.agree !== true)
         return problem(res, 422, 'PUBLIC_VALIDATION', 'Check the details.')
+      // the API's MembershipBody requires the receipts e-mail (z.string().email())
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.email ?? '').trim()))
+        return problem(res, 422, 'VALIDATION_FAILED', 'Check the form', { detail: 'Invalid email address', errors: [{ path: 'body.email', message: 'Invalid email address' }] })
       if (state.members.has(phone)) return remember(409, { type: 'about:blank', status: 409, code: 'PUBLIC_ALREADY_MEMBER', title: 'This number already has a membership. Text us to change your plan.' })
       const memberRef = `OAS-M-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
       state.memberships.push({ memberRef, phone, tier, name: String(body.name) })

@@ -12,7 +12,7 @@
 //   DV-THEME  the theme follows the device (prefers-color-scheme) live until the visitor picks one, which is remembered
 import type { PublicHours } from '../hours/format'
 import { validatePublicHours } from '../hours/format'
-import { daysFromAvailability, daysFromHours, validateAvailability, type Availability, type DesignDay } from './availability'
+import { daysFromAvailability, daysFromHours, isoDate, validateAvailability, type Availability, type DesignDay } from './availability'
 import type { SiteEnv } from './env'
 import { decideTheme, LIGHT_QUERY, readStoredTheme, storeTheme, type ThemeConfig } from '../client/theme'
 import { designTime, hoursRows, hoursTable, withToday, type HoursTable } from './hours'
@@ -22,7 +22,9 @@ type AnyLogic = new (props?: any) => any
 interface Member {
   firstName: string
   tier: 'gold' | 'vip' | null
-  washesLeft: number
+  washesLeft: number | null
+  /** an active membership: no booking fee, member prices (the API decides the fee from the same fact) */
+  active: boolean
 }
 
 interface Problem {
@@ -30,7 +32,47 @@ interface Problem {
   title: string
   detail?: string
   code?: string
+  errors?: { path?: string; message?: string }[]
 }
+
+interface Catalog {
+  services: { key: string; name: string; kind?: string; durationMin?: number }[]
+  addons: { key: string; name: string }[]
+}
+
+/** A name as a catalog key (the backend's keys are the slug of the item's name). */
+export const slugOfName = (s: string): string =>
+  s
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/\+/g, ' plus ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+/**
+ * The catalog entry for one of the design's items: the configured key when the live catalog has it, else the entry
+ * whose name is the design's name (same slug). Nothing else: an item the catalog does not carry has no key (null) and
+ * is never substituted by a look-alike.
+ */
+export function catalogMatch<T extends { key: string; name: string }>(items: T[], key: string | undefined, name: string): T | null {
+  if (key) {
+    const k = items.find((x) => x.key === key)
+    if (k) return k
+  }
+  const want = slugOfName(name)
+  return items.find((x) => x.key === want || slugOfName(x.name) === want) ?? null
+}
+
+/** How long a payload's "bays open now" stays believable (the board refreshes every few minutes). */
+const NOW_FRESH_MS = 10 * 60_000
+/** The board and the hours are fetched again on this interval while the page is open, and when it becomes visible. */
+const REFRESH_MS = 5 * 60_000
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** The real epoch time (Date.now() is the shop's wall clock for a visitor elsewhere, DV-CLOCK; payload stamps are UTC). */
+const realNow = (): number =>
+  typeof performance !== 'undefined' && typeof performance.timeOrigin === 'number' ? performance.timeOrigin + performance.now() : Date.now()
 
 /** Test hook: the e2e records sms:/tel: navigations instead of leaving the page. */
 const navigate = (url: string): void => {
@@ -64,13 +106,21 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     __hours: PublicHours | null = env.hours
     __avail: Availability | null = env.availability
     __availFor = ''
-    __idem: string | null = null
+    __availSeq = 0
+    /** the date (YYYY-MM-DD) of the day the visitor picked; the design keeps only its position in `days`, which moves */
+    __pickDate: string | null = null
+    /** Idempotency-Key per endpoint, kept only for a retry of the same body (sig) and dropped once it succeeded */
+    __idem: { booking: { key: string; sig: string } | null; join: { key: string; sig: string } | null } = { booking: null, join: null }
+    __lastProblem: Problem | null = null
+    __refreshTimer: ReturnType<typeof setInterval> | null = null
+    __onVisible: (() => void) | null = null
+    __lastRefresh = 0
     __member: { token: string; member: Member } | null = null
     __otp: { challengeId: string; phone: string } | null = null
     __booking: { bookingRef: string; confirmationBy: string; deposit?: { dueCents: number; how: string } } | null = null
     __memberRef: string | null = null
     __busy = false
-    __catalog: { services: { key: string; name: string; kind?: string; durationMin?: number }[]; addons: { key: string; name: string }[] } | null = null
+    __catalog: Catalog | null = null
     __catalogReady: Promise<void> | null = null
     __schemeMq: MediaQueryList | null = null
     __onScheme: ((e: { matches: boolean }) => void) | null = null
@@ -93,17 +143,42 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       this.setState({ now: Date.now(), flapAt: Date.now() })
       if (typeof location !== 'undefined' && location.hash.replace(/^#\/?/, '') !== '') this._hc()
       this.__followDevice()
+      this.__refreshAll()
+      // the hours' state and the board are snapshots: fetched again while the page stays open, and when it comes back
+      if (typeof setInterval === 'function') this.__refreshTimer = setInterval(() => this.__refreshAll(), REFRESH_MS)
+      if (typeof document !== 'undefined') {
+        this.__onVisible = () => {
+          if (document.visibilityState === 'visible' && Date.now() - this.__lastRefresh > 60_000) this.__refreshAll()
+        }
+        document.addEventListener('visibilitychange', this.__onVisible)
+      }
+    }
+
+    __refreshAll(): void {
+      this.__lastRefresh = Date.now()
       void this.__refreshHours()
       void this.__refreshAvailability()
     }
 
     componentWillUnmount(): void {
+      if (this.__refreshTimer) clearInterval(this.__refreshTimer)
+      if (this.__onVisible && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.__onVisible)
       const mq = this.__schemeMq as any
       if (mq && this.__onScheme) {
         if (typeof mq.removeEventListener === 'function') mq.removeEventListener('change', this.__onScheme)
         else if (typeof mq.removeListener === 'function') mq.removeListener(this.__onScheme)
       }
       super.componentWillUnmount()
+    }
+
+    componentDidUpdate(...args: any[]): void {
+      if (typeof super.componentDidUpdate === 'function') super.componentDidUpdate(...args)
+      this.__syncPick()
+      // <html data-oasis-theme> (set by the head script, DV-THEME) follows the page's theme
+      if (themeCfg && typeof document !== 'undefined') {
+        const t = this.theme()
+        if (document.documentElement.getAttribute('data-oasis-theme') !== t) document.documentElement.setAttribute('data-oasis-theme', t)
+      }
     }
 
     // ---- DV-THEME: the device decides until the visitor does ------------------------------------------------------------
@@ -154,7 +229,11 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const h = withToday(this.__hours, new Date())
       const today = h?.today
       if (today && !today.closed && today.state === 'open') {
-        const live = this.__avail?.now
+        // the payload's "now" is believed while it is fresh, and never over its own "closed"
+        const a = this.__avail
+        const fresh = !!a && Math.abs(realNow() - Date.parse(a.generatedAt)) < NOW_FRESH_MS
+        const live = fresh ? a!.now : null
+        if (live && live.open === false) return { short: 'CLOSED NOW', open: false }
         if (live && typeof live.baysFree === 'number')
           return { short: `${live.baysFree} OF ${live.baysTotal || 3} BAYS OPEN NOW`, open: true }
         const day = this.days.find((d: DesignDay) => d.i === 0)
@@ -181,38 +260,31 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     /**
-     * The design's service and add-on ids -> the backend's catalog keys. Configured keys (site.config.json) win; when the
-     * live catalog (GET /api/v1/public/catalog, fetched once in live mode) does not carry a configured key, the service
-     * is matched by name (the design's "Signature Hand Wash" -> the catalog's closest package), else the first package;
-     * an add-on without a match is left out of the booking rather than refused.
+     * The design's service and add-on ids -> the backend's catalog keys, from the live catalog (GET
+     * /api/v1/public/catalog, fetched once per page): the configured key (site.config.json) when the catalog carries it,
+     * else the catalog item with the design's name. Fail safe: an item without a catalog entry has no key (null /
+     * listed as missing) and is never replaced by a look-alike; a booking that needs one is refused (text us instead).
      */
-    __serviceKey(): string {
+    __serviceKey(): string | null {
       const svc = this.state.bk?.svc || 'signature'
       const cfg = env.catalog.services[svc]
-      const wanted = cfg?.key ?? svc
       const cat = this.__catalog
-      if (!cat) return wanted
-      if (cat.services.some((s) => s.key === wanted)) return wanted
-      const name = (cfg?.name || svc).toLowerCase()
-      const words: string[] = name.split(/[^a-z]+/).filter((w: string) => w.length > 3)
-      const scored = cat.services
-        .filter((s) => !s.kind || s.kind === 'package')
-        .map((s) => ({ s, score: words.filter((w: string) => s.name.toLowerCase().includes(w)).length }))
-        .sort((a, b) => b.score - a.score)
-      return (scored[0]?.score ? scored[0].s.key : cat.services[0]?.key) ?? wanted
+      if (!cat) return null
+      const name = cfg?.name || this.WASH.find((w: any) => w.id === svc)?.name || svc
+      return catalogMatch(cat.services, cfg?.key, name)?.key ?? null
     }
 
-    __addonKeys(): string[] {
+    __addonKeys(): { keys: string[]; missing: string[] } {
       const cat = this.__catalog
-      return (this.state.bk?.addons || []).flatMap((id: string) => {
-        const wanted = env.catalog.addons[id] ?? id
-        if (!cat) return [wanted]
-        if (cat.addons.some((a) => a.key === wanted)) return [wanted]
-        const name = (this.DURING.find((a: any) => a.id === id)?.name || id).toLowerCase()
-        const words: string[] = name.split(/[^a-z]+/).filter((w: string) => w.length > 3)
-        const hit = cat.addons.find((a) => words.some((w: string) => a.name.toLowerCase().includes(w)))
-        return hit ? [hit.key] : []
-      })
+      const keys: string[] = []
+      const missing: string[] = []
+      for (const id of (this.state.bk?.addons || []) as string[]) {
+        const name = this.DURING.find((a: any) => a.id === id)?.name || id
+        const hit = cat ? catalogMatch(cat.addons, env.catalog.addons[id], name) : null
+        if (hit) keys.push(hit.key)
+        else missing.push(name)
+      }
+      return { keys, missing }
     }
 
     /** The live catalog, fetched once per page in every booking mode (the availability query needs a key it knows). */
@@ -231,7 +303,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         const c = (await res.json()) as { services?: unknown; addons?: unknown }
         if (Array.isArray(c.services) && Array.isArray(c.addons)) this.__catalog = { services: c.services as any, addons: c.addons as any }
       } catch {
-        /* the configured keys stay */
+        /* no catalog: the board asks for the API's default wash, and bookings are refused until it loads */
       }
     }
 
@@ -239,36 +311,89 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     // queried with a catalog key the API knows (the catalog is loaded first)
     async __refreshAvailability(): Promise<void> {
       await this.__loadCatalog()
-      const q = `?days=${fetchDays}&service=${encodeURIComponent(this.__serviceKey())}&addons=${encodeURIComponent(this.__addonKeys().join(','))}`
+      // add-ons never change the answer (the API ignores them): the query is the wash only, one URL per wash for the
+      // cache in front; a wash the catalog does not carry asks for the API's default wash
+      const service = this.__serviceKey()
+      const q = `?days=${fetchDays}${service ? `&service=${service}` : ''}`
       if (this.__availFor === q + '|pending') return
-      const key = q
+      // only the latest query may land: an older answer arriving last would show another wash's times
+      const seq = ++this.__availSeq
       this.__availFor = q + '|pending'
       try {
         const ctl = new AbortController()
         const t = setTimeout(() => ctl.abort(), env.timeouts.availability)
         const res = await fetch(api(env.endpoints.availability + q), { signal: ctl.signal, credentials: 'omit', headers: { accept: 'application/json' } })
         clearTimeout(t)
+        if (seq !== this.__availSeq) return
         if (!res.ok) {
           this.__availFor = ''
           return
         }
-        this.__avail = validateAvailability(await res.json())
-        this.__availFor = key
+        const avail = validateAvailability(await res.json())
+        if (seq !== this.__availSeq) return
+        this.__avail = avail
+        this.__availFor = q
         this.forceUpdate()
       } catch {
-        this.__availFor = ''
+        if (seq === this.__availSeq) this.__availFor = ''
       }
     }
 
+    /** The date of the day at position `i` of the current list (what the visitor sees when they tap it). */
+    __dateAt(i: unknown): string | null {
+      const days = this.days
+      if (typeof i !== 'number' || !days.length) return null
+      const d = days[Math.max(0, Math.min(i, days.length - 1))]
+      return d ? isoDate(d.d) : null
+    }
+
+    /** The day the visitor picked, by its date (null when that day is no longer listed). */
+    __pickedDay(): DesignDay | null {
+      const days = this.days
+      if (this.__pickDate) return days.find((d: DesignDay) => isoDate(d.d) === this.__pickDate) ?? null
+      return days[Math.min(this.state.bk?.day ?? 0, days.length - 1)] ?? null
+    }
+
+    /**
+     * The design keeps the picked day as a position in `days`, a list rebuilt on every render (a refresh drops a day
+     * whose last start passed, midnight shifts it). After every update the position is put back on the picked date; when
+     * the date or the time is gone the pick is cleared and the visitor is asked for another time.
+     */
+    __syncPick(): void {
+      const s = this.state
+      const b = s.bk
+      if (!b || !this.__pickDate || (s.sheet === 'book' && s.step === 'done')) return
+      const days = this.days
+      const idx = days.findIndex((d: DesignDay) => isoDate(d.d) === this.__pickDate)
+      const day = idx >= 0 ? days[idx]! : null
+      const slotOk = b.slot == null || (!!day && (day.unknown || day.slots.some((x) => x.m === b.slot && x.st !== 'booked')))
+      if (day && slotOk) {
+        if (b.day !== idx) this.setState({ bk: { ...b, day: idx } })
+        return
+      }
+      if (!day) this.__pickDate = null
+      const lost = b.slot != null
+      this.setState((ss: any) => ({
+        bk: { ...ss.bk, day: day ? idx : 0, slot: null },
+        ...(lost && ss.sheet === 'book' && ss.step === 'review' ? { step: 'time' } : {}),
+      }))
+      if (lost && s.sheet === 'book') this.flash('That time is no longer available. Pick another time.')
+    }
+
     openBook(p?: any): void {
+      if (p && 'day' in p) this.__pickDate = this.__dateAt(p.day)
+      // live mode: the sheet opens on the member side only for a verified active member (a tier set by a join that is
+      // not paid yet, or by the design's own sign-in, proves nothing)
+      if (env.booking === 'live' && this.state.tier && !this.__member?.member.active) this.setState({ tier: null })
       super.openBook(p)
-      if (!this.__idem) this.__idem = randomId()
       void this.__refreshAvailability()
     }
 
     setBk(p: any): void {
+      if (p && 'day' in p) this.__pickDate = this.__dateAt(p.day)
+      else if (p && p.slot != null && !this.__pickDate) this.__pickDate = this.__dateAt(this.state.bk?.day ?? 0)
       super.setBk(p)
-      if (p && ('svc' in p || 'addons' in p)) void this.__refreshAvailability()
+      if (p && 'svc' in p) void this.__refreshAvailability()
     }
 
     // ---- the view models ------------------------------------------------------------------------------------------------
@@ -289,7 +414,10 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
           sh.bTime && unknown
             ? `We can't show live times right now. Text ${env.contact.smsKeyword} to ${env.contact.smsDisplay} and we'll reply with open times.`
             : '',
-        guestDetails: !!(sh.bReview && sh.isGuest && env.booking === 'live'),
+        // live mode, review step: guests give a name and a mobile number; a member gives the name to book under (the
+        // API keeps what a verified member types as their name, so nothing is sent that they did not type)
+        guestDetails: !!(sh.bReview && env.booking === 'live'),
+        askPhone: !!(sh.bReview && sh.isGuest && env.booking === 'live'),
         name: this.state.bk?.name || '',
         setName: (e: any) => this.setBk({ name: e.target.value }),
         phone: this.state.bk?.phone || '',
@@ -353,7 +481,6 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
           doneSub: `${String(orig.doneSub).replace(/ · 468 River Drive, Garfield$/, '')} · Ref ${bk.bookingRef}${due}`,
           cta: () => {
             this.__booking = null
-            this.__idem = null
             orig.cta()
           },
         }
@@ -373,6 +500,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const validate = (): string => {
         if (st === 1 && !j.vehicles.some((v: any) => v.car.trim())) return 'Add at least one vehicle.'
         if (st === 2 && (!j.name.trim() || digits(j.phone).length < 10)) return 'Add your name and a 10-digit mobile number.'
+        // the API needs the receipts e-mail to start a membership (live mode; a text to the shop does without)
+        if (st === 2 && env.booking === 'live' && !EMAIL.test(String(j.email || '').trim())) return 'Add your email for the receipts.'
         if (st === 3 && !j.agree) return 'Please accept the membership terms.'
         return ''
       }
@@ -390,8 +519,9 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
       if (env.booking === 'live') {
+        // the membership is pending until the checkout is paid: no member pricing yet, the sheet opens at the member
+        // sign-in with the number prefilled (the code proves it; an active membership then waives the fee)
         jv.bookFirst = () => {
-          this.setState({ tier: j.tier })
           this.go('home')
           setTimeout(() => this.openBook({ phone: j.phone, who: null }), 200)
         }
@@ -432,33 +562,55 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       }
       const r = await this.__post(env.endpoints.otpVerify, { challengeId: this.__otp.challengeId, code }, null)
       if (!r) return
-      const member = r.member as Member
+      const m = (r.member ?? {}) as Partial<Member>
+      const member: Member = { firstName: String(m.firstName ?? ''), tier: m.tier ?? null, washesLeft: m.washesLeft ?? null, active: m.active === true }
       this.__member = { token: String(r.memberToken), member }
-      this.setState((ss: any) => ({
-        tier: member.tier || 'gold',
-        step: ss.bk.slot != null ? 'review' : 'svc',
-        bk: { ...ss.bk, who: 'member', name: member.firstName || ss.bk.name },
-      }))
+      if (member.active) {
+        this.setState((ss: any) => ({
+          tier: member.tier || 'gold',
+          step: ss.bk.slot != null ? 'review' : 'svc',
+          bk: { ...ss.bk, who: 'member' },
+        }))
+        return
+      }
+      // a verified number without an active membership books as a guest: guest prices, the booking fee and its terms
+      // (the API charges the fee from the same fact); the token still proves the number
+      this.flash('No active membership on this number. You can book as a guest.')
+      this.setState((ss: any) => ({ tier: null, step: 'svc', bk: { ...ss.bk, who: 'guest', ack: false } }))
+    }
+
+    /** A booking with the member side's terms: only for a verified active member (live mode). */
+    __isMemberBooking(): boolean {
+      return this.state.bk?.who === 'member' && !!this.__member?.member.active
     }
 
     // ---- DV-BOOK ----------------------------------------------------------------------------------------------------------
-    __bookingBody(): Record<string, any> | null {
-      const s = this.state
-      const b = s.bk
-      const day = this.days[Math.min(b.day, this.days.length - 1)]
-      if (!day || b.slot == null) return null
+    /** The request body, or why there is none (a message for the visitor). */
+    __bookingBody(): { body: Record<string, any> } | { error: string } {
+      const b = this.state.bk
+      const day = this.__pickedDay()
+      if (!day || b.slot == null) return { error: 'Pick a time first' }
+      const serviceKey = this.__serviceKey()
+      const wash = this.WASH.find((w: any) => w.id === b.svc) || this.WASH[0]
+      if (!serviceKey) return { error: `${wash.name} can't be booked online yet. Text ${env.contact.smsKeyword} to ${env.contact.smsDisplay} and we'll book it for you.` }
+      const addons = this.__addonKeys()
+      if (addons.missing.length)
+        return { error: `${addons.missing.join(', ')} can't be booked online yet. Remove it, or text ${env.contact.smsKeyword} to ${env.contact.smsDisplay}.` }
       const vehL = this.VEH.find((v: any) => v[0] === b.vehicle)?.[1] ?? b.vehicle
       return {
-        name: String(b.name || this.__member?.member.firstName || ''),
-        phone: String(b.phone || ''),
-        vehicle: { label: vehL },
-        serviceKey: this.__serviceKey(),
-        addonKeys: this.__addonKeys(),
-        date: `${day.d.getFullYear()}-${String(day.d.getMonth() + 1).padStart(2, '0')}-${String(day.d.getDate()).padStart(2, '0')}`,
-        startMin: b.slot,
-        smsConsent: true,
-        ...(this.__member ? { memberToken: this.__member.token } : {}),
-        website: '',
+        body: {
+          // only a name the visitor typed: the API stores a verified member's name as given
+          name: String(b.name || '').trim(),
+          phone: String(b.phone || ''),
+          vehicle: { label: vehL },
+          serviceKey,
+          addonKeys: addons.keys,
+          date: isoDate(day.d),
+          startMin: b.slot,
+          smsConsent: true,
+          ...(this.__member ? { memberToken: this.__member.token } : {}),
+          website: '',
+        },
       }
     }
 
@@ -467,35 +619,60 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const b = s.bk
       const wash = this.WASH.find((w: any) => w.id === b.svc) || this.WASH[0]
       const vehL = this.VEH.find((v: any) => v[0] === b.vehicle)?.[1] ?? b.vehicle
-      const day = this.days[Math.min(b.day, this.days.length - 1)]
+      const day = this.__pickedDay()
       const when = b.slot != null && day ? `${day.word} ${this.fmt(b.slot)}` : 'any open time'
       const ads = this.DURING.filter((a: any) => b.addons.includes(a.id)).map((a: any) => a.name)
       const who = b.who === 'member' ? `Member${b.phone ? ' ' + b.phone : ''}` : 'Guest'
       return `${env.contact.smsKeyword} booking: ${wash.name} · ${vehL} · ${when}${ads.length ? ' · + ' + ads.join(', ') : ''} · ${who}`
     }
 
+    /** The key of one request kind, reused only for a retry of the identical body. */
+    __idemFor(kind: 'booking' | 'join', body: unknown): string {
+      const sig = JSON.stringify(body)
+      const cur = this.__idem[kind]
+      if (cur && cur.sig === sig) return cur.key
+      const next = { key: randomId(), sig }
+      this.__idem[kind] = next
+      return next.key
+    }
+
     async __submitBooking(): Promise<void> {
       const b = this.state.bk
-      const guest = b.who === 'guest'
-      if (guest && !b.ack) {
-        this.flash('Please confirm the booking fee terms')
-        return
-      }
       if (env.booking !== 'live') {
+        if (b.who === 'guest' && !b.ack) {
+          this.flash('Please confirm the booking fee terms')
+          return
+        }
         navigate(smsUrl(this.__composeBooking()))
         return
       }
-      if (guest && (!String(b.name || '').trim() || String(b.phone || '').replace(/\D/g, '').length < 10)) {
+      const member = this.__isMemberBooking()
+      if (!member && !b.ack) {
+        this.flash('Please confirm the booking fee terms')
+        return
+      }
+      if (!String(b.name || '').trim()) {
+        this.flash('Add your full name')
+        return
+      }
+      if (!member && String(b.phone || '').replace(/\D/g, '').length < 10) {
         this.flash('Add your name and a 10-digit mobile number')
         return
       }
-      const body = this.__bookingBody()
-      if (!body) {
-        this.flash('Pick a time first')
+      if (this.__busy) return
+      // the keys come from the live catalog: load it now if it failed earlier (never book a key it does not know)
+      if (!this.__catalog) {
+        this.__catalogReady = null
+        await this.__loadCatalog()
+      }
+      const r0 = this.__bookingBody()
+      if ('error' in r0) {
+        this.flash(r0.error)
         return
       }
-      const r = await this.__post(env.endpoints.bookings, body, this.__idem)
+      const r = await this.__post(env.endpoints.bookings, r0.body, this.__idemFor('booking', r0.body))
       if (!r) return
+      this.__idem.booking = null
       this.__booking = { bookingRef: String(r.bookingRef), confirmationBy: String(r.confirmationBy), deposit: r.deposit }
       this.setState({ step: 'done' })
       void this.__refreshAvailability()
@@ -518,19 +695,24 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         tier: j.tier,
         name: j.name.trim(),
         phone: j.phone,
-        email: j.email,
+        email: String(j.email || '').trim(),
         vehicles: j.vehicles.filter((v: any) => v.car.trim()).map((v: any) => ({ car: v.car.trim(), plate: v.plate.trim().toUpperCase() })),
         smsConsent: true,
         agree: true,
         website: '',
       }
-      if (!this.__idem) this.__idem = randomId()
-      const r = await this.__post(env.endpoints.memberships, body, this.__idem)
-      if (!r) return
+      const r = await this.__post(env.endpoints.memberships, body, this.__idemFor('join', body))
+      if (!r) {
+        // a field the API refused goes back to the step that has it, with the API's words
+        const pb = this.__lastProblem
+        const field = pb?.errors?.find((e) => /^body\.(email|name|phone)/.test(String(e.path ?? '')))
+        if (pb && pb.status === 422 && field) this.setJn({ step: 2, err: String(field.message || pb.detail || pb.title) })
+        return
+      }
+      this.__idem.join = null
       this.__memberRef = String(r.memberRef)
-      this.__idem = null
+      // pending until the checkout is paid: no member pricing (tier) until a verified sign-in says it is active
       this.setJn({ step: 4, err: '' })
-      this.setState({ tier: j.tier })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
 
@@ -538,32 +720,50 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     async __post(endpoint: string, body: unknown, idem: string | null): Promise<Record<string, any> | null> {
       if (this.__busy) return null
       this.__busy = true
+      this.__lastProblem = null
       this.forceUpdate()
       try {
-        const ctl = new AbortController()
-        const t = setTimeout(() => ctl.abort(), env.timeouts.api)
-        const res = await fetch(api(endpoint), {
-          method: 'POST',
-          signal: ctl.signal,
-          credentials: 'omit',
-          headers: { 'content-type': 'application/json', accept: 'application/json', ...(idem ? { 'idempotency-key': idem } : {}) },
-          body: JSON.stringify(body),
-        })
-        clearTimeout(t)
-        if (res.ok) return (await res.json()) as Record<string, any>
-        let problem: Problem | null = null
-        try {
-          problem = (await res.json()) as Problem
-        } catch {
-          problem = null
+        // a retry of the same key while the first request is still being committed answers 409 IDEMPOTENCY_IN_FLIGHT:
+        // wait as told and send the identical request again (it replays the stored answer once the first one is done)
+        for (let attempt = 0; ; attempt++) {
+          const ctl = new AbortController()
+          const t = setTimeout(() => ctl.abort(), env.timeouts.api)
+          const res = await fetch(api(endpoint), {
+            method: 'POST',
+            signal: ctl.signal,
+            credentials: 'omit',
+            headers: { 'content-type': 'application/json', accept: 'application/json', ...(idem ? { 'idempotency-key': idem } : {}) },
+            body: JSON.stringify(body),
+          })
+          clearTimeout(t)
+          if (res.ok) return (await res.json()) as Record<string, any>
+          let problem: Problem | null = null
+          try {
+            problem = (await res.json()) as Problem
+          } catch {
+            problem = null
+          }
+          this.__lastProblem = problem ? { ...problem, status: res.status } : { status: res.status, title: '' }
+          const code = String(problem?.code ?? '')
+          if (res.status === 409 && code === 'IDEMPOTENCY_IN_FLIGHT' && attempt < 5) {
+            const after = Number(res.headers.get('retry-after'))
+            await new Promise((r) => setTimeout(r, (Number.isFinite(after) && after > 0 ? Math.min(after, 5) : 1) * 1000))
+            continue
+          }
+          if (endpoint === env.endpoints.bookings && code.startsWith('PUBLIC_SLOT_')) {
+            // the time is gone (taken, held, past, closed): pick another
+            this.flash(problem?.title || 'That time is no longer available. Pick another.')
+            this.setBk({ slot: null })
+            this.setState({ step: 'time' })
+            void this.__refreshAvailability()
+          } else
+            this.flash(
+              (res.status === 422 && problem?.detail) ||
+                problem?.title ||
+                (res.status === 429 ? 'Too many tries. Please wait a minute.' : 'Something went wrong. Try again or text us.'),
+            )
+          return null
         }
-        if (res.status === 409 && problem?.title) {
-          this.flash(problem.title)
-          this.setBk({ slot: null })
-          this.setState({ step: 'time' })
-          void this.__refreshAvailability()
-        } else this.flash(problem?.title || (res.status === 429 ? 'Too many tries. Please wait a minute.' : 'Something went wrong. Try again or text us.'))
-        return null
       } catch {
         this.flash(`No connection. Text ${env.contact.smsKeyword} to ${env.contact.smsDisplay} instead.`)
         return null

@@ -42,35 +42,72 @@ export function hoursTable(h: PublicHours | null): HoursTable {
   return out
 }
 
+const isoOf = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
 /**
- * `today` and `next` when the payload has none (the committed fallback file): derived from the regular week and the
- * clock, in the browser's local time (the shop's visitors are in its zone; the API payload wins after the refresh).
+ * `today` and `next` for the clock `now` (the shop's wall clock, DV-CLOCK). The payload's `today` is a snapshot of the
+ * moment it was generated (the deploy bakes the API's answer into the page, a tab stays open for hours): its hours for
+ * the day (exceptions included) are used only while its `date` is today's, and its state is always worked out again
+ * from `now`; a `today` of another day is ignored and today comes from the regular week (and the payload's closures).
+ * `next` is kept while it is still after today. The committed fallback file has no `today` at all and takes the same
+ * path.
  */
 export function withToday(h: PublicHours | null, now: Date): PublicHours | null {
-  if (!h || h.today) return h
+  if (!h) return h
   const table = hoursTable(h)
   const nm = now.getHours() * 60 + now.getMinutes()
-  const dayOf = (d: Date): PublicHours['today'] => {
+  const todayIso = isoOf(now)
+  const stateAt = (closed: boolean, from: number | null, to: number | null): string =>
+    closed || from === null || to === null ? 'closed' : nm < from ? 'opens_later' : nm < to ? 'open' : 'closed'
+  const dayOf = (d: Date): NonNullable<PublicHours['today']> => {
+    const iso = isoOf(d)
     const t = table[d.getDay()]
-    const closed = !t
+    const closure = (h.closures ?? []).find((c) => c.date === iso)
+    let from = t ? t[0] * 60 : null
+    let to = t ? t[1] * 60 : null
+    let reason: string | null = t ? null : 'Regular day off'
+    if (closure) {
+      const cf = toMinutes(closure.from ?? null)
+      const ct = toMinutes(closure.to ?? null)
+      if (cf !== null && ct !== null) {
+        from = cf
+        to = ct
+      } else {
+        from = null
+        to = null
+      }
+      reason = closure.name ?? 'Closed'
+    }
+    const closed = from === null || to === null
+    const state = iso === todayIso ? stateAt(closed, from, to) : closed ? 'closed' : 'opens_later'
     return {
-      date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      date: iso,
       day: DAYS[d.getDay()],
       weekday: d.getDay(),
       closed,
-      openMin: t ? t[0] * 60 : null,
-      closeMin: t ? t[1] * 60 : null,
-      openNow: !!t && nm >= t[0] * 60 && nm < t[1] * 60,
-      state: !t ? 'closed' : nm < t[0] * 60 ? 'opens_later' : nm < t[1] * 60 ? 'open' : 'closed',
-      reason: closed ? 'Regular day off' : null,
+      openMin: from,
+      closeMin: to,
+      openNow: state === 'open',
+      state,
+      reason: closed ? reason : null,
     }
   }
-  let next: PublicHours['next'] = null
+  let today: NonNullable<PublicHours['today']>
+  const t = h.today
+  if (t && t.date === todayIso) {
+    const from = typeof t.openMin === 'number' ? t.openMin : null
+    const to = typeof t.closeMin === 'number' ? t.closeMin : null
+    const state = stateAt(!!t.closed, from, to)
+    today = { ...t, openNow: state === 'open', state }
+  } else today = dayOf(now)
+  let next: PublicHours['next'] = h.next && typeof h.next.date === 'string' && h.next.date > todayIso ? h.next : null
   for (let i = 1; i < 8 && !next; i++) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i)
-    if (table[d.getDay()]) next = dayOf(d)
+    const n = dayOf(d)
+    if (!n.closed) next = n
   }
-  return { ...h, today: dayOf(now), next }
+  return { ...h, today, next }
 }
 
 /** The rows of the HOURS block (visit page and footer), grouped like the design groups Monday – Friday. */

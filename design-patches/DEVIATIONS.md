@@ -16,7 +16,10 @@ of every entry below.
 - **DV-HOURS** Opening hours come from `GET /api/v1/public/hours` (the dashboard's Settings), prerendered from
   `SITE_HOURS_JSON` (fallback: `src/data/hours.fallback.json`) and refreshed after mount. The design's
   `hoursList` ("Sunday 9 AM – 3 PM") and `HOURS[0] = [9,15]` are replaced: **Sunday is closed**. Rows are grouped the
-  way the design groups them ("Monday – Friday") and times keep the design's format ("8 AM – 6 PM").
+  way the design groups them ("Monday – Friday") and times keep the design's format ("8 AM – 6 PM"). Hours and the board
+  are fetched again every 5 minutes and when the tab comes back; the payload's `today` is used only on its own date and
+  its open/closed state is always worked out again from the clock (a baked Saturday "open" never reads OPEN NOW on
+  Sunday or after closing).
   Harness: the original gets `t:'9 AM – 3 PM'` → `t:'Closed'` and `HOURS = [[9,15],` → `HOURS = [[24,24],` (no Sunday
   slots) before render.
 - **DV-AVAIL** The open-times board, the day cards, "NEXT OPEN", the "N OF 3 BAYS OPEN NOW" pill, the booking sheet's
@@ -26,8 +29,11 @@ of every entry below.
   Without availability (no `SITE_AVAILABILITY_JSON` and no API yet) the board shows the open days from the hours with
   "text us" counts, the empty-board line reads "TEXT WASH TO 862-388-5827 TO CHECK TIMES" (the texting number, DV-CONTACT) and the sheet's time step
   carries a note with the same advice (an added, design-styled note; hidden when slots exist). The pill counts the
-  open bays of the next bookable half hour ("OPEN NOW · TEXT TO CHECK TIMES" when unknown), the design's
-  `1 + floor(minutes/11) % 3` is gone. The parity build and the harness's fixture endpoint feed the port the design's
+  open bays of the next bookable half hour ("OPEN NOW · TEXT TO CHECK TIMES" when unknown; the payload's `now` while it
+  is under 10 minutes old, "CLOSED NOW" when it says closed), the design's `1 + floor(minutes/11) % 3` is gone. The
+  query is `?days=7&service=<catalog key>` (no `addons`, which the API ignores; no `service` when the wash has no catalog
+  key) and only the latest query's answer is applied. The picked day is remembered as a date, not as the design's
+  position in a list that moves, for the review line, the composed text and the booking. The parity build and the harness's fixture endpoint feed the port the design's
   own pattern (`designAvailability`, `src/site/availability.ts`) so the board matches the original slot for slot; the
   pill text is allow-listed (`DV-AVAIL-pill`).
 - **DV-CONTACT** Every contact fact (phone, e-mail, address lines, the Google Maps link) is a copy-map entry resolved
@@ -49,24 +55,32 @@ of every entry below.
 - **DV-BOOK** The booking sheet books for real. Steps who → svc → time → review → done are the design's. On review
   the guest CTA reads **"Book"** (was "Pay $25 & book"), the due line reads "Booking fee" with "$25 due at the counter
   or by the link we text you. Pay $X after your wash." (`site.config.json` `booking.feeSubPrefix`), and guests get name
-  and mobile fields (live mode only; the design had no contact fields for guests). Submit = `POST
-  /api/v1/public/bookings` with an `Idempotency-Key` minted when the sheet opens; a `409` problem title becomes the
-  design's toast and the time step reloads availability. The done step shows the real booking reference ("Ref
+  and mobile fields (live mode only; the design had no contact fields for guests), a verified member a name field only
+  (the API keeps the name a verified member sends, so only a typed name is sent). Submit = `POST
+  /api/v1/public/bookings` with an `Idempotency-Key` per request kind, kept only for a retry of the identical body and
+  dropped after a success; a `PUBLIC_SLOT_*` problem title becomes the design's toast and the time step reloads
+  availability, `409 IDEMPOTENCY_IN_FLIGHT` is retried after `Retry-After`. The wash and add-on keys come from the live
+  catalog (`GET /api/v1/public/catalog`: the configured key or the item with the design's name, never a look-alike);
+  a booking whose wash or add-on the catalog does not carry is refused with a "text us" toast. The done step shows the real booking reference ("Ref
   OAS-00042", plus the deposit due) and the note reads "We'll text your confirmation and a reminder the day before."
   With **`SITE_BOOKING=sms`** (the launch default, until the SMS tablet is live) the same sheet composes the booking
   as a text (wash, vehicle, time, add-ons, guest/member) and opens `sms:+18623885827?&body=…` (the texting number, DV-CONTACT) instead of calling the
   API; nothing else changes. Test hook: `window.__oasisNavigate(url)` receives the sms:/tel: URL when defined.
 - **DV-OTP** Members identify by phone + one-time code (live mode): "I'm a member · Continue" posts
   `/api/v1/public/otp`, an added **code step** (design-styled, after the who step) verifies it through
-  `/api/v1/public/otp/verify`, and the member token travels with the booking (no fee, the member's tier prices). In
-  sms mode the member path is the design's (phone only).
+  `/api/v1/public/otp/verify`, and the member token travels with the booking. Only an ACTIVE membership
+  (`member.active`) puts the sheet on the member side (no fee, the member's tier prices); a verified number without one
+  books as a guest (the fee line, its terms and guest prices; a toast says so). In sms mode the member path is the
+  design's (phone only).
 - **DV-JOIN** Joining has no card fields: step 4 ("STEP 4 OF 4 · CHECKOUT", was PAYMENT) keeps the terms checkbox
   and explains that a secure Squarespace checkout link is texted; the card number, expiry and CVC inputs are removed
   (the original gets the same removal before render, plus its card validation line), the summary reads "Due at
   checkout" (was "Due today") and the member card loses the fake "•••• 0427". Submit = `POST
-  /api/v1/public/memberships` (pending until the checkout is paid); the welcome step reads "…your Squarespace checkout link
-  is on its way by text. Your 4 washes start the moment it's paid." In sms mode the submit composes "JOIN VIP: name · phone
-  · cars" as a text. "Book your first wash" (live) opens the sheet at the member sign-in with the phone prefilled.
+  /api/v1/public/memberships` (pending until the checkout is paid; live mode requires the receipts e-mail on the details
+  step, as the API does, and a field the API refuses sends the visitor back there); the welcome step reads "…your
+  Squarespace checkout link is on its way by text. Your 4 washes start the moment it's paid." In sms mode the submit
+  composes "JOIN VIP: name · phone · cars" as a text. "Book your first wash" (live) opens the sheet at the member sign-in
+  with the phone prefilled (no member pricing while the membership is pending).
 
 ## Assets and rendering
 
@@ -99,10 +113,14 @@ of every entry below.
   light; dark or no preference -> dark, the design's default), follows a change of that setting live while the page is
   open, until the visitor picks a theme with the design's own controls; that choice is **remembered on the device**
   (`localStorage["oasis-theme"]`, errors ignored) and wins over the device setting on later visits
-  (`site.config.json` `theme`). The markup is prerendered dark; a tiny external script right after `#dc-root`
-  (`src/client/theme.entry.ts`, no inline script under the CSP) decides before the first paint, patches `data-theme` on
-  the wrapper, sets the body background the way the design's `componentDidUpdate` does (`#F2F3F1` / `#06080A`) and
-  exposes the decision; boot passes it as the design's `theme` prop so hydration matches. The bridge applies live device
+  (`site.config.json` `theme`). The markup is prerendered dark; a small external script in `<head>`, parser-blocking
+  and before the stylesheet (`src/client/theme.entry.ts`, no inline script under the CSP; `check:dist` enforces the
+  placement), decides before `<body>` exists, so nothing of the page is painted before it on any network: it marks
+  `<html data-oasis-theme>`, paints `<html>` in the theme's background until the body takes over, patches `data-theme` on
+  the wrapper the moment the parser inserts it (a MutationObserver, disconnected once done), sets the body background
+  the way the design's `componentDidUpdate` does (`#F2F3F1` / `#06080A`) and exposes the decision; boot passes it as the
+  design's `theme` prop so hydration matches (`pnpm e2e:theme-paint`: no frame in the other theme with the script held
+  back 1 s). The bridge applies live device
   changes through the design's own `themeOverride` only while nothing is stored, and stores the toggle/Dark/Light
   choices (never the device-driven changes). Harness: the "light"/"dark" runs emulate that color scheme on both sides
   and the ORIGINAL is rendered with the run's theme as its data-props default (the **DV-THEME swap**,
@@ -113,8 +131,10 @@ of every entry below.
   a hash in the URL is applied right after mount (the design's own `hashchange` handler). The sitemap lists `/` only.
 - **DV-HEAD** Additions outside `#dc-root`: `<html lang="en">`, description, canonical, Open Graph (image = the
   logo), icons from the logo, the LocalBusiness JSON-LD (address, phone, `openingHoursSpecification` Monday–Saturday
-  from the hours, Sunday absent), `robots.txt`, `sitemap.xml`, a `404.html` in the design's tokens. The design's
-  own `<title>` and viewport metas are kept. Harness: `<html lang>` makes every element's computed `-webkit-locale`
+  from the hours, Sunday absent), `robots.txt`, `sitemap.xml`, a `404.html` in the design's tokens that follows the
+  device theme and the stored choice like the home page (the same `<head>` theme script; no hard-coded dark page
+  background; the design's dark default without JavaScript), the `<head>` theme script (DV-THEME) and
+  `<html data-oasis-theme>`. The design's own `<title>` and viewport metas are kept. Harness: `<html lang>` makes every element's computed `-webkit-locale`
   `"en"` instead of `auto` (`DV-HEAD-lang`); nothing renders differently.
 
 ## Harness notes (not deviations of the site)
