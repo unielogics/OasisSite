@@ -2,46 +2,185 @@
   "version": 1,
   "entries": [
     {
-      "id": "DV-F1-href-settings-cc",
-      "page": "settings",
+      "id": "DV-LOGO-src",
+      "page": "index",
       "kind": "attr",
-      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
-      "swap": { "attr": "href", "find": "Oasis%20Command%20Center.dc.html", "replace": "/", "count": 1 }
+      "reason": "DV-LOGO: the design references assets/oasis-logo.png relatively; the build serves the content-hashed /assets/oasis-logo.<hash>.png (the placeholder bytes on both sides).",
+      "matcher": {
+        "name": "src",
+        "orig": "^assets/oasis-logo\\.png$",
+        "port": "^/assets/oasis-logo\\.[0-9a-f]{8}\\.png$"
+      }
     },
     {
-      "id": "DV-F1-href-settings-pay",
-      "page": "settings",
-      "kind": "attr",
-      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
-      "swap": { "attr": "href", "find": "Oasis%20Payments.dc.html", "replace": "/payments", "count": 1 }
+      "id": "DV-IMG-sidecar-404",
+      "page": "index",
+      "kind": "wiring",
+      "reason": "DV-IMG: the design's image-slot.js fetches its .image-slots.state.json sidecar, which does not exist in the share view either (a 404 console line on the original); the port ships no image-slot.js.",
+      "scope": {
+        "checks": [
+          "console"
+        ],
+        "steps": [
+          "initial"
+        ]
+      },
+      "matcher": {
+        "loc": "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
+      }
     },
     {
-      "id": "DV-F1-href-settings-set",
-      "page": "settings",
-      "kind": "attr",
-      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
-      "swap": { "attr": "href", "find": "Oasis%20Settings.dc.html", "replace": "/", "count": 1 }
+      "id": "DV-HEAD-lang",
+      "page": "index",
+      "kind": "computed-style",
+      "reason": "DV-HEAD: the port's document carries <html lang=\"en\"> (the design has no lang), so every element's computed -webkit-locale is \"en\" instead of auto; nothing renders differently.",
+      "matcher": {
+        "name": "-webkit-locale",
+        "orig": "^auto$",
+        "port": "^\"en\"$"
+      },
+      "expect": {
+        "min": 0
+      }
     },
     {
-      "id": "DV-F1-href-payments-cc",
-      "page": "payments",
-      "kind": "attr",
-      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
-      "swap": { "attr": "href", "find": "Oasis%20Command%20Center.dc.html", "replace": "/", "count": 1 }
+      "id": "DV-AVAIL-pill",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-AVAIL: the hero pill counts the open bays of the next bookable half hour from real availability; the design computes 1 + floor(minutes/11) % 3 from the clock.",
+      "matcher": {
+        "orig": "OF 3 BAYS OPEN NOW|^OPENS ",
+        "port": "OF 3 BAYS OPEN NOW|^OPENS |OPEN NOW"
+      },
+      "expect": {
+        "min": 0
+      }
     },
     {
-      "id": "DV-F1-href-payments-pay",
-      "page": "payments",
-      "kind": "attr",
-      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
-      "swap": { "attr": "href", "find": "Oasis%20Payments.dc.html", "replace": "/payments", "count": 1 }
+      "id": "DV-AVAIL-pill-mask",
+      "page": "index",
+      "kind": "region-mask",
+      "reason": "DV-AVAIL: the pixels of the hero pill when its bay count differs from the design's clock formula (see DV-AVAIL-pill).",
+      "scope": {
+        "scenarios": [
+          "initial",
+          "theme-toggle",
+          "menu",
+          "scroll-pricing",
+          "faq",
+          "sheet-*"
+        ]
+      },
+      "matcher": {
+        "tpl": "53"
+      },
+      "expect": {
+        "min": 0
+      }
     },
     {
-      "id": "DV-F1-href-payments-set",
-      "page": "payments",
-      "kind": "attr",
-      "reason": "DV-F1: the dashboard bundles link between screens by .dc.html file name; the fixture pages use the site's clean routes.",
-      "swap": { "attr": "href", "find": "Oasis%20Settings.dc.html", "replace": "/", "count": 1 }
+      "id": "DV-BRIDGE-vals",
+      "page": "index",
+      "kind": "wiring",
+      "reason": "DV-AVAIL/DV-BOOK: the bridge adds one `site` object to renderVals (board/time-step texts and the guest, OTP handlers); the design has no such key.",
+      "matcher": {
+        "loc": "site"
+      },
+      "scope": {
+        "checks": [
+          "vals"
+        ]
+      }
+    },
+    {
+      "id": "DV-IMG-mask-reveal",
+      "page": "index",
+      "kind": "region-mask",
+      "reason": "DV-IMG: the reveal photo slot renders the branded placeholder instead of image-slot.js's drop zone.",
+      "scope": {
+        "scenarios": [
+          "initial",
+          "theme-toggle",
+          "menu",
+          "scroll-pricing",
+          "faq",
+          "sheet-*"
+        ]
+      },
+      "matcher": {
+        "tpl": "444"
+      },
+      "expect": {
+        "min": 0
+      }
+    },
+    {
+      "id": "DV-IMG-mask-detail",
+      "page": "index",
+      "kind": "region-mask",
+      "reason": "DV-IMG: the detailing hero slot renders the branded placeholder instead of image-slot.js's drop zone.",
+      "scope": {
+        "scenarios": [
+          "route-detailing"
+        ]
+      },
+      "matcher": {
+        "tpl": "312"
+      },
+      "expect": {
+        "min": 0
+      }
+    },
+    {
+      "id": "DV-IMG-mask-exp-hero",
+      "page": "index",
+      "kind": "region-mask",
+      "reason": "DV-IMG: the experience hero slot renders the branded placeholder instead of image-slot.js's drop zone.",
+      "scope": {
+        "scenarios": [
+          "route-experience"
+        ]
+      },
+      "matcher": {
+        "tpl": "316"
+      },
+      "expect": {
+        "min": 0
+      }
+    },
+    {
+      "id": "DV-IMG-mask-exp-1",
+      "page": "index",
+      "kind": "region-mask",
+      "reason": "DV-IMG: the first experience photo slot renders the branded placeholder instead of image-slot.js's drop zone.",
+      "scope": {
+        "scenarios": [
+          "route-experience"
+        ]
+      },
+      "matcher": {
+        "tpl": "352"
+      },
+      "expect": {
+        "min": 0
+      }
+    },
+    {
+      "id": "DV-IMG-mask-exp-2",
+      "page": "index",
+      "kind": "region-mask",
+      "reason": "DV-IMG: the second experience photo slot renders the branded placeholder instead of image-slot.js's drop zone.",
+      "scope": {
+        "scenarios": [
+          "route-experience"
+        ]
+      },
+      "matcher": {
+        "tpl": "354"
+      },
+      "expect": {
+        "min": 0
+      }
     }
   ]
 }

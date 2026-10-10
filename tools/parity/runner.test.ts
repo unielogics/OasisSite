@@ -7,6 +7,9 @@ import { validateAllowlist, type AllowEntry } from './allowlist'
 import { compareSnapshots } from './runner'
 import type { ElementSnap, Snapshot } from './types'
 
+/** the dashboard fixture pages this test's entries name (design/pages.json lists the site's page only) */
+const validate = (raw: unknown) => validateAllowlist(raw, ['payments', 'settings', 'operations'])
+
 const png = (paint: (x: number, y: number) => number): Buffer => {
   const img = new PNG({ width: 32, height: 32 })
   for (let y = 0; y < 32; y++) {
@@ -101,7 +104,7 @@ describe('compareSnapshots', () => {
   })
 
   it('lets the allow-list excuse listed differences only, and counts the matches', () => {
-    const entries = validateAllowlist([
+    const entries = validate([
       {
         id: 'title-text',
         page: 'payments',
@@ -137,7 +140,7 @@ describe('compareSnapshots', () => {
   })
 
   it('region masks blank the pixel diff and report usage; unused masks count as zero', () => {
-    const entries = validateAllowlist([
+    const entries = validate([
       {
         id: 'mask-hit',
         page: 'payments',
@@ -161,7 +164,7 @@ describe('compareSnapshots', () => {
   })
 
   it('resolves a tpl mask from the element rects of both sides', () => {
-    const entries = validateAllowlist([
+    const entries = validate([
       {
         id: 'tpl-mask',
         page: 'payments',

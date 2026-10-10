@@ -3,10 +3,12 @@ import { initialScenario } from './common'
 import { operationsScenarios } from './operations'
 import { paymentsScenarios } from './payments'
 import { settingsScenarios } from './settings'
+import { siteScenarios } from './site'
 import type { Scenario } from './types'
 
 /** Scenario modules by page slug. A page of design/pages.json without a module gets the automatic `initial` only. */
 const MODULES: Record<string, readonly Scenario[]> = {
+  index: siteScenarios,
   operations: operationsScenarios,
   payments: paymentsScenarios,
   settings: settingsScenarios,

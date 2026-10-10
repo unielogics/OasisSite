@@ -19,7 +19,7 @@ import {
   type StepResult,
   type UnitResult,
 } from './types'
-import type { Theme } from './config'
+import type { Theme, Viewport } from './config'
 
 export interface RunContext {
   makeOriginal: () => Driver
@@ -164,14 +164,22 @@ export function compareSnapshots(
         ? { x: e.matcher.rect.x, y: e.matcher.rect.y, w: e.matcher.rect.w, h: e.matcher.rect.h }
         : undefined
       if (!rect && e.matcher?.tpl) {
-        const els = [...a.elements, ...b.elements].filter(
-          (x) => x.tpl === e.matcher!.tpl && x.rect[2] > 0 && x.rect[3] > 0,
-        )
+        // element rects are viewport-relative; the full-page screenshot is page-relative
+        const pageRect = (x: { rect: [number, number, number, number] }, s: Snapshot) => [
+          x.rect[0] + (s.docSize.scrollX ?? 0),
+          x.rect[1] + (s.docSize.scrollY ?? 0),
+          x.rect[2],
+          x.rect[3],
+        ]
+        const els = [
+          ...a.elements.filter((x) => x.tpl === e.matcher!.tpl && x.rect[2] > 0 && x.rect[3] > 0).map((x) => pageRect(x, a)),
+          ...b.elements.filter((x) => x.tpl === e.matcher!.tpl && x.rect[2] > 0 && x.rect[3] > 0).map((x) => pageRect(x, b)),
+        ]
         if (els.length) {
-          const x0 = Math.min(...els.map((x) => x.rect[0]))
-          const y0 = Math.min(...els.map((x) => x.rect[1]))
-          const x1 = Math.max(...els.map((x) => x.rect[0] + x.rect[2]))
-          const y1 = Math.max(...els.map((x) => x.rect[1] + x.rect[3]))
+          const x0 = Math.min(...els.map((x) => x[0]!))
+          const y0 = Math.min(...els.map((x) => x[1]!))
+          const x1 = Math.max(...els.map((x) => x[0]! + x[2]!))
+          const y1 = Math.max(...els.map((x) => x[1]! + x[3]!))
           rect = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
         }
       }
@@ -259,19 +267,20 @@ export function compareSnapshots(
   return { step, counts }
 }
 
-export function unitDir(outDir: string, page: string, scenario: string, theme: Theme): string {
-  return path.join(outDir, page, safe(scenario), theme)
+export function unitDir(outDir: string, page: string, scenario: string, theme: Theme, viewport?: Viewport): string {
+  return path.join(outDir, page, safe(scenario), viewport ? `${theme}-${safe(viewport.name)}` : theme)
 }
 
-export async function runUnit(ctx: RunContext, scenario: Scenario, theme: Theme): Promise<UnitResult> {
+export async function runUnit(ctx: RunContext, scenario: Scenario, theme: Theme, viewport?: Viewport): Promise<UnitResult> {
   const started = Date.now()
-  const dir = unitDir(ctx.outDir, scenario.page, scenario.id, theme)
+  const dir = unitDir(ctx.outDir, scenario.page, scenario.id, theme, viewport)
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(dir, { recursive: true })
   const result: UnitResult = {
     page: scenario.page,
     scenario: scenario.id,
     theme,
+    viewport: viewport?.name,
     ok: false,
     steps: [],
     allowlistProblems: [],
@@ -280,9 +289,9 @@ export async function runUnit(ctx: RunContext, scenario: Scenario, theme: Theme)
   }
   const orig = ctx.makeOriginal()
   const port = ctx.makePort()
-  const label = `${scenario.page}/${scenario.id}@${theme}`
+  const label = `${scenario.page}/${scenario.id}@${theme}${viewport ? '/' + viewport.name : ''}`
   try {
-    const open = { page: scenario.page, theme, hash: scenario.hash, touch: scenario.touch }
+    const open = { page: scenario.page, theme, hash: scenario.hash, touch: scenario.touch, viewport }
     await orig.open(open)
     await port.open(open)
     const steps = [
@@ -309,7 +318,7 @@ export async function runUnit(ctx: RunContext, scenario: Scenario, theme: Theme)
       }
       const pointer = { parkPointer: !step.keepPointer }
       const [sa, sb] = [await orig.snapshot(step.full, pointer), await port.snapshot(step.full, pointer)]
-      const unit: UnitCtx = { page: scenario.page, scenario: scenario.id, theme, step: step.id }
+      const unit: UnitCtx = { page: scenario.page, scenario: scenario.id, theme, step: step.id, viewport: viewport?.name }
       const { step: stepResult, counts } = compareSnapshots(sa, sb, unit, ctx, path.join(dir, safe(step.id)))
       const problems = ctx.tracker.record(`${label}/${step.id}`, counts)
       result.allowlistProblems.push(...problems)

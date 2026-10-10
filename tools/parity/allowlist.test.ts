@@ -14,6 +14,9 @@ import {
 } from './allowlist'
 import type { Diff } from './types'
 
+/** the dashboard fixture pages this test's entries name (design/pages.json lists the site's page only) */
+const validate = (raw: unknown) => validateAllowlist(raw, ['payments', 'settings', 'operations'])
+
 const unit: UnitCtx = { page: 'payments', scenario: 'ranges', theme: 'light', step: 'range-today' }
 const base = { reason: 'a sufficiently long reason' }
 
@@ -51,30 +54,30 @@ describe('validateAllowlist', () => {
   }
 
   it('accepts a well-formed list in either container shape', () => {
-    expect(validateAllowlist({ entries: [ok] })).toHaveLength(1)
-    expect(validateAllowlist([ok])).toHaveLength(1)
-    expect(validateAllowlist({ version: 1, entries: [] })).toEqual([])
+    expect(validate({ entries: [ok] })).toHaveLength(1)
+    expect(validate([ok])).toHaveLength(1)
+    expect(validate({ version: 1, entries: [] })).toEqual([])
   })
 
   it('rejects duplicate ids, bad screens, short reasons and unknown kinds', () => {
-    expect(() => validateAllowlist([ok, ok])).toThrow(/duplicate id/)
-    expect(() => validateAllowlist([{ ...ok, page: 'nope' }])).toThrow(/page must be/)
-    expect(() => validateAllowlist([{ ...ok, reason: 'short' }])).toThrow(/reason/)
-    expect(() => validateAllowlist([{ ...ok, kind: 'magic' }])).toThrow(/kind/)
+    expect(() => validate([ok, ok])).toThrow(/duplicate id/)
+    expect(() => validate([{ ...ok, page: 'nope' }])).toThrow(/page must be/)
+    expect(() => validate([{ ...ok, reason: 'short' }])).toThrow(/reason/)
+    expect(() => validate([{ ...ok, kind: 'magic' }])).toThrow(/kind/)
   })
 
   it('rejects over-broad matchers', () => {
-    expect(() => validateAllowlist([{ ...ok, matcher: {} }])).toThrow(/over-broad/)
-    expect(() => validateAllowlist([{ ...ok, matcher: { loc: '**' } }])).toThrow(/bare wildcard/)
-    expect(() => validateAllowlist([{ ...ok, matcher: undefined }])).toThrow(/matcher is required/)
+    expect(() => validate([{ ...ok, matcher: {} }])).toThrow(/over-broad/)
+    expect(() => validate([{ ...ok, matcher: { loc: '**' } }])).toThrow(/bare wildcard/)
+    expect(() => validate([{ ...ok, matcher: undefined }])).toThrow(/matcher is required/)
   })
 
   it('requires a rect or tpl for region-mask and a name for attr swaps', () => {
-    expect(() => validateAllowlist([{ ...ok, kind: 'region-mask', matcher: { loc: 'x' } }])).toThrow(
+    expect(() => validate([{ ...ok, kind: 'region-mask', matcher: { loc: 'x' } }])).toThrow(
       /region-mask needs/,
     )
     expect(() =>
-      validateAllowlist([
+      validate([
         { id: 's', page: 'payments', kind: 'attr', ...base, swap: { find: 'a', replace: 'b', count: 1 } },
       ]),
     ).toThrow(/swap.attr/)
@@ -82,7 +85,7 @@ describe('validateAllowlist', () => {
 
   it('limits pre-render swaps to text and attr and forbids swap plus matcher', () => {
     expect(() =>
-      validateAllowlist([
+      validate([
         {
           id: 's',
           page: 'payments',
@@ -92,25 +95,25 @@ describe('validateAllowlist', () => {
         },
       ]),
     ).toThrow(/only text and attr/)
-    expect(() => validateAllowlist([{ ...ok, swap: { find: 'a', replace: 'b', count: 1 } }])).toThrow(
+    expect(() => validate([{ ...ok, swap: { find: 'a', replace: 'b', count: 1 } }])).toThrow(
       /must not also have/,
     )
     expect(() =>
-      validateAllowlist([
+      validate([
         { id: 's', page: 'payments', kind: 'text', ...base, swap: { find: 'a', replace: 'b', count: 0 } },
       ]),
     ).toThrow(/count/)
   })
 
   it('checks scope.checks against what the kind may cover and regex syntax', () => {
-    expect(() => validateAllowlist([{ ...ok, scope: { checks: ['pixels'] } }])).toThrow(/cannot cover/)
-    expect(() => validateAllowlist([{ ...ok, matcher: { orig: '(' } }])).toThrow(/regular expression/)
-    expect(() => validateAllowlist([{ ...ok, expect: { min: 3, max: 2 } }])).toThrow(/min > expect.max/)
+    expect(() => validate([{ ...ok, scope: { checks: ['pixels'] } }])).toThrow(/cannot cover/)
+    expect(() => validate([{ ...ok, matcher: { orig: '(' } }])).toThrow(/regular expression/)
+    expect(() => validate([{ ...ok, expect: { min: 3, max: 2 } }])).toThrow(/min > expect.max/)
   })
 })
 
 describe('applyAllowlist', () => {
-  const entries = validateAllowlist([
+  const entries = validate([
     { id: 'kpi', page: 'payments', kind: 'text', ...base, matcher: { loc: 'kpis[*].sub' } },
     { id: 'sms', page: '*', kind: 'text', ...base, matcher: { orig: '^WhatsApp$', port: '^SMS$' } },
     { id: 'href', page: 'payments', kind: 'attr', ...base, matcher: { name: 'href', tpl: '9' } },
@@ -128,7 +131,7 @@ describe('applyAllowlist', () => {
   })
 
   it('regex matchers see both the JSON text and the plain string of a vals diff', () => {
-    const e = validateAllowlist([
+    const e = validate([
       {
         id: 'q',
         page: 'payments',
@@ -141,7 +144,7 @@ describe('applyAllowlist', () => {
   })
 
   it('does not let a text entry excuse an attr diff or a style diff', () => {
-    const e = validateAllowlist(
+    const e = validate(
       [{ id: 'wide', page: 'payments', kind: 'text', ...base, matcher: { loc: '**' } }].map((x) => ({
         ...x,
         matcher: { loc: 'div**' },
@@ -152,7 +155,7 @@ describe('applyAllowlist', () => {
   })
 
   it('honours screen and scope', () => {
-    const scoped = validateAllowlist([
+    const scoped = validate([
       { id: 'a', page: 'settings', kind: 'text', ...base, matcher: { loc: 'kpis[*].sub' } },
       {
         id: 'b',
@@ -177,7 +180,7 @@ describe('applyAllowlist', () => {
   })
 
   it('counts a diff for every matching entry but allows it once', () => {
-    const two = validateAllowlist([
+    const two = validate([
       { id: 'one', page: 'payments', kind: 'text', ...base, matcher: { loc: 'kpis[*].sub' } },
       { id: 'two', page: 'payments', kind: 'text', ...base, matcher: { orig: 'booked' } },
     ])
@@ -187,7 +190,7 @@ describe('applyAllowlist', () => {
   })
 
   it('reorder entries also excuse the rect diffs of the moved elements', () => {
-    const e = validateAllowlist([
+    const e = validate([
       { id: 'ro', page: 'payments', kind: 'reorder', ...base, matcher: { tpl: '9' } },
     ])
     const r = applyAllowlist(diffs, e, unit)
@@ -206,8 +209,8 @@ describe('computed-style entries (live mode)', () => {
   }
 
   it('is accepted, and limited to the style check', () => {
-    expect(() => validateAllowlist([entry])).not.toThrow()
-    expect(() => validateAllowlist([{ ...entry, scope: { checks: ['dom'] } }])).toThrow(
+    expect(() => validate([entry])).not.toThrow()
+    expect(() => validate([{ ...entry, scope: { checks: ['dom'] } }])).toThrow(
       /cannot cover check "dom"/,
     )
   })
@@ -226,7 +229,7 @@ describe('computed-style entries (live mode)', () => {
 })
 
 describe('AllowlistTracker', () => {
-  const entries = validateAllowlist([
+  const entries = validate([
     { id: 'used', page: 'payments', kind: 'text', ...base, matcher: { loc: 'a' } },
     { id: 'limited', page: 'payments', kind: 'text', ...base, matcher: { loc: 'b' }, expect: { max: 1 } },
     { id: 'wild', page: 'payments', kind: 'text', ...base, matcher: { loc: 'c' }, expect: { min: 0 } },
@@ -274,7 +277,7 @@ describe('AllowlistTracker', () => {
 })
 
 describe('swapsFor and masksFor', () => {
-  const entries = validateAllowlist([
+  const entries = validate([
     {
       id: 't',
       page: 'payments',
@@ -324,7 +327,7 @@ describe('checkAllowlistScopes', () => {
     { id: 'sections', page: 'settings' as const, steps: [{ id: 'section-vip' }] },
   ]
   const mk = (scope: object, page = 'payments') =>
-    validateAllowlist([{ id: 'e', page, kind: 'text', ...base, matcher: { loc: 'a' }, scope }])
+    validate([{ id: 'e', page, kind: 'text', ...base, matcher: { loc: 'a' }, scope }])
 
   it('accepts scopes that name real scenarios and steps', () => {
     expect(checkAllowlistScopes(mk({ scenarios: ['ranges'], steps: ['range-*'] }), catalogue)).toEqual([])

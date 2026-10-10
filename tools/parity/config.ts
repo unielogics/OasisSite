@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadPages } from '../dc-compile/pages'
@@ -34,8 +35,33 @@ export function pageOf(slug: string): PageSpec {
 export const FIXED_NOW = process.env.PARITY_FIXED_NOW ?? '2026-06-13T10:36:00-04:00'
 export const TIMEZONE = process.env.PARITY_TZ ?? 'America/New_York'
 export const LOCALE = process.env.PARITY_LOCALE ?? 'en-US'
-/** Every page is verified at 1480x1000 (the cc `$preview` size); the phone smoke uses PHONE_VIEWPORTS. */
-export const VIEWPORT = { width: 1480, height: 1000 } as const
+export interface Viewport {
+  name: string
+  width: number
+  height: number
+}
+/**
+ * The viewports every scenario runs at: site.config.json `parity.viewports` (the site: 390x844 phone first, the
+ * design is mobile-first and fluid, and 1440x900 desktop), else the dashboard's 1480x1000 (the cc `$preview` size).
+ * PARITY_VIEWPORTS=390x844,1440x900 overrides for experiments.
+ */
+export const VIEWPORTS: readonly Viewport[] = (() => {
+  const env = process.env.PARITY_VIEWPORTS
+  if (env)
+    return env.split(',').map((v) => {
+      const m = /^(\d+)x(\d+)$/.exec(v.trim())
+      if (!m) throw new Error(`PARITY_VIEWPORTS: ${v} is not WxH`)
+      return { name: `${m[1]}x${m[2]}`, width: Number(m[1]), height: Number(m[2]) }
+    })
+  const file = path.join(ROOT, 'site.config.json')
+  if (fs.existsSync(file)) {
+    const cfg = JSON.parse(fs.readFileSync(file, 'utf8')) as { parity?: { viewports?: Viewport[] } }
+    if (cfg.parity?.viewports?.length) return cfg.parity.viewports
+  }
+  return [{ name: 'desktop', width: 1480, height: 1000 }]
+})()
+/** The first configured viewport (the probe and single-viewport tools). */
+export const VIEWPORT: Viewport = VIEWPORTS[0]!
 export const PHONE_VIEWPORTS = [
   { name: 'phone', width: 390, height: 844 },
   { name: 'tablet', width: 768, height: 1024 },

@@ -33,6 +33,8 @@ export interface Scope {
   scenarios?: string[]
   steps?: string[]
   themes?: Theme[]
+  /** viewport names (site.config.json parity.viewports) */
+  viewports?: string[]
   checks?: CheckName[]
 }
 
@@ -91,7 +93,7 @@ function simpleGlob(glob: string, value: string): boolean {
   return new RegExp('^' + glob.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$').test(value)
 }
 
-export function validateAllowlist(raw: unknown): AllowEntry[] {
+export function validateAllowlist(raw: unknown, slugs: readonly string[] = SLUGS): AllowEntry[] {
   const problems: string[] = []
   const list: unknown = Array.isArray(raw) ? raw : (raw as { entries?: unknown } | null)?.entries
   if (!Array.isArray(list)) throw new AllowlistError('allowlist must be {"entries": [...]} or an array')
@@ -105,8 +107,8 @@ export function validateAllowlist(raw: unknown): AllowEntry[] {
     if (typeof e.id !== 'string' || !/^[A-Za-z0-9._-]+$/.test(e.id)) bad('id must match [A-Za-z0-9._-]+')
     else if (seen.has(e.id)) bad('duplicate id')
     else seen.add(e.id)
-    if (e.page !== '*' && !SLUGS.includes(e.page as string))
-      bad(`page must be one of ${SLUGS.join('|')} or *`)
+    if (e.page !== '*' && !slugs.includes(e.page as string))
+      bad(`page must be one of ${slugs.join('|')} or *`)
     if (!DEVIATION_KINDS.includes(e.kind as DeviationKind))
       bad(`kind must be one of ${DEVIATION_KINDS.join('|')}`)
     if (typeof e.reason !== 'string' || e.reason.trim().length < 10)
@@ -188,9 +190,9 @@ export function validateAllowlist(raw: unknown): AllowEntry[] {
   return entries
 }
 
-export function loadAllowlist(file: string): AllowEntry[] {
+export function loadAllowlist(file: string, slugs: readonly string[] = SLUGS): AllowEntry[] {
   if (!fs.existsSync(file)) return []
-  return validateAllowlist(JSON.parse(fs.readFileSync(file, 'utf8')))
+  return validateAllowlist(JSON.parse(fs.readFileSync(file, 'utf8')), slugs)
 }
 
 /** The pre-render swaps (text and attr entries with a "swap") that apply to a screen's original bundle. */
@@ -248,6 +250,7 @@ export interface UnitCtx {
   scenario: string
   theme: Theme
   step: string
+  viewport?: string
 }
 
 export function entryApplies(e: AllowEntry, u: UnitCtx): boolean {
@@ -256,6 +259,7 @@ export function entryApplies(e: AllowEntry, u: UnitCtx): boolean {
   const s = e.scope
   if (!s) return true
   if (s.themes && !s.themes.includes(u.theme)) return false
+  if (s.viewports && (!u.viewport || !s.viewports.includes(u.viewport))) return false
   if (s.scenarios && !s.scenarios.some((g) => simpleGlob(g, u.scenario))) return false
   if (s.steps && !s.steps.some((g) => simpleGlob(g, u.step))) return false
   return true

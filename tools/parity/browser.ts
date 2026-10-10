@@ -14,6 +14,7 @@ import {
   type Theme,
 } from './config'
 import type { ConsoleMsg } from './types'
+import { findIntercept, type Intercept } from './cdn'
 
 /** Chromium with pinned flags, and FONTCONFIG_FILE pointing at the vendored fallback fonts only. */
 export async function launchBrowser(): Promise<Browser> {
@@ -52,6 +53,8 @@ export interface ParityContextOptions {
   fixedNow?: string
   /** viewport override (the phone smoke); default VIEWPORT */
   viewport?: { width: number; height: number }
+  /** external URLs answered from local bytes (the original's React UMD and Google Fonts, tools/parity/cdn.ts) */
+  intercepts?: readonly Intercept[]
 }
 
 export interface ParityContext {
@@ -76,10 +79,18 @@ export async function newParityContext(browser: Browser, opts: ParityContextOpti
   })
   const allowed = new Set(opts.allowedOrigins)
   const blocked: string[] = []
+  const intercepts = opts.intercepts ?? []
   await ctx.route('**/*', (route) => {
     const u = new URL(route.request().url())
     if (u.protocol === 'data:' || u.protocol === 'blob:' || u.protocol === 'about:' || allowed.has(u.origin))
       return route.continue()
+    const hit = findIntercept(intercepts, route.request().url())
+    if (hit)
+      return route.fulfill({
+        status: 200,
+        body: hit.body,
+        headers: { 'content-type': hit.contentType, 'access-control-allow-origin': '*', 'cache-control': 'no-store' },
+      })
     blocked.push(route.request().url())
     return route.abort()
   })

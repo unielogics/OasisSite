@@ -1,7 +1,9 @@
 import http from 'node:http'
+import fs from 'node:fs'
 import path from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { DESIGN_DIR, PAGES } from './config'
+import { PLACEHOLDER_SIZE, transparentPng } from '../prerender/placeholder'
 import { buildBundle } from './serve-original'
 import { serializeVals } from './vals-serialize'
 
@@ -60,13 +62,29 @@ export async function startMockPort(
       html.replace('<head>', () => `<head>${HOOK}`),
     )
   }
+  // a raw document's relative references (./support.js, ./image-slot.js, assets/<file>) resolve against the route
+  const looseDir = path.join(DESIGN_DIR, 'original', 'loose')
+  const MIME: Record<string, string> = { '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.json': 'application/json' }
   const server = http.createServer((req, res) => {
-    const html = pages.get((req.url ?? '/').split('?')[0]!.split('#')[0]!)
-    if (!html) {
-      res.writeHead(404, { 'content-type': 'text/plain' }).end('not found')
+    const pathname = (req.url ?? '/').split('?')[0]!.split('#')[0]!
+    const html = pages.get(pathname)
+    if (html) {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }).end(html)
       return
     }
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }).end(html)
+    const rel = pathname.replace(/^\/+/, '')
+    if (rel && !rel.includes('..')) {
+      const file = path.join(looseDir, rel)
+      if ((!rel.includes('/') || rel.startsWith('assets/')) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+        res.writeHead(200, { 'content-type': MIME[path.extname(rel)] ?? 'application/octet-stream', 'cache-control': 'no-store' }).end(fs.readFileSync(file))
+        return
+      }
+      if (rel.startsWith('assets/') && rel.endsWith('.png')) {
+        res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store' }).end(transparentPng(PLACEHOLDER_SIZE, PLACEHOLDER_SIZE))
+        return
+      }
+    }
+    res.writeHead(404, { 'content-type': 'text/plain' }).end('not found')
   })
   await new Promise<void>((resolve) => server.listen(opts.port ?? 0, '127.0.0.1', resolve))
   return {

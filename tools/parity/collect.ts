@@ -221,14 +221,60 @@ export function decodeElements(json: string, curated: readonly string[]): Elemen
 
 export const PSEUDO_PROP_LIST: readonly string[] = PSEUDO_PROPS
 
-export function readDocSize(): { width: number; height: number } {
+export function readDocSize(): { width: number; height: number; scrollX: number; scrollY: number } {
   const d = document.documentElement
-  return { width: Math.max(d.scrollWidth, d.clientWidth), height: Math.max(d.scrollHeight, d.clientHeight) }
+  return {
+    width: Math.max(d.scrollWidth, d.clientWidth),
+    height: Math.max(d.scrollHeight, d.clientHeight),
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+  }
 }
 
+/**
+ * #dc-root's outerHTML with every `style` attribute rewritten to the browser's own serialisation (`el.style.cssText`):
+ * the original sets styles through React's style object (the attribute is the browser's cssText), the port's
+ * prerendered attribute is React's server string; both describe the same declarations and only the browser's form
+ * is comparable byte for byte.
+ */
 export function readRootHtml(): string {
   const root = document.getElementById('dc-root')
-  return root ? root.outerHTML : ''
+  if (!root) return ''
+  const clone = root.cloneNode(true) as HTMLElement
+  const live = root.querySelectorAll('[style]')
+  const copies = clone.querySelectorAll('[style]')
+  // declarations sorted by name: a shorthand expanded by the parser (the port's attribute) and the same longhands set
+  // one by one through the style object (the original) list them in a different order; cssText never repeats a
+  // property, so the order carries no meaning
+  const sorted = (cssText: string): string => {
+    const decls: string[] = []
+    let cur = ''
+    let depth = 0
+    let quote = ''
+    for (const ch of cssText) {
+      if (quote) {
+        cur += ch
+        if (ch === quote) quote = ''
+        continue
+      }
+      if (ch === '"' || ch === "'") quote = ch
+      else if (ch === '(') depth++
+      else if (ch === ')') depth--
+      if (ch === ';' && depth === 0) {
+        if (cur.trim()) decls.push(cur.trim())
+        cur = ''
+        continue
+      }
+      cur += ch
+    }
+    if (cur.trim()) decls.push(cur.trim())
+    return decls.sort().join('; ') + (decls.length ? ';' : '')
+  }
+  for (let i = 0; i < copies.length; i++) {
+    const src = live[i] as HTMLElement | undefined
+    if (src) copies[i]!.setAttribute('style', sorted(src.style.cssText))
+  }
+  return clone.outerHTML
 }
 
 /** Resolves once the event loop and React have flushed; MessageChannel is not controlled by the fake clock. */

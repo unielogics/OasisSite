@@ -1,3 +1,20 @@
 {
-  "pixels": []
+  "pixels": [
+    {
+      "id": "DV-PARITY-blur-review",
+      "page": "index",
+      "scenario": "sheet-guest",
+      "step": "review",
+      "maxMismatched": 5200,
+      "reason": "Phone width, guest review step: the sheet's glass CTA bar (backdrop-filter blur 16px) rasterises a 13-row band over the content it overlaps with channel differences of at most 3/255 (measured: every differing pixel is in the 1-3 bucket, ~4.9k px of 390x128); DOM, computed style, rects and vals are identical and the original is deterministic against itself (dry run). Paint-level rounding of Chromium's backdrop filter, not a design difference (DEVIATIONS.md DV-PARITY-blur)."
+    },
+    {
+      "id": "DV-PARITY-blur-ack",
+      "page": "index",
+      "scenario": "sheet-guest",
+      "step": "ack",
+      "maxMismatched": 5200,
+      "reason": "Same band as DV-PARITY-blur-review after the terms checkbox is ticked (the bar turns cyan; ~4.8k px, every one within 3/255)."
+    }
+  ]
 }

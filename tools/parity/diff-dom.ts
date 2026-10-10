@@ -45,10 +45,24 @@ function convert(node: P5Node, keepTpl: boolean): DomNode | null {
         tag: el.tagName,
         attrs,
         tpl: keepTpl ? tpl : null,
-        children: kids.map((c) => convert(c, keepTpl)).filter((c): c is DomNode => c !== null),
+        children: mergeText(kids.map((c) => convert(c, keepTpl)).filter((c): c is DomNode => c !== null)),
       }
     }
   }
+}
+
+/**
+ * Adjacent text nodes become one: the original's outerHTML already joins React's separate text children, while the
+ * port's `<!-- -->` hydration boundaries (dropped above) keep them apart in its serialisation.
+ */
+function mergeText(list: DomNode[]): DomNode[] {
+  const out: DomNode[] = []
+  for (const n of list) {
+    const last = out[out.length - 1]
+    if (n.t === 'text' && last && last.t === 'text') last.v += n.v
+    else out.push(n.t === 'text' ? { t: 'text', v: n.v } : n)
+  }
+  return out
 }
 
 /**
@@ -57,7 +71,7 @@ function convert(node: P5Node, keepTpl: boolean): DomNode | null {
  */
 export function normalizeHtml(html: string, keepTpl: boolean): DomNode[] {
   const frag = parseFragment(html)
-  return frag.childNodes.map((c) => convert(c as P5Node, keepTpl)).filter((c): c is DomNode => c !== null)
+  return mergeText(frag.childNodes.map((c) => convert(c as P5Node, keepTpl)).filter((c): c is DomNode => c !== null))
 }
 
 function sig(n: DomNode): string {

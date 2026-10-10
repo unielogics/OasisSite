@@ -63,8 +63,8 @@ export interface Snapshot {
   /** requests aborted by the network block (anything other than the two local origins) */
   blocked: string[]
   fullStyle: boolean
-  /** document scroll size (full-page screenshots cover it) */
-  docSize: { width: number; height: number }
+  /** document scroll size (full-page screenshots cover it) and the scroll position the rects are relative to */
+  docSize: { width: number; height: number; scrollX?: number; scrollY?: number }
 }
 
 export interface CheckResult {
@@ -94,6 +94,8 @@ export interface UnitResult {
   page: string
   scenario: string
   theme: Theme
+  /** the viewport name when the run is per viewport (site.config.json parity.viewports) */
+  viewport?: string
   ok: boolean
   steps: StepResult[]
   error?: string

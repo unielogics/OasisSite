@@ -7,7 +7,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { fileURLToPath } from 'node:url'
-import { DEFAULT_DIST_PORT, ROOT } from './config'
+import { DEFAULT_DIST_PORT, FIXED_NOW, ROOT, TIMEZONE } from './config'
+import { designAvailability } from '../../src/site/availability'
+import { hoursTable } from '../../src/site/hours'
+import { validatePublicHours } from '../../src/hours/format'
 
 export type HoursFixture = 'design' | 'alt'
 
@@ -60,6 +63,24 @@ export function hoursFixture(kind: HoursFixture): string {
   return fs.readFileSync(file, 'utf8')
 }
 
+/**
+ * The availability the harness answers with: the design's own generated pattern at the frozen instant over the hours
+ * fixture (Sunday closed), exactly what `pnpm build:parity` bakes (tools/parity/build-parity.ts), so a refresh after
+ * mount changes nothing. `service`/`addons` are accepted and ignored (the pattern does not depend on them).
+ */
+export function availabilityFixture(kind: HoursFixture, days = 5, now = new Date(FIXED_NOW)): string {
+  const hours = validatePublicHours(JSON.parse(hoursFixture(kind)))
+  // the design's pattern is seeded by the LOCAL date and filtered by the local time of day: the shop's zone
+  const prev = process.env.TZ
+  process.env.TZ = TIMEZONE
+  try {
+    return JSON.stringify(designAvailability(now, hoursTable(hours), { days, tz: hours.tz }))
+  } finally {
+    if (prev === undefined) delete process.env.TZ
+    else process.env.TZ = prev
+  }
+}
+
 export async function startDistServer(opts: DistServerOptions = {}): Promise<DistServer> {
   const dir = path.resolve(ROOT, opts.dir ?? 'dist')
   if (!fs.existsSync(path.join(dir, 'index.html'))) throw new Error(`${dir} has no index.html (build first)`)
@@ -100,6 +121,13 @@ export async function startDistServer(opts: DistServerOptions = {}): Promise<Dis
       }
       if (opts.hoursDelayMs) setTimeout(send, opts.hoursDelayMs)
       else send()
+      return
+    }
+    if (url.pathname === '/api/v1/public/availability') {
+      const days = Math.max(1, Math.min(14, Number(url.searchParams.get('days') ?? '5') || 5))
+      res
+        .writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=60' })
+        .end(availabilityFixture(opts.hours ?? 'design', days))
       return
     }
     if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/hooks/')) {

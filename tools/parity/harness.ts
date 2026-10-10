@@ -15,10 +15,14 @@ import {
   CONSOLE_BASELINE_FILE,
   DEFAULT_ORIGINAL_PORT,
   REPORTS_DIR,
+  ROOT,
   SLUGS,
   TOLERANCES_FILE,
+  VIEWPORTS,
   type Theme,
+  type Viewport,
 } from './config'
+import { copyMapSwaps } from './copy-swaps'
 import { OriginalDriver, PortDriver, type Driver } from './drivers'
 import { runUnit, type RunContext } from './runner'
 import { ALL_SCENARIOS, selectScenarios, themesOf, validateScenarios, type ScenarioFilter } from './scenarios'
@@ -40,6 +44,8 @@ export interface HarnessOptions {
   scenarios?: readonly Scenario[]
   filter?: ScenarioFilter
   theme?: Theme
+  /** viewports to run (default: every configured one) */
+  viewports?: readonly Viewport[]
   port: PortTarget
   allowlist?: readonly AllowEntry[]
   tolerances?: Tolerances
@@ -96,8 +102,15 @@ export async function runHarness(opts: HarnessOptions): Promise<HarnessResult> {
   const log = opts.log ?? ((l: string) => console.log(l))
   fs.mkdirSync(outDir, { recursive: true })
 
+  // the allow-list's own swaps plus the port's copy-map changes applied to the original (one source of truth); a
+  // second ORIGINAL standing in for the port (dry runs, the self-tests) gets the copy-map swaps too, so original vs
+  // original compares the design with the owner's decisions applied on both sides
+  const copySwaps: Record<string, ReturnType<typeof swapsFor>> = {}
   const swapsBySlug: Record<string, ReturnType<typeof swapsFor>> = {}
-  for (const slug of SLUGS) swapsBySlug[slug] = swapsFor(allowlist, slug)
+  for (const slug of SLUGS) {
+    copySwaps[slug] = copyMapSwaps(ROOT, slug)
+    swapsBySlug[slug] = [...swapsFor(allowlist, slug), ...copySwaps[slug]]
+  }
   const origServer: OriginalServer = await startOriginalServer({
     swapsBySlug,
     port: opts.origPort ?? DEFAULT_ORIGINAL_PORT,
@@ -106,7 +119,7 @@ export async function runHarness(opts: HarnessOptions): Promise<HarnessResult> {
   let distServer: Awaited<ReturnType<typeof startDistServer>> | undefined
   let portUrl = ''
   if (opts.port.kind === 'original') {
-    portServer = await startOriginalServer({ port: 0, ...opts.port.serve })
+    portServer = await startOriginalServer({ port: 0, swapsBySlug: copySwaps, ...opts.port.serve })
   } else if (opts.port.kind === 'url') {
     await checkPortReachable(opts.port.url)
     portUrl = opts.port.url
@@ -130,10 +143,13 @@ export async function runHarness(opts: HarnessOptions): Promise<HarnessResult> {
       outDir,
       log,
     }
+    const viewports = opts.viewports ?? VIEWPORTS
     for (const scenario of scenarios) {
       for (const theme of themesOf(scenario, opts.theme)) {
-        log(`${scenario.page}/${scenario.id}@${theme}`)
-        units.push(await runUnit(ctx, scenario, theme))
+        for (const vp of viewports) {
+          log(`${scenario.page}/${scenario.id}@${theme}/${vp.name}`)
+          units.push(await runUnit(ctx, scenario, theme, vp))
+        }
       }
     }
   } finally {
@@ -157,6 +173,7 @@ export async function runHarness(opts: HarnessOptions): Promise<HarnessResult> {
       page: u.page,
       scenario: u.scenario,
       theme: u.theme,
+      viewport: u.viewport,
       ok: u.ok,
       steps: u.steps.length,
       failedSteps: u.steps.filter((s) => !s.ok).map((s) => s.step),
@@ -179,7 +196,7 @@ export function formatSummary(r: HarnessResult): string {
     `${r.ok ? 'PASS' : 'FAIL'}  ${r.units.length} runs, ${steps} steps, ${badSteps} failing steps, ${r.problems.length} allow-list problems`,
   )
   for (const u of r.units.filter((x) => !x.ok)) {
-    lines.push(`  ${u.page}/${u.scenario}@${u.theme}${u.error ? ` ERROR: ${u.error.split('\n')[0]}` : ''}`)
+    lines.push(`  ${u.page}/${u.scenario}@${u.theme}${u.viewport ? '/' + u.viewport : ''}${u.error ? ` ERROR: ${u.error.split('\n')[0]}` : ''}`)
     for (const s of u.steps.filter((x) => !x.ok)) {
       const detail = Object.values(s.checks)
         .filter((c) => !c.ok)
@@ -189,6 +206,6 @@ export function formatSummary(r: HarnessResult): string {
     }
   }
   for (const p of r.problems) lines.push(`  allowlist: ${p}`)
-  lines.push(`artifacts: ${path.relative(process.cwd(), r.outDir) || '.'}/<page>/<scenario>/<theme>/<step>/`)
+  lines.push(`artifacts: ${path.relative(process.cwd(), r.outDir) || '.'}/<page>/<scenario>/<theme>-<viewport>/<step>/`)
   return lines.join('\n')
 }

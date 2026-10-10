@@ -10,6 +10,7 @@ import {
   settleInPage,
 } from './collect'
 import { pageOf, type Side, type Theme } from './config'
+import { defaultIntercepts } from './cdn'
 import type { OriginalServer } from './serve-original'
 import type { JsonValue, Snapshot } from './types'
 import { serializeVals } from './vals-serialize'
@@ -19,6 +20,7 @@ export interface OpenOptions {
   theme: Theme
   hash?: string
   touch?: boolean
+  viewport?: { width: number; height: number }
 }
 
 /** What a scenario step can do. The same step function runs against both pages, so it only gets this surface. */
@@ -114,6 +116,7 @@ export abstract class PageDriver implements Driver {
       allowedOrigins: this.allowedOrigins(),
       hideBranding: this.hideBranding,
       touch: opts.touch,
+      viewport: opts.viewport,
       ...extra,
     })
     this.actions = this.buildActions(opts)
@@ -265,6 +268,11 @@ export class OriginalDriver extends PageDriver {
 
   protected allowedOrigins(): string[] {
     return [this.server.origin]
+  }
+
+  /** The original may load React and Google Fonts from the network: answered from the pinned local copies. */
+  protected async prepare(): Promise<Partial<ParityContextOptions>> {
+    return { intercepts: defaultIntercepts() }
   }
 
   protected urlFor(o: OpenOptions): string {

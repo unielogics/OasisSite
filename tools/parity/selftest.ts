@@ -35,11 +35,13 @@ function replaceOnce(template: string, find: string, replace: string, what: stri
  * arrives, add its page here (the gate fails loudly on a page without an entry).
  */
 const TEXT_EDIT: Record<string, [string, string]> = {
+  index: ['>Compare plans<', '>Compare plans!<'],
   operations: ['>Walk-in<', '>Walk-in!<'],
   payments: ['>Export CSV<', '>Export CSV!<'],
   settings: ['>Copy Monday to weekdays<', '>Copy Monday to weekdays!<'],
 }
 const VALS_EDIT: Record<string, [string, string]> = {
+  index: ["'Wax with every wash'", "'Wax with every wash!'"],
   operations: ["'Bay Board'", "'Bay Board!'"],
   payments: ["'Net revenue'", "'Net revenue!'"],
   settings: ["'Working hours'", "'Working hours!'"],
@@ -110,7 +112,7 @@ async function determinismGate(
     log: (l) =>
       /FAIL|ERROR|allowlist/.test(l)
         ? console.log(l)
-        : /^[a-z0-9-]+\/[a-z0-9-]+@(light|dark)$/.test(l)
+        : /^[a-z0-9-]+\/[a-z0-9-]+@(light|dark)(\/[A-Za-z0-9_-]+)?$/.test(l)
           ? process.stdout.write('.')
           : undefined,
   })
@@ -344,7 +346,12 @@ async function portDriverGate(browser: Awaited<ReturnType<typeof launchBrowser>>
 }
 
 async function main(): Promise<number> {
-  const { values } = parseArgs({ options: { quick: { type: 'boolean', default: false } }, strict: true })
+  // `pnpm parity:selftest -- --quick` hands the separator through to the script
+  const { values } = parseArgs({
+    args: process.argv.slice(2).filter((a) => a !== '--'),
+    options: { quick: { type: 'boolean', default: false } },
+    strict: true,
+  })
   const quick = values.quick === true
   fs.rmSync(path.join(REPORTS_DIR, 'selftest'), { recursive: true, force: true })
   const browser = await launchBrowser()
