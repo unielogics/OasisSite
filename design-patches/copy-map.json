@@ -140,7 +140,7 @@
       "page": "index",
       "scope": "logic",
       "from": "'Billed monthly from today. Your first wash can be today.'",
-      "to": "'We\\u2019ll text you a secure checkout link. Billed monthly once you pay, and your first wash can be today.'",
+      "to": "'We\\u2019ll text you a secure Squarespace checkout link. Billed monthly once you pay, and your first wash can be today.'",
       "count": 1,
       "dv": "DV-JOIN"
     },
@@ -149,7 +149,7 @@
       "page": "index",
       "scope": "logic",
       "from": "' 4 washes are ready. Book the first one now.'",
-      "to": "' checkout link is on its way by text. Your 4 washes start the moment it\\u2019s paid.'",
+      "to": "' Squarespace checkout link is on its way by text. Your 4 washes start the moment it\\u2019s paid.'",
       "count": 1,
       "dv": "DV-JOIN"
     },

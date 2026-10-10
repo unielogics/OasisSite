@@ -50,7 +50,7 @@ Written by the build, imported by the bridge and the prerender, bundled into the
   ("WASH booking: Signature Hand Wash · Sedan / Coupe · Today 11:30 AM · + Hand wax · Guest") and opens
   `sms:+12015986304?&body=…`; no API call is made.
 - **Join (DV-JOIN).** Steps plan → vehicles → details → checkout (terms only, no card fields) → welcome. `live`: posts
-  `/api/v1/public/memberships`; the welcome step says the checkout link is on its way by text. `sms`: composes
+  `/api/v1/public/memberships`; the welcome step says the Squarespace checkout link is on its way by text. `sms`: composes
   "JOIN VIP: name · phone · email · cars". "Book your first wash" (live) opens the sheet at the member sign-in.
 - **First render (DV-CLOCK, DV-HASH).** The prerender pins `Date` to `buildNow`; the client pins it the same way until
   the host is about to run `componentDidMount` (`src/client/boot.tsx` `freeze`), then the bridge re-renders with the

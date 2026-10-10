@@ -43,7 +43,7 @@ of every entry below.
   and mobile fields (live mode only; the design had no contact fields for guests). Submit = `POST
   /api/v1/public/bookings` with an `Idempotency-Key` minted when the sheet opens; a `409` problem title becomes the
   design's toast and the time step reloads availability. The done step shows the real booking reference ("Ref
-  ABC123", plus the deposit due) and the note reads "We'll text your confirmation and a reminder the day before."
+  OAS-00042", plus the deposit due) and the note reads "We'll text your confirmation and a reminder the day before."
   With **`SITE_BOOKING=sms`** (the launch default, until the SMS tablet is live) the same sheet composes the booking
   as a text (wash, vehicle, time, add-ons, guest/member) and opens `sms:201-598-6304?&body=…` instead of calling the
   API; nothing else changes. Test hook: `window.__oasisNavigate(url)` receives the sms:/tel: URL when defined.
@@ -55,8 +55,8 @@ of every entry below.
   and explains that a secure Squarespace checkout link is texted; the card number, expiry and CVC inputs are removed
   (the original gets the same removal before render, plus its card validation line), the summary reads "Due at
   checkout" (was "Due today") and the member card loses the fake "•••• 0427". Submit = `POST
-  /api/v1/public/memberships` (pending until the checkout is paid); the welcome step reads "…your checkout link is on
-  its way by text. Your 4 washes start the moment it's paid." In sms mode the submit composes "JOIN VIP: name · phone
+  /api/v1/public/memberships` (pending until the checkout is paid); the welcome step reads "…your Squarespace checkout link
+  is on its way by text. Your 4 washes start the moment it's paid." In sms mode the submit composes "JOIN VIP: name · phone
   · cars" as a text. "Book your first wash" (live) opens the sheet at the member sign-in with the phone prefilled.
 
 ## Assets and rendering
