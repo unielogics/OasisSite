@@ -7,7 +7,7 @@ on:
 jobs:
   check-build-parity:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       NODE_OPTIONS: --max-old-space-size=4096
       SITE_URL: https://oasisautospanj.com
@@ -30,12 +30,14 @@ jobs:
       - run: pnpm parity:selftest -- --quick
       - run: pnpm parity:all
       - run: pnpm parity:phone
+      - run: pnpm e2e:site --api fixture
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: parity-reports
           path: |
             parity-reports/summary.json
+            parity-reports/e2e-site.json
             parity-reports/**/result.json
             parity-reports/**/*.diff.json
             parity-reports/**/diff.png
