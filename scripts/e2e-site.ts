@@ -442,7 +442,8 @@ async function main(): Promise<number> {
       if (when) {
         for (const d of avail0.body.days as { date: string; label: string; slots: { startMin: number; start: string }[] }[]) {
           const slot = d.slots.find((s) => s.start === when[2])
-          if (d.label === when[1] && slot) {
+          // the nearest day with that label (a 7-day board can list two "Mon")
+          if (d.label === when[1] && slot && !bookedDate) {
             bookedDate = d.date
             bookedStart = slot.startMin
           }

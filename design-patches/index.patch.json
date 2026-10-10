@@ -46,8 +46,8 @@
     },
     {
       "op": "insert-before",
-      "tpl": 752,
-      "expectTag": "button",
+      "tpl": 751,
+      "expectTag": "sc-if",
       "html": "<sc-if value=\"{{ site.guestDetails }}\"><div style=\"display:flex;flex-direction:column;gap:10px;\"><input value=\"{{ site.name }}\" onInput=\"{{ site.setName }}\" autocomplete=\"name\" placeholder=\"Full name\" style=\"height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;\"><sc-if value=\"{{ site.askPhone }}\"><input value=\"{{ site.phone }}\" onInput=\"{{ site.setPhone }}\" inputmode=\"tel\" autocomplete=\"tel\" placeholder=\"Mobile number\" style=\"height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;\"><div style=\"font-size:12.5px;color:var(--ink3);\">We'll text your confirmation to this number.</div></sc-if></div></sc-if>",
       "dv": "DV-BOOK"
     }
