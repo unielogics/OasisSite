@@ -544,8 +544,14 @@ async function main(): Promise<number> {
     check('sms mode: Book composes an sms: link with the booking', navs.length === 1 && /^sms:\+12015986304\?&body=WASH%20booking%3A/.test(navs[0]!), navs[0])
     check('sms mode: the composed text names the wash, the vehicle and the time', /Signature%20Hand%20Wash/.test(navs[0] ?? '') && /Sedan/.test(decodeURIComponent(navs[0] ?? '')) && /(AM|PM)/.test(decodeURIComponent(navs[0] ?? '')), decodeURIComponent(navs[0] ?? ''))
     // the design's own text links (the hero's "Text WASH to …", the footer) live on the home view
-    const href = await page.locator('#dc-root a[href^="sms:"]').first().getAttribute('href')
-    check('sms mode: the design\'s own text links keep the configured number', href === 'sms:+12015986304?&body=WASH', href ?? '')
+    // (the pricing section's quote link comes first in the document: every link must carry the number, and the
+    // "Text WASH" links of the 07 section and the footer must be there)
+    const hrefs = await page.locator('#dc-root a[href^="sms:"]').evaluateAll((els) => els.map((e) => e.getAttribute('href') ?? ''))
+    check(
+      'sms mode: the design\'s own text links keep the configured number',
+      hrefs.length > 0 && hrefs.every((h) => h.startsWith('sms:+12015986304?&body=')) && hrefs.filter((h) => h === 'sms:+12015986304?&body=WASH').length >= 2,
+      hrefs.join(' | '),
+    )
     await bookPage.ctx.close()
     // a fresh page for the join flow: the sms: navigation was swallowed by the test hook, so the sheet is still open
     // on the first page and a hash-only goto would keep it (and its CTA) over the join page
