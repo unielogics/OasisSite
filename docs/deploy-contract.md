@@ -71,7 +71,7 @@ A `<link rel="preconnect">` to an external font host is kept only if the design'
 - everything else under `/api`, `/hooks`, `/dev-storage` → 404; dotfiles → 404.
 
 `tools/parity/serve-dist.ts` mimics these rules (clean URLs, 404 page, immutable assets, no-cache HTML, the hours and
-availability endpoints with fixture bodies) for the harness and for `pnpm serve:dist` on port 3301;
+availability and catalog endpoints with fixture bodies) for the harness and for `pnpm serve:dist` on port 3301;
 `tools/site/proxy.ts` proxies the real `/api/v1/public/*` prefix for the e2e (docs/e2e.md).
 
 ## Health

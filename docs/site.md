@@ -63,8 +63,9 @@ Written by the build, imported by the bridge and the prerender, bundled into the
 ## Catalog keys
 
 `site.config.json` `catalog` maps the design's service ids (`signature`, `exterior`) and add-on ids to the backend's
-catalog keys (the slug of the service name in the dashboard's catalog, `GET /api/v1/public/catalog`). In live mode the
-bridge fetches the catalog once (after mount and when the sheet opens): a configured key that exists is used as is;
+catalog keys (the slug of the service name in the dashboard's catalog, `GET /api/v1/public/catalog`). In every booking
+mode the bridge fetches the catalog once, before the first availability query (which 422s on a key the API does not
+know): a configured key that exists is used as is;
 otherwise the service is matched to the catalog by name words ("Signature Hand Wash" → the closest package, e.g. the
 seeded "Premium Hand Wash + Interior"), else the first package; an add-on without a configured or name match is left out
 of the booking (the person still sees the design's add-on list). Once the owner's catalog carries the website's services

@@ -2,7 +2,7 @@
 
 The design is the source of truth. The harness renders the **original** document (`design/original/Oasis Site
 v2.dc.html` with its own runtime and loose files, served by `serve-original` on port 4320) and the **port**
-(`dist-parity/`, served by `serve-dist` with clean URLs and fixture hours/availability endpoints) side by side in the
+(`dist-parity/`, served by `serve-dist` with clean URLs and fixture hours/availability/catalog endpoints) side by side in the
 same pinned Chromium, at every configured viewport (`site.config.json` `parity.viewports`: 390x844 phone first, the
 design is mobile-first and fluid, then 1440x900 desktop) and in both themes, performs the same scenario actions on
 both, and fails on any difference that is not explicitly listed in `parity/allowlist.json`. It is the dashboard's
@@ -71,7 +71,8 @@ process at a time on the shared box (`flock /tmp/oasis-heavy.lock`).
     `FIXED_NOW` (`2026-06-13T10:36:00-04:00`, `America/New_York`), bakes the fixture hours (`src/data/hours.fallback.json`,
     Sunday closed) and the design's own availability pattern computed in the shop's zone (`designAvailability`,
     `src/site/availability.ts`), with `SITE_BOOKING=sms`; `serve-dist` answers `/api/v1/public/hours` and
-    `/api/v1/public/availability` with the same payloads, so the refresh after mount changes nothing.
+    `/api/v1/public/availability` with the same payloads (and `/api/v1/public/catalog` with the configured keys), so
+    the refresh after mount changes nothing.
 
 ## Environment and determinism
 

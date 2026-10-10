@@ -57,6 +57,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     __memberRef: string | null = null
     __busy = false
     __catalog: { services: { key: string; name: string; kind?: string; durationMin?: number }[]; addons: { key: string; name: string }[] } | null = null
+    __catalogReady: Promise<void> | null = null
 
     constructor(props?: any) {
       super(props)
@@ -76,7 +77,6 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       this.setState({ now: Date.now(), flapAt: Date.now() })
       if (typeof location !== 'undefined' && location.hash.replace(/^#\/?/, '') !== '') this._hc()
       void this.__refreshHours()
-      void this.__loadCatalog()
       void this.__refreshAvailability()
     }
 
@@ -165,8 +165,13 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       })
     }
 
-    async __loadCatalog(): Promise<void> {
-      if (env.booking !== 'live' || this.__catalog) return
+    /** The live catalog, fetched once per page in every booking mode (the availability query needs a key it knows). */
+    __loadCatalog(): Promise<void> {
+      if (!this.__catalogReady) this.__catalogReady = this.__fetchCatalog()
+      return this.__catalogReady
+    }
+
+    async __fetchCatalog(): Promise<void> {
       try {
         const ctl = new AbortController()
         const t = setTimeout(() => ctl.abort(), env.timeouts.api)
@@ -174,17 +179,16 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         clearTimeout(t)
         if (!res.ok) return
         const c = (await res.json()) as { services?: unknown; addons?: unknown }
-        if (Array.isArray(c.services) && Array.isArray(c.addons)) {
-          this.__catalog = { services: c.services as any, addons: c.addons as any }
-          void this.__refreshAvailability()
-        }
+        if (Array.isArray(c.services) && Array.isArray(c.addons)) this.__catalog = { services: c.services as any, addons: c.addons as any }
       } catch {
         /* the configured keys stay */
       }
     }
 
+    // in every booking mode (the launch default sms included): the board shows real times as soon as the API answers,
+    // queried with a catalog key the API knows (the catalog is loaded first)
     async __refreshAvailability(): Promise<void> {
-      if (env.booking !== 'live' && !env.availability) return
+      await this.__loadCatalog()
       const q = `?days=${fetchDays}&service=${encodeURIComponent(this.__serviceKey())}&addons=${encodeURIComponent(this.__addonKeys().join(','))}`
       if (this.__availFor === q + '|pending') return
       const key = q
@@ -209,7 +213,6 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     openBook(p?: any): void {
       super.openBook(p)
       if (!this.__idem) this.__idem = randomId()
-      void this.__loadCatalog()
       void this.__refreshAvailability()
     }
 

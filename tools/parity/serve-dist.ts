@@ -1,6 +1,6 @@
 // serve:dist — a static server with the production nginx semantics the site relies on: clean URLs
-// (/x -> x/index.html or x.html), 404.html for misses, immutable caching under /assets/, no-cache HTML, and a fixture
-// GET /api/v1/public/hours (--hours design|alt) so hydration and the hours refresh can be exercised offline.
+// (/x -> x/index.html or x.html), 404.html for misses, immutable caching under /assets/, no-cache HTML, and fixture
+// GET /api/v1/public/{hours,availability,catalog} (--hours design|alt) so hydration and the refreshes can be exercised offline.
 // Usage: tsx tools/parity/serve-dist.ts [--dir dist] [--port 3301] [--hours design|alt]
 import http from 'node:http'
 import fs from 'node:fs'
@@ -61,6 +61,25 @@ export function hoursFixture(kind: HoursFixture): string {
       ? path.join(ROOT, 'tools/parity/fixtures/hours.alt.json')
       : path.join(ROOT, 'src/data/hours.fallback.json')
   return fs.readFileSync(file, 'utf8')
+}
+
+/**
+ * The catalog the harness answers with: the site's configured keys (site.config.json `catalog`), so the bridge's
+ * catalog load (made in every booking mode before the first availability query) resolves the configured keys as is.
+ */
+export function catalogFixture(): string {
+  const site = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'utf8')) as {
+    catalog: { services: Record<string, { key: string; name: string }>; addons: Record<string, string> }
+  }
+  return JSON.stringify({
+    generatedAt: FIXED_NOW,
+    services: Object.entries(site.catalog.services).map(([id, s]) => ({ key: s.key, name: s.name, shortName: s.name, durationMin: id === 'signature' ? 45 : 30, priceCents: 0, tags: [] })),
+    addons: Object.entries(site.catalog.addons).map(([id, key]) => ({ key, name: id, priceCents: 0, tags: [] })),
+    plans: [
+      { key: 'gold', name: 'Gold', planKey: 'premium', planName: 'Premium', perks: [], priceCents: null },
+      { key: 'vip', name: 'VIP', planKey: 'executive', planName: 'Executive', perks: [], priceCents: null },
+    ],
+  })
 }
 
 /**
@@ -128,6 +147,12 @@ export async function startDistServer(opts: DistServerOptions = {}): Promise<Dis
       res
         .writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=60' })
         .end(availabilityFixture(opts.hours ?? 'design', days))
+      return
+    }
+    if (url.pathname === '/api/v1/public/catalog') {
+      res
+        .writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=60' })
+        .end(catalogFixture())
       return
     }
     if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/hooks/')) {
