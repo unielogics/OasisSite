@@ -2,7 +2,9 @@
 // the site without the live stack: hours (the committed fallback with today/next derived), availability (the
 // design's pattern over the hours, with bookings taken out), catalog (the site's configured keys), OTP (the code is
 // returned in a dev header and listed at GET /__fixture/texts), bookings (409 when a slot is taken, honeypot 202),
-// memberships (pending). In-memory; one process per run. Used by scripts/e2e-site.ts --api fixture and by
+// memberships (pending), and the personal-link API (tools/site/fixture-links.ts: issue links through POST
+// /__fixture/links, switch the PUBLIC_LINKS_ENABLED gate through POST /__fixture/links/enabled?on=0|1, read
+// /__fixture/links/state). In-memory; one process per run. Used by scripts/e2e-site.ts --api fixture and by
 // `pnpm serve:dist --api fixture`. Never part of the build.
 import http from 'node:http'
 import crypto from 'node:crypto'
@@ -14,6 +16,7 @@ import { validatePublicHours } from '../../src/hours/format'
 import type { PublicHours } from '../../src/hours/format'
 import { designAvailability, type Availability } from '../../src/site/availability'
 import { hoursTable, withToday } from '../../src/site/hours'
+import { createLinkFixture, type LinkFixture } from './fixture-links'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -28,6 +31,8 @@ export interface FixtureApi {
   origin: string
   port: number
   state: FixtureState
+  /** the link API (personal links, DV-LINK): issue links, switch the gate, read its state and request log */
+  links: LinkFixture
   close(): Promise<void>
 }
 
@@ -99,7 +104,9 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
     // bookings taken out: a booked slot loses one bay
     for (const day of a.days)
       for (const s of day.slots) {
-        const taken = state.bookings.filter((b) => b.date === day.date && b.startMin === s.startMin).length
+        const taken =
+          state.bookings.filter((b) => b.date === day.date && b.startMin === s.startMin).length +
+          links.state.bookings.filter((b) => b.date === day.date && b.startMin === s.startMin).length // links (W3f)
         if (!taken) continue
         s.bays = Math.max(0, s.bays - taken)
         s.state = s.bays === 0 ? 'booked' : s.bays === 1 ? 'last' : s.state
@@ -115,15 +122,36 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
       req.on('data', (c) => (s += c))
       req.on('end', () => resolve(s))
     })
+  // ---- links (W3f): the personal-link API in memory (tools/site/fixture-links.ts) ----
+  const site2 = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'utf8')) as { links?: { base?: string } }
+  const links = createLinkFixture({
+    base: site2.links?.base ?? '/api/v1/public/links',
+    now,
+    availability: (days, serviceKey) => availability(days, serviceKey) as never,
+    services,
+    addons,
+    pushText: (t) => state.texts.push({ ...t, at: now().toISOString() }),
+  })
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost')
     const p = url.pathname
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type,idempotency-key', 'access-control-allow-methods': 'GET,POST' }).end()
+      res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type,idempotency-key,authorization', 'access-control-allow-methods': 'GET,POST' }).end()
       return
     }
     if (p === '/__fixture/texts') return json(res, 200, { texts: state.texts })
+    // ---- links (W3f) ----
+    if (p === '/__fixture/links' && req.method === 'POST') {
+      const b = JSON.parse((await readBody(req)) || '{}')
+      return json(res, 201, links.issue(b, String(b.siteOrigin ?? 'https://oasisautospanj.com')))
+    }
+    if (p === '/__fixture/links/state') return json(res, 200, links.snapshot())
+    if (p === '/__fixture/links/enabled' && req.method === 'POST') {
+      links.state.enabled = url.searchParams.get('on') !== '0'
+      return json(res, 200, { enabled: links.state.enabled })
+    }
+    if (await links.handle(req, res, url, () => readBody(req))) return
     if (p === '/__fixture/state')
       return json(res, 200, { bookings: state.bookings, memberships: state.memberships, challenges: [...state.challenges.entries()].map(([id, c]) => ({ id, phone: c.phone, code: c.code })) })
     if (p === '/api/v1/public/hours') return json(res, 200, inShopZone(() => withToday(base, now())), { 'cache-control': 'public, max-age=60' })
@@ -256,7 +284,7 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
     })
   })
   const port = (server.address() as AddressInfo).port
-  return { origin: `http://127.0.0.1:${port}`, port, state, close: () => new Promise((r) => server.close(() => r())) }
+  return { origin: `http://127.0.0.1:${port}`, port, state, links, close: () => new Promise((r) => server.close(() => r())) }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
