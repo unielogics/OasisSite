@@ -63,8 +63,10 @@ are redacted) and the pending membership row.
    device change and a reload on a device that says otherwise; the menu's Appearance Light on a dark device is stored
    and kept after a reload; no hydration error in any of them.
 9. Over every page: no console error or page error, no request to another origin, no 5xx.
-10-21. Personal links (`scripts/e2e-links.ts`, fixture mode; skipped on a stack until the backend's link API is in
-   it). They run on the launch build (`SITE_BOOKING=sms`; links do not depend on the booking mode), every page with the
+10-21. Personal links (`scripts/e2e-links.ts`, fixture mode; skipped on a stack until the backend's link API (W3c) is
+   in it: the stack has no `/public/links` routes and no way to issue a link). The fixture answers the backend's own
+   shapes (backend `docs/api-spec.md` section 28), held to them by `tools/site/fixture-links.test.ts` with the key lists
+   of `src/site/link-contract.testkit.ts`, so these checks exercise the real contract. They run on the launch build (`SITE_BOOKING=sms`; links do not depend on the booking mode), every page with the
    production Content-Security-Policy (the kit's `SITE_CSP` minus `upgrade-insecure-requests`, the test host is plain
    http) injected on the document, links issued in the fixture (`api.links.issue`, the URL a text would carry):
    **10** the token is sent only in the body of `POST /links/exchange` (every browser request recorded: URL, headers,
@@ -80,7 +82,7 @@ are redacted) and the pending membership row.
    stays;
    **15** membership: `#/join?gold` (token scrubbed), code, e-mail, terms → the plan's Squarespace checkout, a pending
    membership and a checkout intent with the confirmed e-mail;
-   **16** payment: the review shows the invoice and the balance, PIN → the invoice's Squarespace link; an invoice URL
+   **16** payment: the review shows the invoice (number, date, items, tax) and the balance, PIN → the invoice's Squarespace link; an invoice URL
    off the allowlist is not followed ("We couldn't open the payment page", a text-us link);
    **17** dead links: expired, used, revoked and unknown tokens show their notice and the text-us link;
    **18** a link preview (a plain GET of the link URL) gets the static page and reaches no API; opening twice uses

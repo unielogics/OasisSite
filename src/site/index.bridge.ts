@@ -20,7 +20,7 @@ import { decideTheme, LIGHT_QUERY, readStoredTheme, storeTheme, type ThemeConfig
 import { designTime, hoursRows, hoursTable, withToday, type HoursTable } from './hours'
 // ---- links (W3f): imports ----
 import { installLinkCapture, onLink, takeLink, type CapturedLink } from '../client/link'
-import { allowedRedirect, DEAD_COPY, deadReason, money, PIN_RE, trustDate, validateExchange, whoLabel, whoText, type Exchanged, type LinkDeadReason, type StepUpPurpose } from './links'
+import { allowedRedirect, DEAD_COPY, deadReason, money, PIN_RE, planTier, shopDate, trustDate, validateExchange, validateState, whoLabel, whoText, type Exchanged, type LinkDeadReason, type StepUpPurpose } from './links'
 
 // DV-LINK: the token leaves the address bar while this module is evaluated, before boot() hydrates (src/client/link.ts)
 installLinkCapture()
@@ -104,6 +104,8 @@ type LinkView =
       action?: { label: string; run: () => void } | null
       /** an sms: link to the texting number ("Text us for a new link") */
       sms?: string | null
+      /** the sms: link's label (default "Text us for a new link") */
+      smsLabel?: string
     }
 
 /** The step-up block (DV-STEPUP): PIN, texted code, or a new PIN; and what runs once it succeeds. */
@@ -115,7 +117,7 @@ interface StepUp {
   err: string
   /** the PIN is locked or disabled: no PIN input, only the reset by code */
   locked: boolean
-  then: 'book' | 'join' | 'join-start' | 'pay' | 'verified' | 'pinset'
+  then: 'book' | 'join' | 'join-start' | 'pay' | 'pay-review' | 'verified' | 'pinset'
   /** a PIN offered after a code ("Skip for now") */
   optional: boolean
 }
@@ -843,7 +845,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     /** The membership link's join steps are showing. */
     __lkJoining(): boolean {
-      return this.__lk?.kind === 'membership' && this.state.page === 'join'
+      return this.__lk?.kind === 'membership' && this.state.page === 'join' && this.__lkTier() !== null
     }
 
     /** The per-client board's auth (null: the public board). */
@@ -912,7 +914,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
           else this.__lkStepUp('verified')
           return
         case 'pin':
-          this.__lkStepUp('pinset', { purpose: x.pin === 'set' ? 'pin_reset' : 'pin_set', mode: 'send' })
+          this.__lkStepUp('pinset', { purpose: x.stepUp.method === 'pin' ? 'pin_reset' : 'pin_set', mode: 'send' })
           return
         case 'membership':
           this.__lkOpenJoin()
@@ -978,8 +980,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
             this.__lkDead(again.status === 401 ? deadReason(again.problem?.meta) : 'expired')
             return null
           }
-          lk.session = x.session
-          lk.trust = x.trust
+          Object.assign(lk, x)
           lk.stepUpAt = null
           r = await this.__lkRaw(method, path, body, lk.session, idem)
         }
@@ -1034,7 +1035,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const lk = this.__lk
       if (!lk) return
       const until = trustDate(lk.trust.until, env.tz)
-      const canPin = offerPin && lk.pin !== 'set' && lk.codeAt != null && realNow() - lk.codeAt < PIN_AFTER_CODE_MS
+      // the API opens a window to choose a PIN after a code (stepUp.canSetPinUntil); a stranger's link has none
+      const canPin = offerPin && lk.stepUp.method !== 'pin' && !!lk.stepUp.canSetPinUntil && lk.codeAt != null && realNow() - lk.codeAt < PIN_AFTER_CODE_MS
       this.__su = null
       this.__lkNotice({
         tone: 'ok',
@@ -1115,10 +1117,6 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         this.flash('Please confirm the booking fee terms')
         return
       }
-      if (!lk.client.firstName && !String(b.name || '').trim()) {
-        this.flash('Add your full name')
-        return
-      }
       if (this.__busy) return
       if (!this.__catalog) {
         this.__catalogReady = null
@@ -1131,6 +1129,11 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       }
       if (!lk.trust.verified) {
         this.__lkStepUp('book')
+        return
+      }
+      // after the step-up: a record the stale-record rule hid until now has its name back, only a stranger types one
+      if (!lk.client.firstName && !String(b.name || '').trim()) {
+        this.flash('Add your full name')
         return
       }
       const x = r0.body
@@ -1156,6 +1159,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const code = String(r.problem?.code ?? '')
       if (code === 'IDENTITY_STEP_UP_REQUIRED' || code === 'IDENTITY_NOT_TRUSTED' || code === 'IDENTITY_NOT_VERIFIED') {
         lk.trust = { verified: false, until: null }
+        lk.stepUpAt = null
         this.__lkStepUp('book')
         return
       }
@@ -1173,9 +1177,9 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     __lkStepUp(then: StepUp['then'], o: { purpose?: StepUpPurpose; optional?: boolean; mode?: StepUp['mode'] } = {}): void {
       const lk = this.__lk
       if (!lk) return
-      const purpose = o.purpose ?? 'link_verify'
-      // a PIN outranks a texted code once set (the server refuses the code then: IDENTITY_PIN_REQUIRED)
-      const mode = o.mode ?? (purpose === 'link_verify' && lk.pin === 'set' ? 'pin' : 'send')
+      const purpose = o.purpose ?? 'verify'
+      // a PIN outranks a texted code once set (stepUp.method 'pin'; the server refuses the code then: IDENTITY_PIN_REQUIRED)
+      const mode = o.mode ?? (purpose === 'verify' && lk.stepUp.method === 'pin' ? 'pin' : 'send')
       this.__su = { mode, purpose, challengeId: null, value: '', err: '', locked: false, then, optional: !!o.optional }
       if (then === 'book') this.setState({ step: 'verify' })
       else if (then === 'join' || then === 'join-start') {
@@ -1207,14 +1211,14 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       } else {
         const code = String(r.problem?.code ?? '')
         if (code === 'IDENTITY_PIN_REQUIRED') {
-          lk.pin = 'set'
-          Object.assign(su, { mode: 'pin', purpose: 'link_verify', value: '', err: '' })
+          lk.stepUp.method = 'pin'
+          Object.assign(su, { mode: 'pin', purpose: 'verify', value: '', err: '' })
         } else if (code === 'IDENTITY_PIN_EXISTS') {
-          lk.pin = 'set'
+          lk.stepUp.method = 'pin'
           Object.assign(su, { mode: 'send', purpose: 'pin_reset', err: 'You already have a PIN. We can text you a code to choose a new one.' })
         } else if (code === 'IDENTITY_PIN_NOT_SET') {
-          lk.pin = 'none'
-          Object.assign(su, { mode: 'send', purpose: su.then === 'pinset' ? 'pin_set' : 'link_verify', err: '' })
+          lk.stepUp.method = 'code'
+          Object.assign(su, { mode: 'send', purpose: su.then === 'pinset' ? 'pin_set' : 'verify', err: '' })
         } else su.err = this.__lkProblemText(r)
       }
       this.forceUpdate()
@@ -1237,7 +1241,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         if (r.ok) {
           lk.codeAt = realNow()
           if (su.purpose !== 'pin_reset') this.__lkVerified(r.body)
-          if (su.purpose === 'link_verify') return this.__suDone()
+          else this.__lkState(r.body)
+          if (su.purpose === 'verify') return this.__suDone()
           // a PIN link (set or reset): the new PIN next
           Object.assign(su, { mode: 'create', value: '', err: '', optional: false })
           this.forceUpdate()
@@ -1245,8 +1250,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         }
         const code = String(r.problem?.code ?? '')
         if (code === 'IDENTITY_PIN_REQUIRED') {
-          lk.pin = 'set'
-          return fail('', { mode: 'pin', purpose: 'link_verify', value: '' })
+          lk.stepUp.method = 'pin'
+          return fail('', { mode: 'pin', purpose: 'verify', value: '' })
         }
         if (code === 'PUBLIC_OTP_LOCKED' || code === 'PUBLIC_OTP_EXPIRED') return fail(this.__lkProblemText(r), { mode: 'send', challengeId: null, value: '' })
         return fail(this.__lkProblemText(r), { value: '' })
@@ -1270,27 +1275,47 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         const r = await this.__lkCall('POST', reset ? '/pin/reset' : '/pin', { pin: v })
         if (!r || this.__su !== su) return
         if (r.ok) {
-          lk.pin = 'set'
           this.__lkVerified(r.body)
+          lk.stepUp.method = 'pin'
           return this.__suDone()
         }
         const code = String(r.problem?.code ?? '')
         if (code === 'IDENTITY_CODE_REQUIRED') return fail(this.__lkProblemText(r), { mode: 'send', value: '', optional: false })
         if (code === 'IDENTITY_PIN_EXISTS') {
-          lk.pin = 'set'
-          return fail(this.__lkProblemText(r), { mode: su.then === 'pinset' ? 'send' : 'pin', purpose: su.then === 'pinset' ? 'pin_reset' : 'link_verify', value: '' })
+          lk.stepUp.method = 'pin'
+          return fail(this.__lkProblemText(r), { mode: su.then === 'pinset' ? 'send' : 'pin', purpose: su.then === 'pinset' ? 'pin_reset' : 'verify', value: '' })
         }
         return fail(this.__lkProblemText(r), { value: '' })
       }
+    }
+
+    /**
+     * A step's answer (`{verified, ...LinkState}`): the page takes the state it carries (the trust, the PIN state, a
+     * name or an invoice the stale-record rule hid until now). false when the answer has no usable state.
+     */
+    __lkState(body: any): boolean {
+      const lk = this.__lk
+      if (!lk) return false
+      let x
+      try {
+        x = validateState(body)
+      } catch {
+        return false
+      }
+      if (x.kind !== lk.kind) return false
+      Object.assign(lk, { client: x.client, trust: x.trust, stepUp: x.stepUp, invoice: x.invoice, plan: x.plan, expiresAt: x.expiresAt })
+      return true
     }
 
     /** The page is verified (PIN or code): the number is trusted (30 days) and a fresh step-up is on record. */
     __lkVerified(body: any): void {
       const lk = this.__lk
       if (!lk) return
+      const full = this.__lkState(body)
       const until = typeof body?.trust?.until === 'string' ? body.trust.until : lk.trust.until
       lk.trust = { verified: true, until }
-      lk.stepUpAt = realNow()
+      // fresh from now (the page's own clock), unless the API's answer says nothing entered here counts as fresh
+      lk.stepUpAt = full && !lk.stepUp.freshUntil ? null : realNow()
     }
 
     __suDone(): void {
@@ -1313,6 +1338,9 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
           return
         case 'pay':
           void this.__lkPayStart()
+          return
+        case 'pay-review':
+          this.__lkOpenPay()
           return
         case 'verified':
           this.__lkNoticeVerified()
@@ -1363,7 +1391,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
             send: true,
             sendLabel: 'Text me a code',
             alt: su.purpose === 'pin_reset' && su.then !== 'pinset' ? 'Use my PIN instead' : '',
-            altClick: () => this.__suSwitch('pin', 'link_verify'),
+            altClick: () => this.__suSwitch('pin', 'verify'),
           }
         case 'code':
           return {
@@ -1390,8 +1418,22 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     // ---- DV-LINK-PAY: review -> verify -> Squarespace --------------------------------------------------------------------------
     __lkOpenPay(): void {
-      const inv = this.__lk!.invoice
-      if (!inv || inv.balanceCents <= 0) {
+      const lk = this.__lk!
+      const inv = lk.invoice
+      if (!inv) {
+        // the API hides the invoice of a record the stale-record rule hides until the page is verified
+        if (!lk.trust.verified) return this.__lkStepUp('pay-review')
+        this.__lkNotice({
+          tone: 'warn',
+          eyebrow: 'PAYMENT · ' + this.__lkWho(),
+          title: 'We couldn’t load your invoice',
+          text: `Text us at ${env.contact.smsDisplay} and we’ll help you pay.`,
+          sms: 'Hi, my payment link didn’t show my invoice. Can you help?',
+          smsLabel: 'Text us',
+        })
+        return
+      }
+      if (inv.balanceCents <= 0) {
         this.__lkNotice({ tone: 'ok', eyebrow: 'PAYMENT · ' + this.__lkWho(), title: 'Nothing to pay', text: 'This invoice is paid. Thank you!' })
         return
       }
@@ -1432,15 +1474,25 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     // ---- DV-LINK-JOIN: plan -> verify -> e-mail -> terms -> Squarespace --------------------------------------------------------
     /** The design's tier for the link's plan (site.config.json catalog.plans maps the design's ids to plan keys). */
-    __lkTier(): 'gold' | 'vip' {
-      const key = this.__lk?.plan?.key
-      const plans = env.catalog?.plans ?? {}
-      const id = Object.keys(plans).find((k) => k === key || plans[k] === key)
-      return id === 'gold' ? 'gold' : 'vip'
+    __lkTier(): 'gold' | 'vip' | null {
+      return this.__lk?.kind === 'membership' ? planTier(this.__lk.plan, env.catalog?.plans ?? {}) : null
     }
 
     __lkOpenJoin(): void {
       const tier = this.__lkTier()
+      if (!tier) {
+        // a plan the website does not show (or none): never guess one; joining goes by text
+        const name = this.__lk?.plan?.name
+        this.__lkNotice({
+          tone: 'warn',
+          eyebrow: 'MEMBERSHIP · ' + this.__lkWho(),
+          title: 'Let’s finish this by text',
+          text: `We can’t show ${name ? `the ${name} plan` : 'this plan'} on the website. Text us and we’ll help you join.`,
+          sms: `Hi, I’d like to join ${name ? `the ${name} plan` : 'a membership'}.`,
+          smsLabel: 'Text us',
+        })
+        return
+      }
       this.__lkJoinInit = true
       this.__lkJoinVerify = false
       if (this.state.sheet || this.state.menu) this.setState({ sheet: null, menu: false })
@@ -1450,21 +1502,22 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     /** After the design has shown the join page (its hashchange handler resets the steps): the link's plan and name. */
     __lkJoinSync(): void {
-      if (this.state.page !== 'join' || this.__lk?.kind !== 'membership') return
+      const tier = this.__lkTier()
+      if (this.state.page !== 'join' || !tier || !this.__lk) return
       if (this.__lkJoinInit) {
         this.__lkJoinInit = false
-        this.setJn({ tier: this.__lkTier(), name: this.__lk.client.firstName ?? '', step: 0, err: '', agree: false })
+        this.setJn({ tier, name: this.__lk.client.firstName ?? '', step: 0, err: '', agree: false })
         return
       }
       // the join page reopened through another button (Join VIP, …): still this link's plan
-      if (this.state.jn?.tier !== this.__lkTier()) this.setJn({ tier: this.__lkTier() })
+      if (this.state.jn?.tier !== tier) this.setJn({ tier })
     }
 
     __lkJoinVM(r: any): any {
       const jv = { ...r.jv }
       const j = this.state.jn
       const tier = this.__lkTier()
-      const plan = this.__lk?.plan?.label || (tier === 'vip' ? 'VIP' : 'Gold')
+      const plan = this.__lk?.plan?.name || (tier === 'vip' ? 'VIP' : 'Gold')
       jv.tiers = (jv.tiers || []).map((t: any) =>
         String(t.name).toLowerCase() === tier ? t : { ...t, onClick: () => this.flash(`This link is for ${plan}. Text us to switch plans.`) },
       )
@@ -1557,7 +1610,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         const kind = lk?.kind
         const who = this.__lkWho()
         const eyebrow = kind === 'pay' ? 'PAYMENT FOR ' + who : kind === 'pin' ? 'YOUR PIN · ' + who : 'VERIFY · ' + who
-        const back = kind === 'pay' ? () => this.__lkOpenPay() : undefined
+        const back = kind === 'pay' && lk?.invoice ? () => this.__lkOpenPay() : undefined
         return { ...base, canBack: !!back, back, eyebrow, title: this.__su?.mode === 'create' ? 'Your PIN' : 'Confirm it’s you', progress: '60%' }
       }
       const inv = lk?.invoice
@@ -1596,7 +1649,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
               action: notice.action?.label ?? '',
               actionClick: () => notice.action?.run(),
               smsHref: notice.sms ? smsUrl(notice.sms) : '',
-              smsLabel: 'Text us for a new link',
+              smsLabel: notice.smsLabel || 'Text us for a new link',
               home: () => this.__lkHome(),
             }
           : { show: false },
@@ -1604,12 +1657,16 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
           linkSheet && view?.v === 'pay' && inv
             ? {
                 show: true,
-                title: inv.number ? `Invoice ${inv.number}` : 'Your invoice',
-                sub: inv.title || `${env.contact.addressShort}`,
-                lines: inv.lines.map((l) => ({ label: l.label, value: money(l.amountCents), lc: 'var(--ink2)', vc: 'var(--ink)' })),
+                title: inv.number != null ? `Invoice #${inv.number}` : 'Your invoice',
+                sub: shopDate(inv.date) || `${env.contact.addressShort}`,
+                lines: [
+                  ...inv.items.map((l) => ({ label: l.name, value: money(l.priceCents) })),
+                  ...(inv.taxCents > 0 ? [{ label: 'Tax', value: money(inv.taxCents) }] : []),
+                  ...(inv.tipCents > 0 ? [{ label: 'Tip', value: money(inv.tipCents) }] : []),
+                ].map((l) => ({ ...l, lc: 'var(--ink2)', vc: 'var(--ink)' })),
                 dueLabel: 'Balance due',
                 due: money(inv.balanceCents),
-                dueSub: inv.totalCents > inv.balanceCents ? `${money(inv.totalCents - inv.balanceCents)} already paid. You’ll pay the rest on Squarespace’s secure checkout.` : 'You’ll pay on Squarespace’s secure checkout.',
+                dueSub: inv.paidCents > 0 ? `${money(inv.paidCents)} already paid. You’ll pay the rest on Squarespace’s secure checkout.` : 'You’ll pay on Squarespace’s secure checkout.',
               }
             : { show: false },
         joinEmail: joining && !this.__lkJoinVerify && s.jn?.step === 2,

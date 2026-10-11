@@ -1,6 +1,9 @@
-// The link API (backend design docs/design/ai-assistant-and-phone-identity.md section 5, the routes this site calls:
-// docs/site.md "Personal links") in memory, for the fixture API (tools/site/fixture-api.ts) and the e2e. It follows the
-// identity core's rules (backend docs/api-spec.md section 27 and src/modules/identity/problems.ts): tokens are 43
+// The link API in memory, for the fixture API (tools/site/fixture-api.ts) and the e2e: the backend's personal-link API
+// (backend docs/api-spec.md section 28, ADR 0160 W3c; design docs/design/ai-assistant-and-phone-identity.md section 5;
+// the routes this site calls: docs/site.md "Personal links"), answering the API's own shapes (LinkState, the code,
+// booking, membership and payment answers; src/site/link-contract.testkit.ts lists them and
+// tools/site/fixture-links.test.ts holds this file to them). It follows the identity core's rules (backend
+// docs/api-spec.md section 27 and src/modules/identity/problems.ts): tokens are 43
 // base64url characters and only their sha256 is kept, the gate answers 404 before anything else while links are off,
 // sessions are bearer tokens (15 min idle, 1 h at most), opening a link uses nothing and completing it does, a PIN
 // outranks a texted code, five wrong tries end a page, five wrong PINs lock the PIN for 15 minutes, memberships and
@@ -15,8 +18,10 @@ export type FixtureLinkKind = 'calendar' | 'verify' | 'pin' | 'membership' | 'pa
 export interface IssueLinkInput {
   kind: FixtureLinkKind
   phone: string
-  /** null for a stranger's calendar link */
+  /** null for a stranger's link (no client record) */
   firstName?: string | null
+  /** the stale-record rule hides the client (name, tier, invoice) until the page is verified */
+  stale?: boolean
   tier?: 'gold' | 'vip' | null
   /** the number's 30-day trust is live */
   trusted?: boolean
@@ -25,8 +30,10 @@ export interface IssueLinkInput {
   expired?: boolean
   used?: boolean
   revoked?: boolean
-  invoice?: { number: string; title?: string; totalCents: number; balanceCents: number; lines: { label: string; amountCents: number }[]; url: string | null } | null
-  plan?: { key: string; label: string; monthlyPriceCents: number; checkoutUrl: string } | null
+  /** the invoice of a payment link (the API's InvoiceView is computed from it) and the payment URL staff attached */
+  invoice?: { number: number; date: string; items: { name: string; priceCents: number }[]; taxCents?: number; tipCents?: number; paidCents?: number; url: string | null } | null
+  /** the plan of a membership link (the API's PlanView) and its Squarespace checkout */
+  plan?: { tier: 'gold' | 'vip' | null; planKey: string; name: string; monthlyPriceCents: number | null; perks?: string[]; checkoutUrl: string | null } | null
 }
 
 interface FLink {
@@ -35,6 +42,7 @@ interface FLink {
   kind: FixtureLinkKind
   phone: string
   firstName: string | null
+  stale: boolean
   tier: 'gold' | 'vip' | null
   expiresAt: number
   uses: number
@@ -49,6 +57,7 @@ interface FLink {
 interface FSession {
   linkId: string
   verified: boolean
+  verifiedBy: 'pin' | 'code' | null
   stepUpAt: number | null
   codeAt: number | null
   resetCodeAt: number | null
@@ -61,12 +70,16 @@ interface FSession {
 
 interface FCode {
   sessionHash: string
-  purpose: 'link_verify' | 'pin_set' | 'pin_reset'
+  purpose: CodePurpose
   code: string
   tries: number
   expiresAt: number
   used: boolean
 }
+
+/** The code request's purposes (the API's CodeBody enum). */
+export type CodePurpose = 'verify' | 'pin_set' | 'pin_reset'
+const PURPOSES: CodePurpose[] = ['verify', 'pin_set', 'pin_reset']
 
 export interface LinkLogEntry {
   method: string
@@ -81,11 +94,13 @@ export interface LinkFixtureState {
   sessions: Map<string, FSession>
   trust: Map<string, number>
   pins: Map<string, { pin: string; fails: number; lockedUntil: number; disabled: boolean }>
+  /** a PIN reset holds member privileges for 72 hours (phone -> until) */
+  held: Map<string, number>
   codes: Map<string, FCode>
-  bookings: { bookingRef: string; phone: string; name: string; date: string; startMin: number; serviceKey: string; addonKeys: string[]; linkId: string; source: 'link' }[]
+  bookings: { bookingRef: string; phone: string; name: string; date: string; startMin: number; serviceKey: string; serviceName: string; addonKeys: string[]; start: string; end: string; when: string; linkId: string; source: 'link' }[]
   memberships: { membershipRef: string; phone: string; planKey: string; state: 'pending' }[]
   checkouts: { membershipRef: string; phone: string; planKey: string; expectedEmail: string; checkoutUrl: string; linkId: string; state: 'open' }[]
-  payStarts: { linkId: string; invoice: string; redirectUrl: string | null }[]
+  payStarts: { linkId: string; invoice: number; redirectUrl: string | null }[]
   log: LinkLogEntry[]
   texts: { to: string; body: string; klass: string }[]
 }
@@ -128,6 +143,16 @@ export function pinRejected(pin: string, phone: string): string | null {
   return null
 }
 
+/** The API's InvoiceView of a seeded invoice: the subtotal of its items, plus tax and tip, less what was paid. */
+export function invoiceView(i: NonNullable<IssueLinkInput['invoice']>) {
+  const subtotalCents = i.items.reduce((n, x) => n + x.priceCents, 0)
+  const taxCents = i.taxCents ?? 0
+  const tipCents = i.tipCents ?? 0
+  const totalCents = subtotalCents + taxCents + tipCents
+  const paidCents = i.paidCents ?? 0
+  return { number: i.number, date: i.date, items: i.items.map((x) => ({ name: x.name, priceCents: x.priceCents })), subtotalCents, taxCents, tipCents, totalCents, paidCents, balanceCents: totalCents - paidCents }
+}
+
 export function createLinkFixture(d: LinkFixtureDeps) {
   const st: LinkFixtureState = {
     enabled: true,
@@ -135,6 +160,7 @@ export function createLinkFixture(d: LinkFixtureDeps) {
     sessions: new Map(),
     trust: new Map(),
     pins: new Map(),
+    held: new Map(),
     codes: new Map(),
     bookings: [],
     memberships: [],
@@ -157,6 +183,7 @@ export function createLinkFixture(d: LinkFixtureDeps) {
       kind: i.kind,
       phone: i.phone,
       firstName: i.firstName === undefined ? 'Maria' : i.firstName,
+      stale: !!i.stale,
       tier: i.tier ?? null,
       expiresAt: now() + (i.expired ? -MIN : p.ttl),
       uses: i.used ? p.uses : 0,
@@ -179,24 +206,43 @@ export function createLinkFixture(d: LinkFixtureDeps) {
     if (l.revoked) return 'revoked'
     if (l.expiresAt <= now()) return 'expired'
     if (l.uses >= l.maxUses) return 'used'
-    if (l.kind === 'pay' && l.invoice && l.invoice.balanceCents <= 0) return 'used'
+    if (l.kind === 'pay' && l.invoice && invoiceView(l.invoice).balanceCents <= 0) return 'used'
     return null
   }
   const trusted = (phone: string) => (st.trust.get(phone) ?? 0) > now()
-  const trustView = (s: FSession, l: FLink) => ({
-    verified: s.verified,
-    until: trusted(l.phone) ? new Date(st.trust.get(l.phone)!).toISOString() : null,
-  })
-  const view = (session: string, s: FSession, l: FLink) => ({
-    session,
-    expiresAt: new Date(s.until).toISOString(),
-    kind: l.kind,
-    client: { firstName: l.firstName, last2: l.phone.slice(-2), tier: l.tier },
-    trust: trustView(s, l),
-    ...(l.invoice ? { invoice: { number: l.invoice.number, title: l.invoice.title ?? null, totalCents: l.invoice.totalCents, balanceCents: l.invoice.balanceCents, lines: l.invoice.lines } } : {}),
-    ...(l.plan ? { plan: { key: l.plan.key, label: l.plan.label, monthlyPriceCents: l.plan.monthlyPriceCents } } : {}),
-    pin: st.pins.has(l.phone) ? 'set' : 'none',
-  })
+  const iso = (t: number) => new Date(t).toISOString()
+  const heldUntil = (phone: string) => ((st.held.get(phone) ?? 0) > now() ? st.held.get(phone)! : null)
+  /** The API's LinkState (backend docs/api-spec.md 28.2) of a page. */
+  const view = (s: FSession, l: FLink) => {
+    const t = now()
+    const client = l.firstName !== null
+    // a record the stale-record rule hides is nobody until the page is verified
+    const known = client && (!l.stale || s.verified)
+    const pinSet = st.pins.has(l.phone)
+    const fresh = s.stepUpAt != null && t - s.stepUpAt <= 5 * MIN ? iso(s.stepUpAt + 5 * MIN) : null
+    const after = pinSet ? s.resetCodeAt : s.codeAt
+    return {
+      kind: l.kind,
+      expiresAt: iso(s.until),
+      idleExpiresAt: iso(s.idleUntil),
+      link: { expiresAt: iso(l.expiresAt) },
+      client: { firstName: known ? l.firstName! : '', last2: l.phone.slice(-2), tier: known && !heldUntil(l.phone) ? l.tier : null },
+      trust: { verified: s.verified, by: s.verified ? s.verifiedBy : null, until: trusted(l.phone) ? iso(st.trust.get(l.phone)!) : null },
+      stepUp: {
+        method: pinSet ? ('pin' as const) : ('code' as const),
+        freshUntil: fresh,
+        canSetPinUntil: client && after != null && t - after <= 10 * MIN ? iso(after + 10 * MIN) : null,
+      },
+      appointments:
+        s.verified && known
+          ? st.bookings
+              .filter((b) => b.phone === l.phone)
+              .map((b) => ({ ref: b.bookingRef, start: b.start, end: b.end, when: b.when, service: b.serviceName, addons: [], status: 'booked', canReschedule: true }))
+          : null,
+      invoice: l.kind === 'pay' && l.invoice && known ? invoiceView(l.invoice) : null,
+      plan: l.kind === 'membership' && l.plan ? { tier: l.plan.tier, planKey: l.plan.planKey, name: l.plan.name, monthlyPriceCents: l.plan.monthlyPriceCents, perks: l.plan.perks ?? [] } : null,
+    }
+  }
 
   const send = (res: http.ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) =>
     res
@@ -227,7 +273,7 @@ export function createLinkFixture(d: LinkFixtureDeps) {
     for (const [k, v] of Object.entries(req.headers)) headers[k] = Array.isArray(v) ? v.join(', ') : String(v ?? '')
     st.log.push({ method: req.method ?? 'GET', path: url.pathname + url.search, headers, body: raw })
     // the gate: 404 before validation while PUBLIC_LINKS_ENABLED is off
-    if (!st.enabled) return problem(res, 404, 'NOT_FOUND', 'Not found'), true
+    if (!st.enabled) return problem(res, 404, 'ROUTE_NOT_FOUND', 'Route not found'), true
     const p = url.pathname.slice(d.base.length)
     let body: Record<string, unknown> = {}
     if (req.method === 'POST') {
@@ -247,9 +293,9 @@ export function createLinkFixture(d: LinkFixtureDeps) {
         return problem(res, 401, 'IDENTITY_LINK_INVALID', 'This link no longer works', { detail: 'This link expired or was replaced. Text us and we’ll send you a new one.', meta: { reason: dead } }), true
       l!.exchanges++
       const sess = token()
-      const s: FSession = { linkId: l!.id, verified: trusted(l!.phone), stepUpAt: null, codeAt: null, resetCodeAt: null, failures: 0, codeTimes: [], idleUntil: t + 15 * MIN, until: t + 60 * MIN }
+      const s: FSession = { linkId: l!.id, verified: trusted(l!.phone), verifiedBy: null, stepUpAt: null, codeAt: null, resetCodeAt: null, failures: 0, codeTimes: [], idleUntil: t + 15 * MIN, until: t + 60 * MIN }
       st.sessions.set(sha(sess), s)
-      return send(res, 200, view(sess, s, l!)), true
+      return send(res, 200, { session: sess, ...view(s, l!) }), true
     }
 
     const ses = session(req)
@@ -259,22 +305,35 @@ export function createLinkFixture(d: LinkFixtureDeps) {
     if (dead && dead !== 'used') return problem(res, 401, 'IDENTITY_LINK_INVALID', 'This link no longer works', { meta: { reason: dead } }), true
     const pin = st.pins.get(l.phone)
 
-    if (p === '/me' && req.method === 'GET') return send(res, 200, view(ses.token, s, l)), true
+    if (p === '/me' && req.method === 'GET') return send(res, 200, view(s, l)), true
+    // a page asking for another kind of link's action
+    const wrongPurpose = () => problem(res, 401, 'LINK_WRONG_PURPOSE', 'This link is for something else', { detail: 'This link is for something else. Text us and we’ll send you the right one.' })
+    const stepUp = (need: 'verified' | 'fresh') => problem(res, 403, 'IDENTITY_STEP_UP_REQUIRED', 'Confirm it’s you', { detail: 'Enter your PIN or a texted code to continue.', meta: { need } })
+    const held = () => {
+      const until = heldUntil(l.phone)
+      return until ? (problem(res, 403, 'LINK_PRIVILEGES_HELD', 'Your PIN was just reset', { detail: 'Your PIN was just reset, so this waits a few days. Text us if you need help.', meta: { until: iso(until) } }), true) : false
+    }
 
     if (p === '/availability' && req.method === 'GET') {
+      if (l.kind !== 'calendar' && l.kind !== 'book_again') return wrongPurpose(), true
       const days = Math.max(1, Math.min(14, Number(url.searchParams.get('days') ?? '7') || 7))
       const service = url.searchParams.get('service') || d.services[0]!.key
       if (!d.services.some((x) => x.key === service)) return problem(res, 422, 'PUBLIC_VALIDATION', `Unknown service ${service}.`), true
       const a = d.availability(days, service)
       // VIP-aware only when verified: a verified VIP member sees the held times as open
-      if (s.verified && l.tier === 'vip') for (const day of a.days) for (const x of day.slots) if (x.state === 'vip') x.state = x.bays === 1 ? 'last' : 'open'
-      return send(res, 200, a), true
+      const vip = s.verified && (!l.stale || s.verified) && l.tier === 'vip' && !heldUntil(l.phone)
+      if (vip) for (const day of a.days) for (const x of day.slots) if (x.state === 'vip') x.state = x.bays === 1 ? 'last' : 'open'
+      return send(res, 200, { ...a, vip }), true
     }
 
     if (p === '/verify/code' && req.method === 'POST') {
       // the code goes to the link's number only: a phone in the body is ignored
-      const purpose = body.purpose === 'pin_set' || body.purpose === 'pin_reset' ? body.purpose : 'link_verify'
-      if (purpose === 'link_verify' && pin) return problem(res, 409, 'IDENTITY_PIN_REQUIRED', 'Enter your PIN', { detail: 'Enter your PIN to continue, or reset it with a texted code.' }), true
+      // the API's CodeBody: purpose verify | pin_set | pin_reset (default verify); anything else is a 422
+      if (body.purpose !== undefined && !PURPOSES.includes(body.purpose as CodePurpose))
+        return problem(res, 422, 'VALIDATION_FAILED', 'Check the form', { detail: 'Invalid enum value', errors: [{ path: 'body.purpose', message: `Invalid enum value. Expected 'verify' | 'pin_set' | 'pin_reset'` }] }), true
+      const purpose = (body.purpose as CodePurpose | undefined) ?? 'verify'
+      if (purpose !== 'verify' && l.firstName === null) return problem(res, 409, 'IDENTITY_UNKNOWN_CLIENT', 'No client for this link', { detail: 'Text us and we’ll help you set a PIN.' }), true
+      if (purpose === 'verify' && pin) return problem(res, 409, 'IDENTITY_PIN_REQUIRED', 'Enter your PIN', { detail: 'Enter your PIN to continue, or reset it with a texted code.' }), true
       if (purpose === 'pin_set' && pin) return problem(res, 409, 'IDENTITY_PIN_EXISTS', 'You already have a PIN', { detail: 'You already have a PIN. Enter it, or reset it with a texted code.' }), true
       if (purpose === 'pin_reset' && !pin) return problem(res, 409, 'IDENTITY_PIN_NOT_SET', 'No PIN yet', { detail: 'You don’t have a PIN yet. Confirm with a texted code to create one.' }), true
       s.codeTimes = s.codeTimes.filter((x) => x > t - 10 * MIN)
@@ -287,7 +346,7 @@ export function createLinkFixture(d: LinkFixtureDeps) {
       const text = { to: l.phone, body: `Your Oasis Auto Spa code is ${code}. It expires in 10 minutes.`, klass: 'otp_code' }
       st.texts.push(text)
       d.pushText(text)
-      return send(res, 202, { challengeId: id, expiresInSec: 600, purpose }), true
+      return send(res, 202, { challengeId: id, expiresInSec: 600, purpose, to: l.phone.slice(-2) }), true
     }
 
     if (p === '/verify/code/confirm' && req.method === 'POST') {
@@ -307,14 +366,15 @@ export function createLinkFixture(d: LinkFixtureDeps) {
       c.used = true
       if (c.purpose === 'pin_reset') {
         s.resetCodeAt = t
-        return send(res, 200, { purpose: c.purpose, verified: false, trust: trustView(s, l) }), true
+        return send(res, 200, { verified: false, ...view(s, l) }), true
       }
       if (st.pins.has(l.phone)) return problem(res, 409, 'IDENTITY_PIN_REQUIRED', 'Enter your PIN', { detail: 'Enter your PIN to continue, or reset it with a texted code.' }), true
       s.verified = true
+      s.verifiedBy = 'code'
       s.stepUpAt = t
       s.codeAt = t
-      grantTrust(l.phone)
-      return send(res, 200, { purpose: c.purpose, verified: true, trust: trustView(s, l) }), true
+      if (l.firstName !== null) grantTrust(l.phone)
+      return send(res, 200, { verified: true, ...view(s, l) }), true
     }
 
     if (p === '/verify/pin' && req.method === 'POST') {
@@ -344,35 +404,39 @@ export function createLinkFixture(d: LinkFixtureDeps) {
       }
       pin.fails = 0
       s.verified = true
+      s.verifiedBy = 'pin'
       s.stepUpAt = t
       grantTrust(l.phone)
-      return send(res, 200, { verified: true, trust: trustView(s, l) }), true
+      return send(res, 200, { verified: true, ...view(s, l) }), true
     }
 
     if ((p === '/pin' || p === '/pin/reset') && req.method === 'POST') {
       const reset = p === '/pin/reset'
       const after = reset ? s.resetCodeAt : s.codeAt
       if (after == null || t - after > 10 * MIN) return problem(res, 403, 'IDENTITY_CODE_REQUIRED', 'Confirm with a code first', { detail: 'Confirm with the code we text you, then choose your PIN within 10 minutes.' }), true
+      if (l.firstName === null) return problem(res, 409, 'IDENTITY_UNKNOWN_CLIENT', 'No client for this link', { detail: 'Text us and we’ll help you set a PIN.' }), true
       if (!reset && pin) return problem(res, 409, 'IDENTITY_PIN_EXISTS', 'You already have a PIN', { detail: 'You already have a PIN. Enter it, or reset it with a texted code.' }), true
       if (reset && !pin) return problem(res, 409, 'IDENTITY_PIN_NOT_SET', 'No PIN yet', { detail: 'You don’t have a PIN yet. Confirm with a texted code to create one.' }), true
       const np = String(body.pin ?? '')
       const why = pinRejected(np, l.phone)
       if (why) return problem(res, 422, 'IDENTITY_PIN_REJECTED', 'Choose another PIN', { detail: why }), true
       st.pins.set(l.phone, { pin: np, fails: 0, lockedUntil: 0, disabled: false })
+      if (reset) st.held.set(l.phone, t + 72 * 60 * MIN)
       s.verified = true
+      s.verifiedBy = s.verifiedBy ?? 'code'
       s.stepUpAt = t
       grantTrust(l.phone)
       // a new PIN ends the client's other pages (the identity core re-binds this one)
       for (const [k, other] of st.sessions) if (other !== s && linkById(other.linkId)?.phone === l.phone) st.sessions.delete(k)
-      return send(res, 200, { trust: trustView(s, l), ...(reset ? { memberPrivilegesHeldUntil: new Date(t + 72 * 60 * MIN).toISOString() } : {}) }), true
+      return send(res, 200, { verified: true, ...view(s, l) }), true
     }
 
     if (p === '/bookings' && req.method === 'POST') {
-      if (l.kind !== 'calendar' && l.kind !== 'book_again') return problem(res, 403, 'IDENTITY_WRONG_LINK', 'This link can’t book'), true
-      if (!s.verified) return problem(res, 403, 'IDENTITY_STEP_UP_REQUIRED', 'Confirm it’s you', { detail: 'Enter your PIN or a texted code to continue.' }), true
+      if (l.kind !== 'calendar' && l.kind !== 'book_again') return wrongPurpose(), true
+      if (!s.verified) return stepUp('verified'), true
       if (typeof req.headers['idempotency-key'] !== 'string') return problem(res, 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key is required.'), true
       // strict body (the API's zod schemas refuse unknown keys)
-      const allowed = ['serviceKey', 'addonKeys', 'date', 'startMin', 'vehicle', 'name']
+      const allowed = ['serviceKey', 'addonKeys', 'date', 'startMin', 'vehicle', 'name', 'email', 'smsConsent']
       const extra = Object.keys(body).filter((k) => !allowed.includes(k))
       if (extra.length) return problem(res, 422, 'VALIDATION_FAILED', 'Check the form', { detail: `Unknown field ${extra[0]}`, errors: extra.map((k) => ({ path: `body.${k}`, message: 'Unrecognized key' })) }), true
       if (l.uses >= l.maxUses) return problem(res, 409, 'IDENTITY_LINK_USED', 'This link was already used', { detail: 'This link was already used. Text us and we’ll send you a new one.' }), true
@@ -380,7 +444,8 @@ export function createLinkFixture(d: LinkFixtureDeps) {
       const startMin = Number(body.startMin)
       const svc = d.services.find((x) => x.key === body.serviceKey)
       const name = l.firstName ?? String(body.name ?? '').trim()
-      if (!svc || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isInteger(startMin) || !name) return problem(res, 422, 'PUBLIC_VALIDATION', 'Check the booking details.'), true
+      if (!name) return problem(res, 422, 'VALIDATION_FAILED', 'Check the form', { detail: 'Enter your name.', errors: [{ path: 'body.name', message: 'Enter your name.' }] }), true
+      if (!svc || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isInteger(startMin)) return problem(res, 422, 'PUBLIC_VALIDATION', 'Check the booking details.'), true
       const a = d.availability(14, svc.key)
       const day = a.days.find((x) => x.date === date)
       const slot = day?.slots.find((x) => x.startMin === startMin)
@@ -390,46 +455,72 @@ export function createLinkFixture(d: LinkFixtureDeps) {
       if (slot.state === 'booked') return problem(res, 409, 'PUBLIC_SLOT_TAKEN', 'That time was just taken. Pick another.'), true
       l.uses++
       const bookingRef = `OAS-${String(++seq).padStart(5, '0')}`
-      st.bookings.push({ bookingRef, phone: l.phone, name, date, startMin, serviceKey: svc.key, addonKeys: Array.isArray(body.addonKeys) ? (body.addonKeys as string[]) : [], linkId: l.id, source: 'link' })
-      const member = !!l.tier
-      return send(res, 201, { bookingRef, status: 'booked', when: `${day.label} · ${slot.start}`, deposit: member ? { dueCents: 0, how: 'counter' } : { dueCents: 2500, how: 'counter' }, confirmationBy: 'sms', member }), true
+      const addonKeys = Array.isArray(body.addonKeys) ? (body.addonKeys as string[]) : []
+      const when = `${day.label} · ${slot.start}`
+      // instants: the shop date at startMin, as UTC-4 (the fixture's clock is the shop's; good enough for the shape)
+      const start = new Date(`${date}T00:00:00-04:00`).getTime() + startMin * MIN
+      const end = start + 45 * MIN
+      st.bookings.push({ bookingRef, phone: l.phone, name, date, startMin, serviceKey: svc.key, serviceName: svc.name, addonKeys, start: iso(start), end: iso(end), when, linkId: l.id, source: 'link' })
+      const member = !!l.tier && !heldUntil(l.phone)
+      return send(res, 201, {
+        bookingRef,
+        status: 'booked',
+        start: iso(start),
+        end: iso(end),
+        deposit: member ? { dueCents: 0, how: 'counter' } : { dueCents: 2500, how: 'counter' },
+        confirmationBy: 'sms',
+        service: { key: svc.key, name: svc.name },
+        addons: addonKeys.map((k) => ({ key: k, name: d.addons.find((a) => a.key === k)?.name ?? k })),
+        when,
+        member,
+        bayCount: 3,
+      }), true
     }
 
     const resched = /^\/appointments\/([^/]+)\/reschedule$/.exec(p)
     if (resched && req.method === 'POST') {
-      if (!s.verified) return problem(res, 403, 'IDENTITY_STEP_UP_REQUIRED', 'Confirm it’s you'), true
+      if (l.kind !== 'calendar') return wrongPurpose(), true
+      if (!s.verified) return stepUp('verified'), true
       const b = st.bookings.find((x) => x.bookingRef === decodeURIComponent(resched[1]!) && x.phone === l.phone)
-      if (!b) return problem(res, 404, 'NOT_FOUND', 'Not found'), true
+      if (!b) return problem(res, 404, 'LINK_APPOINTMENT_NOT_FOUND', 'Visit not found', { detail: 'We can’t find that visit. Text us and we’ll help.' }), true
       b.date = String(body.date ?? b.date)
       b.startMin = Number(body.startMin ?? b.startMin)
-      return send(res, 200, { bookingRef: b.bookingRef, status: 'booked' }), true
+      return send(res, 200, { bookingRef: b.bookingRef, status: 'booked', start: b.start, end: b.end, when: b.when }), true
     }
 
     if (p === '/membership/start' && req.method === 'POST') {
-      if (l.kind !== 'membership' || !l.plan) return problem(res, 403, 'IDENTITY_WRONG_LINK', 'This link can’t start a membership'), true
-      if (s.stepUpAt == null || t - s.stepUpAt > 5 * MIN) return problem(res, 403, 'IDENTITY_STEP_UP_REQUIRED', 'Confirm it’s you', { detail: 'Enter your PIN or a texted code to continue.' }), true
+      if (l.kind !== 'membership' || !l.plan) return wrongPurpose(), true
+      if (s.stepUpAt == null || t - s.stepUpAt > 5 * MIN) return stepUp('fresh'), true
+      if (held()) return true
+      const extra = Object.keys(body).filter((k) => k !== 'email' && k !== 'vehicles')
+      if (extra.length) return problem(res, 422, 'VALIDATION_FAILED', 'Check the form', { detail: `Unknown field ${extra[0]}`, errors: extra.map((k) => ({ path: `body.${k}`, message: 'Unrecognized key' })) }), true
       const email = String(body.email ?? '').trim()
-      if (!EMAIL.test(email)) return problem(res, 422, 'VALIDATION_FAILED', 'Check the form', { detail: 'Invalid email address', errors: [{ path: 'body.email', message: 'Invalid email address' }] }), true
+      if (!EMAIL.test(email)) return problem(res, 422, 'VALIDATION_FAILED', 'Check the form', { detail: 'Enter a valid email.', errors: [{ path: 'body.email', message: 'Enter a valid email.' }] }), true
+      if (l.tier) return problem(res, 409, 'LINK_ALREADY_MEMBER', 'Already a member', { detail: 'You already have a membership. Text us to change your plan.' }), true
+      if (!l.plan.checkoutUrl) return problem(res, 409, 'LINK_CHECKOUT_UNAVAILABLE', 'Joining online isn’t open', { detail: 'Joining online isn’t open right now. Text us and we’ll help you join.' }), true
       if (l.uses >= l.maxUses) return problem(res, 409, 'IDENTITY_LINK_USED', 'This link was already used'), true
       l.uses++
       const membershipRef = `OAS-M-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
-      st.memberships.push({ membershipRef, phone: l.phone, planKey: l.plan.key, state: 'pending' })
-      st.checkouts.push({ membershipRef, phone: l.phone, planKey: l.plan.key, expectedEmail: email, checkoutUrl: l.plan.checkoutUrl, linkId: l.id, state: 'open' })
-      return send(res, 200, { redirectUrl: l.plan.checkoutUrl, membershipRef, expiresAt: new Date(t + 72 * 60 * MIN).toISOString() }), true
+      st.memberships.push({ membershipRef, phone: l.phone, planKey: l.plan.planKey, state: 'pending' })
+      st.checkouts.push({ membershipRef, phone: l.phone, planKey: l.plan.planKey, expectedEmail: email, checkoutUrl: l.plan.checkoutUrl, linkId: l.id, state: 'open' })
+      return send(res, 200, { redirectUrl: l.plan.checkoutUrl, membershipRef, checkoutExpiresAt: iso(t + 72 * 60 * MIN) }), true
     }
 
     if (p === '/pay/start' && req.method === 'POST') {
-      if (l.kind !== 'pay' || !l.invoice) return problem(res, 403, 'IDENTITY_WRONG_LINK', 'This link can’t pay'), true
-      if (s.stepUpAt == null || t - s.stepUpAt > 5 * MIN) return problem(res, 403, 'IDENTITY_STEP_UP_REQUIRED', 'Confirm it’s you', { detail: 'Enter your PIN or a texted code to continue.' }), true
-      if (l.invoice.balanceCents <= 0) return problem(res, 409, 'IDENTITY_LINK_USED', 'This link was already used'), true
+      if (l.kind !== 'pay' || !l.invoice) return wrongPurpose(), true
+      if (s.stepUpAt == null || t - s.stepUpAt > 5 * MIN) return stepUp('fresh'), true
+      if (held()) return true
+      if (invoiceView(l.invoice).balanceCents <= 0) return problem(res, 401, 'IDENTITY_SESSION_INVALID', 'Open your link again', { detail: 'Open the link from our text again.' }), true
+      if (l.uses >= l.maxUses) return problem(res, 409, 'IDENTITY_LINK_USED', 'This link was already used'), true
+      l.uses++
       st.payStarts.push({ linkId: l.id, invoice: l.invoice.number, redirectUrl: l.invoice.url })
-      // the real API refuses a URL off its own allowlist; this fixture hands back whatever was seeded so the e2e can
-      // prove the page's own allowlist
-      if (!l.invoice.url) return send(res, 200, { status: 'link_pending' }), true
-      return send(res, 200, { redirectUrl: l.invoice.url }), true
+      // the real API refuses a URL off its own allowlist (link_pending); this fixture hands back whatever was seeded so
+      // the e2e can prove the page's own allowlist
+      if (!l.invoice.url) return send(res, 200, { status: 'link_pending', redirectUrl: null }), true
+      return send(res, 200, { status: 'redirect', redirectUrl: l.invoice.url }), true
     }
 
-    return problem(res, 404, 'NOT_FOUND', 'Not found'), true
+    return problem(res, 404, 'ROUTE_NOT_FOUND', 'Route not found'), true
   }
 
   /** Ends every page now (the e2e's "the page timed out" case). */

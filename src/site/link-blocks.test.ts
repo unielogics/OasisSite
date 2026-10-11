@@ -21,6 +21,7 @@ import { parseTemplate } from '../../tools/dc-compile/parse'
 import { interpret } from '../../tools/dc-compile/tests/reference'
 import { installLinkCapture, resetLinkCapture } from '../client/link'
 import { configCatalog, makeSite, payload, ROOT, type Handler } from './bridge.testkit'
+import { exchangeAnswer, invoiceAnswer, planAnswer, stepAnswer, type LinkStateOpts } from './link-contract.testkit'
 
 const LINK_DVS = ['DV-LINK', 'DV-STEPUP', 'DV-LINK-JOIN', 'DV-LINK-PAY', 'DV-LINK-DEAD']
 const GOLDENS = path.join(ROOT, 'src/site/__goldens__')
@@ -93,14 +94,8 @@ const BASE = '/api/v1/public/links'
 const board = payload([{ date: '2026-10-12', slots: [[540, 'open', 3], [570, 'open', 2]] }])
 const ok = (body: unknown, status = 200) => ({ status, body })
 const prob = (status: number, code: string, title: string, extra: Record<string, unknown> = {}) => ({ status, body: { type: 'about:blank', status, code, title, ...extra } })
-const ex = (o: Record<string, unknown> = {}) => ({
-  session: 'sess-g',
-  expiresAt: '2026-10-10T15:00:00Z',
-  kind: 'calendar',
-  client: { firstName: 'Maria', last2: '51', tier: null },
-  trust: { verified: false, until: null },
-  ...o,
-})
+// the API's own shapes (backend docs/api-spec.md section 28; link-contract.testkit.ts)
+const ex = (o: LinkStateOpts = {}) => exchangeAnswer(o, 'sess-g')
 
 async function linked(pathLetter: string, routes: Record<string, Handler>) {
   history.replaceState(null, '', `/#/${pathLetter}/${TOKEN}`)
@@ -133,7 +128,7 @@ describe('port goldens of the linked states', () => {
   it('step-up: code, wrong code, create PIN; PIN locked', async () => {
     const t = await linked('v', {
       [`${BASE}/exchange`]: () => ok(ex({ kind: 'verify' })),
-      [`${BASE}/verify/code`]: () => ok({ challengeId: 'c1' }, 202),
+      [`${BASE}/verify/code`]: () => ok({ challengeId: 'c1', expiresInSec: 600, purpose: 'verify', to: '51' }, 202),
       [`${BASE}/verify/code/confirm`]: () => prob(401, 'PUBLIC_OTP_INVALID', 'That code didn’t match', { detail: 'That code didn’t match. 2 more tries before you need a new one.' }),
     })
     golden('link-stepup-send', region(render(TREE, t.vals()), SHEET))
@@ -159,7 +154,7 @@ describe('port goldens of the linked states', () => {
   })
 
   it('verified notice and dead link', async () => {
-    const t = await linked('v', { [`${BASE}/exchange`]: () => ok(ex({ kind: 'verify', trust: { verified: true, until: '2026-11-09T14:00:00Z' } })) })
+    const t = await linked('v', { [`${BASE}/exchange`]: () => ok(ex({ kind: 'verify', verified: true })) })
     golden('link-verified', region(render(TREE, t.vals()), SHEET))
     resetLinkCapture()
     const d = await linked('c', { [`${BASE}/exchange`]: () => prob(401, 'IDENTITY_LINK_INVALID', 'This link no longer works', { meta: { reason: 'expired' } }) })
@@ -169,16 +164,16 @@ describe('port goldens of the linked states', () => {
   it('payment review', async () => {
     const t = await linked('p', {
       [`${BASE}/exchange`]: () =>
-        ok(ex({ kind: 'pay', invoice: { number: 'INV-20611', title: 'Signature Hand Wash · Oct 9', totalCents: 6900, balanceCents: 5400, lines: [{ label: 'Signature Hand Wash', amountCents: 5400 }, { label: 'Hand wax', amountCents: 1500 }] } })),
+        ok(ex({ kind: 'pay', invoice: invoiceAnswer({ items: [{ name: 'Signature Hand Wash', priceCents: 5400 }, { name: 'Hand wax', priceCents: 1500 }], paidCents: 1500 }) })),
     })
     golden('link-pay-review', region(render(TREE, t.vals()), SHEET))
   })
 
   it('membership: the verify step and the e-mail step on the join page', async () => {
     const t = await linked('m', {
-      [`${BASE}/exchange`]: () => ok(ex({ kind: 'membership', plan: { key: 'gold', label: 'Gold', monthlyPriceCents: 9900 } })),
-      [`${BASE}/verify/code`]: () => ok({ challengeId: 'c2' }, 202),
-      [`${BASE}/verify/code/confirm`]: () => ok({ verified: true, trust: { verified: true, until: '2026-11-09T14:00:00Z' } }),
+      [`${BASE}/exchange`]: () => ok(ex({ kind: 'membership', plan: planAnswer('gold') })),
+      [`${BASE}/verify/code`]: () => ok({ challengeId: 'c2', expiresInSec: 600, purpose: 'verify', to: '51' }, 202),
+      [`${BASE}/verify/code/confirm`]: () => ok(stepAnswer({ kind: 'membership', plan: planAnswer('gold'), by: 'code' })),
     })
     t.c.setState({ page: 'join', jn: t.c.freshJn('gold') })
     t.c.joinVM().jv.next()

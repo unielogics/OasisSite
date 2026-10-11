@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Personal links on the REAL design logic (bridge.testkit.ts): DV-LINK, DV-STEPUP, DV-LINK-JOIN, DV-LINK-PAY,
-// DV-LINK-DEAD. The link API is scripted per test in the shapes of docs/site.md "Personal links".
+// DV-LINK-DEAD. The link API is scripted per test in the API's own shapes (backend docs/api-spec.md section 28, built by
+// link-contract.testkit.ts).
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installLinkCapture, resetLinkCapture } from '../client/link'
 import { configCatalog, makeSite, payload, type Call, type Handler } from './bridge.testkit'
-import { allowedRedirect, validateExchange, whoLabel } from './links'
+import { exchangeAnswer as exchanged, invoiceAnswer, linkState, planAnswer, stepAnswer as stepped } from './link-contract.testkit'
+import { allowedRedirect, planTier, shopDate, validateExchange, whoLabel } from './links'
 
 beforeAll(() => {
   process.env.TZ = 'America/New_York'
@@ -36,25 +38,6 @@ const board = payload([{ date: '2026-10-10', slots: [[660, 'open', 3]] }, { date
 const ok = (body: unknown, status = 200) => ({ status, body })
 const prob = (status: number, code: string, title: string, extra: Record<string, unknown> = {}) => ({ status, body: { type: 'about:blank', status, code, title, ...extra } })
 
-interface LinkOpts {
-  kind?: string
-  tier?: 'gold' | 'vip' | null
-  verified?: boolean
-  firstName?: string | null
-  pin?: 'set' | 'none'
-  invoice?: unknown
-  plan?: unknown
-}
-const exchanged = (o: LinkOpts = {}, session = 'sess-1') => ({
-  session,
-  expiresAt: '2026-10-10T15:00:00Z',
-  kind: o.kind ?? 'calendar',
-  client: { firstName: o.firstName === undefined ? 'Maria' : o.firstName, last2: '51', tier: o.tier ?? null },
-  trust: { verified: !!o.verified, until: o.verified ? '2026-11-09T14:00:00Z' : null },
-  ...(o.invoice ? { invoice: o.invoice } : {}),
-  ...(o.plan ? { plan: o.plan } : {}),
-  ...(o.pin ? { pin: o.pin } : {}),
-})
 
 /** Opens the page with `#/<path>/<token>` captured exactly like the browser does (scrubbed, in memory). */
 function openWith(path: string, token: string, routes: Record<string, Handler>, booking: 'sms' | 'live' = 'sms') {
@@ -88,7 +71,7 @@ describe('no link, or links switched off: the site as today', () => {
   })
 
   it('PUBLIC_LINKS_ENABLED off (404): no sheet, no toast, the URL is scrubbed anyway', async () => {
-    const t = openWith('c', TOKEN, { [`${BASE}/exchange`]: () => prob(404, 'NOT_FOUND', 'Not found') })
+    const t = openWith('c', TOKEN, { [`${BASE}/exchange`]: () => prob(404, 'ROUTE_NOT_FOUND', 'Route not found') })
     const before = { ...t.c.state }
     await t.settle()
     expect(location.href).not.toContain(TOKEN)
@@ -153,11 +136,14 @@ describe('DV-LINK: a calendar link books for its client', () => {
     const t = openWith('c', TOKEN, {
       [`${BASE}/exchange`]: () => ok(exchanged({ verified: false })),
       [`${BASE}/availability`]: () => ok(board),
-      [`${BASE}/verify/code`]: () => ok({ challengeId: 'ch-1', expiresInSec: 600, purpose: 'link_verify' }, 202),
+      [`${BASE}/verify/code`]: (call) =>
+        call.body.purpose === undefined || call.body.purpose === 'verify'
+          ? ok({ challengeId: 'ch-1', expiresInSec: 600, purpose: 'verify', to: '51' }, 202)
+          : prob(422, 'VALIDATION_FAILED', 'Check the form', { errors: [{ path: 'body.purpose', message: 'Invalid enum value' }] }),
       [`${BASE}/verify/code/confirm`]: (call) => {
         if (call.body.code !== '123456') return prob(401, 'PUBLIC_OTP_INVALID', 'That code didn’t match', { detail: 'That code didn’t match. 2 more tries before you need a new one.' })
         confirmed = true
-        return ok({ purpose: 'link_verify', verified: true, trust: { verified: true, until: '2026-11-09T14:00:00Z' } })
+        return ok(stepped({ by: 'code' }))
       },
       [`${BASE}/bookings`]: () => (confirmed ? ok({ bookingRef: 'OAS-00078', deposit: { dueCents: 2500, how: 'counter' } }, 201) : prob(403, 'IDENTITY_STEP_UP_REQUIRED', 'Confirm it’s you')),
     })
@@ -174,7 +160,9 @@ describe('DV-LINK: a calendar link books for its client', () => {
     lv(c).su.sendCode()
     await t.settle()
     const send = t.calls.find((x) => x.path === `${BASE}/verify/code`)!
-    expect(send.body).toEqual({ purpose: 'link_verify' }) // no phone: the code goes to the link's number
+    // the API's purposes are verify | pin_set | pin_reset (F1 of the 2026-10-11 review: 'link_verify' was a 422); no phone:
+    // the code goes to the link's number
+    expect(send.body).toEqual({ purpose: 'verify' })
     expect(lv(c).su).toMatchObject({ code: true, title: 'Enter the code we texted' })
     lv(c).su.setValue({ target: { value: '111111' } })
     lv(c).su.submit()
@@ -186,7 +174,41 @@ describe('DV-LINK: a calendar link books for its client', () => {
     await t.settle()
     expect(t.calls.filter((x) => x.path === `${BASE}/bookings`)).toHaveLength(1)
     expect(c.state.step).toBe('done')
-    expect(c.__lk.trust).toMatchObject({ verified: true, until: '2026-11-09T14:00:00Z' })
+    expect(c.__lk.trust).toMatchObject({ verified: true, until: '2026-11-09T14:00:00.000Z' })
+  })
+
+  it('a record the stale-record rule hides: confirm first, then the name comes back and none is asked', async () => {
+    let confirmed = false
+    const t = openWith('c', TOKEN, {
+      // the API hides the first name until the page is verified ('' like a stranger's)
+      [`${BASE}/exchange`]: () => ok(exchanged({ firstName: null })),
+      [`${BASE}/availability`]: () => ok(board),
+      [`${BASE}/verify/code`]: () => ok({ challengeId: 'ch-s', expiresInSec: 600, purpose: 'verify', to: '51' }, 202),
+      [`${BASE}/verify/code/confirm`]: () => {
+        confirmed = true
+        return ok(stepped({ firstName: 'Maria', by: 'code' }))
+      },
+      [`${BASE}/bookings`]: () => (confirmed ? ok({ bookingRef: 'OAS-00082' }, 201) : prob(403, 'IDENTITY_STEP_UP_REQUIRED', 'Confirm it’s you')),
+    })
+    await t.settle()
+    const c = t.c
+    expect(sh(c).eyebrow).toBe('BOOKING FOR ••51 · STEP 1 OF 3')
+    c.setBk({ day: 1, slot: 540, ack: true })
+    c.setState({ step: 'review' })
+    sh(c).cta()
+    await t.settle()
+    expect(c.state.toast).not.toBe('Add your full name')
+    expect(c.state.step).toBe('verify')
+    lv(c).su.sendCode()
+    await t.settle()
+    lv(c).su.setValue({ target: { value: '123456' } })
+    lv(c).su.submit()
+    await t.settle()
+    const b = t.calls.filter((x) => x.path === `${BASE}/bookings`)
+    expect(b).toHaveLength(1)
+    expect(b[0]!.body.name).toBeUndefined()
+    expect(c.state.step).toBe('done')
+    expect(c.__lk.client.firstName).toBe('Maria')
   })
 
   it('a stranger\'s calendar link asks for a full name and sends it', async () => {
@@ -304,10 +326,12 @@ describe('DV-STEPUP: PIN, lockout, create PIN', () => {
   it('a verify link: code, "You\'re verified" until the trust date, then an optional PIN', async () => {
     const t = openWith('v', TOKEN, {
       [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'verify' })),
-      [`${BASE}/verify/code`]: () => ok({ challengeId: 'ch-2' }, 202),
-      [`${BASE}/verify/code/confirm`]: () => ok({ verified: true, trust: { verified: true, until: '2026-11-09T14:00:00Z' } }),
+      [`${BASE}/verify/code`]: () => ok({ challengeId: 'ch-2', expiresInSec: 600, purpose: 'verify', to: '51' }, 202),
+      [`${BASE}/verify/code/confirm`]: () => ok(stepped({ kind: 'verify', by: 'code', canSetPin: true })),
       [`${BASE}/pin`]: (call) =>
-        call.body.pin === '1234' ? prob(422, 'IDENTITY_PIN_REJECTED', 'Choose another PIN', { detail: 'Don’t use a run like 1234. Choose another PIN.' }) : ok({ trust: { verified: true, until: '2026-11-09T14:00:00Z' } }),
+        call.body.pin === '1234'
+          ? prob(422, 'IDENTITY_PIN_REJECTED', 'Choose another PIN', { detail: 'Don’t use a run like 1234. Choose another PIN.' })
+          : ok(stepped({ kind: 'verify', by: 'code', pin: 'set' })),
     })
     await t.settle()
     const c = t.c
@@ -330,14 +354,46 @@ describe('DV-STEPUP: PIN, lockout, create PIN', () => {
     await t.settle()
     expect(sh(c).title).toBe('Your PIN is set')
     expect(t.calls.find((x) => x.path === `${BASE}/pin` && x.body.pin === '4826')).toBeTruthy()
+    expect(t.c.__lk.stepUp.method).toBe('pin')
+  })
+
+  it('no PIN offer where the API opens no window to choose one (a stranger\'s link: stepUp.canSetPinUntil null)', async () => {
+    const t = openWith('v', TOKEN, {
+      [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'verify', firstName: null })),
+      [`${BASE}/verify/code`]: () => ok({ challengeId: 'ch-2b', expiresInSec: 600, purpose: 'verify', to: '51' }, 202),
+      [`${BASE}/verify/code/confirm`]: () => ok(stepped({ kind: 'verify', firstName: null, by: 'code', canSetPin: false })),
+    })
+    await t.settle()
+    lv(t.c).su.sendCode()
+    await t.settle()
+    lv(t.c).su.setValue({ target: { value: '654321' } })
+    lv(t.c).su.submit()
+    await t.settle()
+    expect(sh(t.c).title).toBe('You’re verified')
+    expect(lv(t.c).notice.action).toBe('')
+  })
+
+  it('stepUp.method "pin" opens the PIN entry straight away: no code is asked for first (F4 of the 2026-10-11 review)', async () => {
+    const t = openWith('v', TOKEN, {
+      [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'verify', pin: 'set' })),
+      [`${BASE}/verify/pin`]: () => ok(stepped({ kind: 'verify', pin: 'set', by: 'pin' })),
+    })
+    await t.settle()
+    expect(lv(t.c).su).toMatchObject({ pin: true, send: false, title: 'Enter your PIN' })
+    lv(t.c).su.setValue({ target: { value: '4826' } })
+    lv(t.c).su.submit()
+    await t.settle()
+    expect(t.calls.filter((x) => x.path === `${BASE}/verify/code`)).toEqual([])
+    expect(sh(t.c).title).toBe('You’re verified')
+    expect(lv(t.c).notice.action).toBe('') // a client with a PIN is not offered another
   })
 
   it('a PIN link for a client with a PIN resets it: code (pin_reset) -> new PIN -> /pin/reset', async () => {
     const t = openWith('pin', TOKEN, {
       [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'pin', pin: 'set' })),
-      [`${BASE}/verify/code`]: (call) => ok({ challengeId: 'ch-3', purpose: call.body.purpose }, 202),
-      [`${BASE}/verify/code/confirm`]: () => ok({ purpose: 'pin_reset', verified: false }),
-      [`${BASE}/pin/reset`]: () => ok({ trust: { verified: true, until: '2026-11-09T14:00:00Z' }, memberPrivilegesHeldUntil: '2026-10-13T14:00:00Z' }),
+      [`${BASE}/verify/code`]: (call) => ok({ challengeId: 'ch-3', expiresInSec: 600, purpose: call.body.purpose, to: '51' }, 202),
+      [`${BASE}/verify/code/confirm`]: () => ok(stepped({ kind: 'pin', pin: 'set', canSetPin: true }, false)),
+      [`${BASE}/pin/reset`]: () => ok(stepped({ kind: 'pin', pin: 'set', by: 'code' })),
     })
     await t.settle()
     const c = t.c
@@ -356,7 +412,7 @@ describe('DV-STEPUP: PIN, lockout, create PIN', () => {
     expect(sh(c).title).toBe('Your PIN is set')
   })
 
-  it('without the pin hint, a code request answered "Enter your PIN" switches to the PIN field', async () => {
+  it('a PIN set meanwhile: a code request answered "Enter your PIN" switches to the PIN field', async () => {
     const t = openWith('v', TOKEN, {
       [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'verify' })),
       [`${BASE}/verify/code`]: () => prob(409, 'IDENTITY_PIN_REQUIRED', 'Enter your PIN', { detail: 'Enter your PIN to continue, or reset it with a texted code.' }),
@@ -424,13 +480,14 @@ describe('a second link in the same tab', () => {
 })
 
 describe('DV-LINK-JOIN: plan -> verify -> e-mail -> terms -> Squarespace', () => {
-  const plan = { key: 'gold', label: 'Gold', monthlyPriceCents: 9900 }
+  const plan = planAnswer('gold')
   it('walks the steps, verifies fresh, posts the e-mail only and redirects to the allowed checkout', async () => {
     const t = openWith('m', TOKEN, {
       [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'membership', plan, verified: true })),
-      [`${BASE}/verify/code`]: () => ok({ challengeId: 'ch-4' }, 202),
-      [`${BASE}/verify/code/confirm`]: () => ok({ verified: true, trust: { verified: true, until: '2026-11-09T14:00:00Z' } }),
-      [`${BASE}/membership/start`]: () => ok({ redirectUrl: 'https://oasis-auto-spa.squarespace.com/checkout/subscribe?sku=gold' }),
+      [`${BASE}/verify/code`]: () => ok({ challengeId: 'ch-4', expiresInSec: 600, purpose: 'verify', to: '51' }, 202),
+      [`${BASE}/verify/code/confirm`]: () => ok(stepped({ kind: 'membership', plan, by: 'code' })),
+      [`${BASE}/membership/start`]: () =>
+        ok({ redirectUrl: 'https://oasis-auto-spa.squarespace.com/checkout/subscribe?sku=gold', membershipRef: 'OAS-M-1A2B3C4D', checkoutExpiresAt: '2026-10-13T14:00:00.000Z' }),
     })
     await t.settle()
     const c = t.c
@@ -484,11 +541,43 @@ describe('DV-LINK-JOIN: plan -> verify -> e-mail -> terms -> Squarespace', () =>
     expect(c.state.jn.tier).toBe('gold')
   })
 
+  it('a Gold link opens Gold (the API\'s plan {tier, planKey, name}; F2 of the 2026-10-11 review)', async () => {
+    const t = openWith('m', TOKEN, { [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'membership', plan: planAnswer('gold') })) })
+    await t.settle()
+    expect(location.hash).toBe('#/join?gold')
+    expect(t.c.__lkTier()).toBe('gold')
+    t.c.setState({ page: 'join', jn: t.c.freshJn('gold') })
+    expect(t.c.state.jn.tier).toBe('gold')
+    t.c.joinVM().jv.tiers.find((x: any) => x.name === 'VIP').onClick()
+    expect(t.c.state.toast).toBe('This link is for Gold. Text us to switch plans.')
+  })
+
+  it('a VIP link whose plan has no tier but a key mapped in site.config.json opens VIP', async () => {
+    const t = openWith('m', TOKEN, { [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'membership', plan: { ...planAnswer('vip'), tier: null } })) })
+    await t.settle()
+    expect(location.hash).toBe('#/join?vip')
+  })
+
+  it('a plan the website does not show is never guessed: no join page, a text-us notice', async () => {
+    const t = openWith('m', TOKEN, { [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'membership', plan: planAnswer(null, 'family-plan', 'Family') })) })
+    await t.settle()
+    const c = t.c
+    expect(location.hash).not.toMatch(/join/)
+    expect(c.__lkTier()).toBeNull()
+    expect(sh(c).title).toBe('Let’s finish this by text')
+    expect(lv(c).notice).toMatchObject({ show: true, ok: false, smsLabel: 'Text us', text: 'We can’t show the Family plan on the website. Text us and we’ll help you join.' })
+    // the site's own Join buttons are the design's join again, not the link's
+    c.setState({ sheet: null, page: 'join', jn: c.freshJn('vip') })
+    expect(c.state.jn.tier).toBe('vip')
+    expect(lv(c).joinStepUp).toBe(false)
+    expect(c.joinVM().jv.eyebrow).not.toContain('CONFIRM')
+  })
+
   it('a checkout URL off the allowlist is not followed', async () => {
     const t = openWith('m', TOKEN, {
       [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'membership', plan, pin: 'set' })),
-      [`${BASE}/verify/pin`]: () => ok({ trust: { verified: true, until: '2026-11-09T14:00:00Z' } }),
-      [`${BASE}/membership/start`]: () => ok({ redirectUrl: 'https://squarespace.com.evil.example/checkout' }),
+      [`${BASE}/verify/pin`]: () => ok(stepped({ kind: 'membership', plan, pin: 'set', by: 'pin' })),
+      [`${BASE}/membership/start`]: () => ok({ redirectUrl: 'https://squarespace.com.evil.example/checkout', membershipRef: 'OAS-M-1', checkoutExpiresAt: '2026-10-13T14:00:00.000Z' }),
     })
     await t.settle()
     const c = t.c
@@ -508,18 +597,30 @@ describe('DV-LINK-JOIN: plan -> verify -> e-mail -> terms -> Squarespace', () =>
 })
 
 describe('DV-LINK-PAY: review -> verify -> Squarespace', () => {
-  const invoice = { number: 'INV-20611', title: 'Signature Hand Wash · Oct 9', totalCents: 5400, balanceCents: 5400, lines: [{ label: 'Signature Hand Wash', amountCents: 5400 }] }
+  const invoice = invoiceAnswer({ items: [{ name: 'Signature Hand Wash', priceCents: 5000 }], taxCents: 400 })
   it('the review block, then a fresh PIN, then the redirect', async () => {
     const t = openWith('p', TOKEN, {
       [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'pay', invoice, verified: true, pin: 'set' })),
-      [`${BASE}/verify/pin`]: () => ok({ trust: { verified: true, until: '2026-11-09T14:00:00Z' } }),
-      [`${BASE}/pay/start`]: () => ok({ redirectUrl: 'https://oasis-auto-spa.squarespace.com/pay/inv-20611' }),
+      [`${BASE}/verify/pin`]: () => ok(stepped({ kind: 'pay', invoice, pin: 'set', by: 'pin' })),
+      [`${BASE}/pay/start`]: () => ok({ status: 'redirect', redirectUrl: 'https://oasis-auto-spa.squarespace.com/pay/inv-20611' }),
     })
     await t.settle()
     const c = t.c
     expect(c.state.sheet).toBe('link')
     expect(sh(c)).toMatchObject({ eyebrow: 'PAYMENT FOR MARIA ••51', title: 'Review & pay', hasCta: true, ctaLabel: 'Verify & pay $54' })
-    expect(lv(c).pay).toMatchObject({ show: true, title: 'Invoice INV-20611', sub: 'Signature Hand Wash · Oct 9', due: '$54', dueLabel: 'Balance due', lines: [{ label: 'Signature Hand Wash', value: '$54' }] })
+    // the API's invoice: items, tax, number, date (F3 of the 2026-10-11 review: the lines were empty)
+    expect(lv(c).pay).toMatchObject({
+      show: true,
+      title: 'Invoice #20611',
+      sub: 'Fri, Oct 9',
+      due: '$54',
+      dueLabel: 'Balance due',
+      dueSub: 'You’ll pay on Squarespace’s secure checkout.',
+      lines: [
+        { label: 'Signature Hand Wash', value: '$50' },
+        { label: 'Tax', value: '$4' },
+      ],
+    })
     sh(c).cta()
     expect(lv(c)).toMatchObject({ sheetStepUp: true, pay: { show: false } })
     expect(lv(c).su.pin).toBe(true)
@@ -534,8 +635,8 @@ describe('DV-LINK-PAY: review -> verify -> Squarespace', () => {
   it('a payment URL off the allowlist: no navigation, "We couldn\'t open the payment page"', async () => {
     const t = openWith('p', TOKEN, {
       [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'pay', invoice, pin: 'set' })),
-      [`${BASE}/verify/pin`]: () => ok({ trust: { verified: true, until: null } }),
-      [`${BASE}/pay/start`]: () => ok({ redirectUrl: 'http://oasis-auto-spa.squarespace.com/pay' }),
+      [`${BASE}/verify/pin`]: () => ok(stepped({ kind: 'pay', invoice, pin: 'set', by: 'pin' })),
+      [`${BASE}/pay/start`]: () => ok({ status: 'redirect', redirectUrl: 'http://oasis-auto-spa.squarespace.com/pay' }),
     })
     await t.settle()
     sh(t.c).cta()
@@ -550,8 +651,8 @@ describe('DV-LINK-PAY: review -> verify -> Squarespace', () => {
   it('no payment link yet: "We\'ll text you a link"; a paid invoice: "Nothing to pay"', async () => {
     const t = openWith('p', TOKEN, {
       [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'pay', invoice, pin: 'set' })),
-      [`${BASE}/verify/pin`]: () => ok({ trust: { verified: true, until: null } }),
-      [`${BASE}/pay/start`]: () => ok({ status: 'link_pending' }),
+      [`${BASE}/verify/pin`]: () => ok(stepped({ kind: 'pay', invoice, pin: 'set', by: 'pin' })),
+      [`${BASE}/pay/start`]: () => ok({ status: 'link_pending', redirectUrl: null }),
     })
     await t.settle()
     sh(t.c).cta()
@@ -563,6 +664,42 @@ describe('DV-LINK-PAY: review -> verify -> Squarespace', () => {
     const t2 = openWith('p', TOKEN2, { [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'pay', invoice: { ...invoice, balanceCents: 0 } })) })
     await t2.settle()
     expect(sh(t2.c).title).toBe('Nothing to pay')
+  })
+
+  it('a part-paid invoice says what was paid', async () => {
+    const t = openWith('p', TOKEN, { [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'pay', invoice: invoiceAnswer({ items: [{ name: 'Full Detail', priceCents: 18000 }], tipCents: 2000, paidCents: 5000 }) })) })
+    await t.settle()
+    expect(lv(t.c).pay).toMatchObject({
+      lines: [
+        { label: 'Full Detail', value: '$180' },
+        { label: 'Tip', value: '$20' },
+      ],
+      due: '$150',
+      dueSub: '$50 already paid. You’ll pay the rest on Squarespace’s secure checkout.',
+    })
+    expect(sh(t.c).ctaLabel).toBe('Verify & pay $150')
+  })
+
+  it('an invoice the stale-record rule hides: confirm first, then the review from the step\'s answer', async () => {
+    const t = openWith('p', TOKEN, {
+      [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'pay', firstName: null, pin: 'set' })),
+      [`${BASE}/verify/pin`]: () => ok(stepped({ kind: 'pay', firstName: 'Ravi', invoice, pin: 'set', by: 'pin' })),
+      [`${BASE}/pay/start`]: () => ok({ status: 'redirect', redirectUrl: 'https://oasis-auto-spa.squarespace.com/pay/inv-20611' }),
+    })
+    await t.settle()
+    const c = t.c
+    expect(sh(c).title).not.toBe('Nothing to pay')
+    expect(lv(c)).toMatchObject({ sheetStepUp: true, pay: { show: false } })
+    expect(lv(c).su.pin).toBe(true)
+    lv(c).su.setValue({ target: { value: '4826' } })
+    lv(c).su.submit()
+    await t.settle()
+    expect(sh(c)).toMatchObject({ eyebrow: 'PAYMENT FOR RAVI ••51', title: 'Review & pay', ctaLabel: 'Pay $54' })
+    expect(lv(c).pay).toMatchObject({ show: true, title: 'Invoice #20611' })
+    expect(navigations()).toEqual([])
+    sh(c).cta()
+    await t.settle()
+    expect(navigations()).toEqual(['https://oasis-auto-spa.squarespace.com/pay/inv-20611'])
   })
 })
 
@@ -580,12 +717,33 @@ describe('helpers', () => {
     expect(allowedRedirect(null, hosts)).toBe(false)
   })
 
-  it('validateExchange keeps what the page needs and refuses an unknown kind', () => {
-    const x = validateExchange({ session: 's', kind: 'pay', client: { firstName: ' Maria ', last2: '+1 51', tier: 'platinum' }, trust: { verified: true, until: 'x' }, invoice: { number: 'INV-1', totalCents: 100, balanceCents: 50, lines: [{ label: 'a', amountCents: 50 }] } })
+  it('validateExchange reads the API\'s LinkState and refuses an unknown kind or no session', () => {
+    const x = validateExchange({
+      ...exchanged({ kind: 'pay', pin: 'set', fresh: true, invoice: invoiceAnswer({ taxCents: 300 }) }),
+      client: { firstName: ' Maria ', last2: '+1 51', tier: 'platinum' },
+    })
     expect(x.client).toEqual({ firstName: 'Maria', last2: '51', tier: null })
-    expect(x.invoice!.lines).toEqual([{ label: 'a', amountCents: 50 }])
-    expect(x.pin).toBeNull()
-    expect(() => validateExchange({ session: 's', kind: 'admin' })).toThrow()
+    expect(x.stepUp).toEqual({ method: 'pin', freshUntil: '2026-10-10T14:05:00.000Z', canSetPinUntil: null })
+    expect(x.invoice).toEqual({ number: 20611, date: '2026-10-09', items: [{ name: 'Signature Hand Wash', priceCents: 5400 }], subtotalCents: 5400, taxCents: 300, tipCents: 0, totalCents: 5700, paidCents: 0, balanceCents: 5700 })
+    expect(validateExchange(exchanged({ kind: 'membership', plan: planAnswer('gold') })).plan).toEqual({ tier: 'gold', planKey: 'gold', name: 'Gold', monthlyPriceCents: 9900, perks: ['Unlimited washes'] })
+    expect(validateExchange(exchanged({ firstName: null })).client.firstName).toBeNull() // '' from the API
+    expect(validateExchange(exchanged()).stepUp.method).toBe('code')
+    expect(() => validateExchange({ ...linkState(), kind: 'admin', session: 's' })).toThrow()
+    expect(() => validateExchange(linkState())).toThrow()
     expect(whoLabel(x.client)).toBe('MARIA ••51')
+  })
+
+  it('planTier: the plan\'s tier, else its key through catalog.plans, else nothing (never a default)', () => {
+    const plans = { gold: 'gold', vip: 'vip' }
+    expect(planTier(planAnswer('gold') as any, plans)).toBe('gold')
+    expect(planTier({ ...planAnswer('vip'), tier: null } as any, plans)).toBe('vip')
+    expect(planTier(planAnswer(null, 'family-plan', 'Family') as any, plans)).toBeNull()
+    expect(planTier(null, plans)).toBeNull()
+  })
+
+  it('shopDate: the invoice\'s shop date as "Fri, Oct 9"', () => {
+    expect(shopDate('2026-10-09')).toBe('Fri, Oct 9')
+    expect(shopDate('2026-10-9')).toBe('')
+    expect(shopDate(null)).toBe('')
   })
 })

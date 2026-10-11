@@ -101,7 +101,8 @@ test (every declaration of the new blocks is one the design itself uses) and the
   listener that runs before the design's, scrubbed the same way and replaces the first link (its session is dropped).
   A **calendar** or **book again** link opens the design's booking sheet at "Choose your wash" in linked mode: the
   eyebrow reads "BOOKING FOR MARIA ••51 · STEP 1 OF 3" (first name and the last two digits of the number the link was
-  texted to; "••51" alone for a stranger, who is then asked a full name on the review step), the who / phone / code steps
+  texted to; "••51" alone for a stranger, who is then asked a full name on the review step, and for a record the API
+  hides until verified, which confirms first and is asked a name only if the API still has none), the who / phone / code steps
   are skipped (the wash step has no back button), an active member's tier comes from the link (member prices, no fee),
   the board (home and sheet) is the client's own (`GET /links/availability`, never cached, VIP-aware once verified),
   every Book button of the page books for that client while the link is open, and "Book" posts
@@ -111,23 +112,25 @@ test (every declaration of the new blocks is one the design itself uses) and the
   is hidden (`wrap-if site.sheetSummary` around the design's right column; true everywhere else).
 - **DV-STEPUP** "Confirm it's you": a design-styled card (the member sign-in card's frame, input and button, the code
   step's error line and link button, the done step's note) with three modes: the client's **PIN** (4-6 digits; a PIN
-  outranks a code once set), a **texted code** ("Text me a code" sends a 6-digit code to the link's number only, then the
+  outranks a code once set: the API's `stepUp.method` says which to show first), a **texted code** ("Text me a code" sends a 6-digit code to the link's number only, then the
   code field), and **create / reset a PIN** (after a code). Wrong entries show the API's own words ("That PIN didn't
   match. 3 more tries on this page."); a locked PIN shows the lockout text ("Too many wrong PINs. Try again in 15 min, or
   reset your PIN with a texted code.") and only the reset; five wrong tries end the page (DV-LINK-DEAD "Too many
   tries"). A verify link shows it at once and ends on "You're verified" (until when the number is trusted, plus an
-  optional "Create a PIN for next time" within the code's 10 minutes); a PIN link sets or resets the PIN ("Your PIN is
+  optional "Create a PIN for next time" while the API keeps a window open for it, never on a stranger's link); a PIN link sets or resets the PIN ("Your PIN is
   set"). The note under the card says the PIN or code is only ever asked on this page, never by text.
-- **DV-LINK-JOIN** A **membership** link opens the design's join steps for the link's plan: plan (the other plan says
+- **DV-LINK-JOIN** A **membership** link opens the design's join steps for the link's plan (its tier, Gold or VIP; a
+  plan the website does not show opens no join page but a "Let's finish this by text" note): plan (the other plan says
   "This link is for Gold. Text us to switch plans.") → **verify** (the step-up card in the join column, "STEP 2 OF 4 ·
   CONFIRM IT'S YOU"; a PIN or code from the last 5 minutes is required for every membership) → **e-mail** ("STEP 3 OF
   4 · EMAIL": a "Joining as MARIA ••51" line and the design's e-mail field; the name and phone fields are not shown, the
   link already knows them) → the design's terms step ("Continue to checkout") → `POST /links/membership/start {email}`
   and a redirect to the plan's Squarespace checkout. The vehicles step is skipped (the request carries the e-mail only).
 - **DV-LINK-PAY** A **payment** link opens the link sheet with a review block (the design's review card: the invoice
-  number, what it is for, its lines, "Balance due" and the amount) and the design's CTA "Verify & pay $54" → the
+  number, the visit's date, its items with tax and tip, what was already paid, "Balance due" and the amount) and the design's CTA "Verify & pay $54" → the
   step-up card (fresh PIN or code, every time) → `POST /links/pay/start` → a redirect to the invoice's payment link.
-  "We'll text you a link" when the invoice has no payment link yet; "Nothing to pay" when it is paid.
+  "We'll text you a link" when the invoice has no payment link yet; "Nothing to pay" when it is paid. An invoice the
+  API hides until the page is verified (the stale-record rule) shows after the step-up.
   **Redirect allowlist** (DV-LINK-JOIN too): the page follows only `https://` URLs on `site.config.json`
   `links.redirectHosts` (squarespace.com and its subdomains), whatever the API answered; anything else shows "We
   couldn't open the payment page. Text us at 862-388-5827 …" and navigates nowhere.

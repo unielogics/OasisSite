@@ -99,7 +99,9 @@ Written by the build, imported by the bridge and the prerender, bundled into the
 A text from the shop can carry a personal link, `https://oasisautospanj.com/#/<path>/<token>` with `path` `c`
 (calendar, book again), `m` (membership), `p` (payment), `pin` (create / reset a PIN) or `v` (verify), the token 43
 base64url characters (backend design `docs/design/ai-assistant-and-phone-identity.md` sections 5 and 7; the identity
-core in backend `docs/api-spec.md` section 27). The site side:
+core in backend `docs/api-spec.md` section 27). The page takes the base64url run after the path as the token and ignores
+anything a messaging app or a shortener adds after it (`/`, `.`, `?utm=…`); the whole fragment is scrubbed either way.
+The site side:
 
 ```
 #/c/<token> ─► src/client/link.ts (while the bundle is evaluated, before hydrateRoot): history.replaceState(…, "/")
@@ -121,28 +123,48 @@ only, no credentials or port) and the "text us for a new link" body; the code is
 Base `/api/v1/public/links` (same origin through nginx's `/api/v1/public/` location), JSON in and out, `credentials:
 'omit'`, `cache: 'no-store'`, `referrerPolicy: 'no-referrer'`; every route but the exchange carries
 `Authorization: Bearer <session>`. Problems are `application/problem+json` with `code`, `title`, `detail` (written
-for the client: the page shows `detail`, else `title`) and `meta`. The fixture (`tools/site/fixture-links.ts`)
-implements exactly this.
+for the client: the page shows `detail`, else `title`) and `meta`. This is the backend's personal-link API (backend
+`docs/api-spec.md` section 28, W3c) and its shapes, field for field: `src/site/link-contract.testkit.ts` copies its key
+lists, the bridge tests build their answers with it, and `tools/site/fixture-links.test.ts` holds the fixture
+(`tools/site/fixture-links.ts`, what the e2e runs against) to it. When the API's schemas change, change that file
+first. The e2e's `--stack` mode cannot run the link checks until W3c is on the stack's backend (the stack has no
+`/public/links` routes and no way to issue a link); the contract test is the guard until then.
+
+Every verification step answers `{verified, ...LinkState}` and the page takes that state (trust, `stepUp`, a name or an
+invoice the stale-record rule hid until the page was verified):
+
+`LinkState` = `{kind, expiresAt, idleExpiresAt, link: {expiresAt}, client: {firstName ('' when unknown or hidden),
+last2, tier: gold|vip|null}, trust: {verified, by: pin|code|null, until}, stepUp: {method: pin|code, freshUntil,
+canSetPinUntil}, appointments: [...] | null, invoice: {number, date, items: [{name, priceCents}], subtotalCents,
+taxCents, tipCents, totalCents, paidCents, balanceCents} | null, plan: {tier, planKey, name, monthlyPriceCents, perks}
+| null}`.
 
 | call | body | answer the site uses | problems the site handles |
 | --- | --- | --- | --- |
-| `POST /exchange` | `{token}` | `{session, expiresAt, kind: calendar\|verify\|pin\|membership\|pay\|book_again, client: {firstName\|null, last2, tier: gold\|vip\|null}, trust: {verified, until\|null}, invoice?: {number, title, totalCents, balanceCents, lines: [{label, amountCents}]}, plan?: {key, label, monthlyPriceCents}, pin?: set\|none}` | 404 (links off: nothing shown), 401 `IDENTITY_LINK_INVALID` `meta.reason` expired\|used\|revoked\|not_found (dead-link notice), 429 |
+| `POST /exchange` | `{token}` | `{session, ...LinkState}` | 404 (links off: nothing shown), 401 `IDENTITY_LINK_INVALID` `meta.reason` expired\|used\|revoked\|not_found (dead-link notice), 429 |
 | `GET /availability?days=7&service=<key>` | | the public availability payload, the client's own (VIP-aware once verified) | any failure: back to the public board |
-| `POST /verify/code` | `{purpose: link_verify\|pin_set\|pin_reset}` (never a phone) | 202 `{challengeId}` | 409 `IDENTITY_PIN_REQUIRED` (switch to the PIN), `IDENTITY_PIN_EXISTS` (offer the reset), `IDENTITY_PIN_NOT_SET`, 429 limits |
-| `POST /verify/code/confirm` | `{challengeId, code}` | `{verified, trust}` | 401 `PUBLIC_OTP_INVALID`, 429 `PUBLIC_OTP_LOCKED` / 410 `PUBLIC_OTP_EXPIRED` (ask for a new code), 409 `IDENTITY_PIN_REQUIRED` |
-| `POST /verify/pin` | `{pin}` | `{trust}` | 401 `IDENTITY_PIN_INVALID`, 429 `IDENTITY_PIN_LOCKED` / 423 `IDENTITY_PIN_DISABLED` (lockout text, reset only), 429 `IDENTITY_TOO_MANY_TRIES` |
-| `POST /pin` | `{pin}` | `{trust}` | 403 `IDENTITY_CODE_REQUIRED`, 409 `IDENTITY_PIN_EXISTS`, 422 `IDENTITY_PIN_REJECTED` (the reason) |
-| `POST /pin/reset` | `{pin}` (after a `pin_reset` code) | `{trust, memberPrivilegesHeldUntil}` | as `/pin` |
-| `POST /bookings` + `Idempotency-Key` | `{serviceKey, addonKeys, date, startMin, vehicle: {label}, name?}` (`name` only when the link has no client name) | 201 `{bookingRef, deposit?, confirmationBy?}` | 403 `IDENTITY_STEP_UP_REQUIRED` / `IDENTITY_NOT_TRUSTED` (step-up, then again), `PUBLIC_SLOT_*` (pick another time), 409 `IDENTITY_LINK_USED` (dead) |
-| `POST /membership/start` | `{email}` | `{redirectUrl}` (followed only when allowed) | 403 `IDENTITY_STEP_UP_REQUIRED` (step-up, then again), 422 with an `email` error (back to the e-mail step) |
-| `POST /pay/start` | `{}` | `{redirectUrl}` or `{status: 'link_pending'}` | 403 `IDENTITY_STEP_UP_REQUIRED`, 409 `IDENTITY_LINK_USED` |
+| `POST /verify/code` | `{purpose: verify\|pin_set\|pin_reset}` (never a phone) | 202 `{challengeId, expiresInSec, purpose, to}` | 409 `IDENTITY_PIN_REQUIRED` (switch to the PIN), `IDENTITY_PIN_EXISTS` (offer the reset), `IDENTITY_PIN_NOT_SET`, 429 limits |
+| `POST /verify/code/confirm` | `{challengeId, code}` | `{verified, ...LinkState}` (`verified: false` after a `pin_reset` code) | 401 `PUBLIC_OTP_INVALID`, 429 `PUBLIC_OTP_LOCKED` / 410 `PUBLIC_OTP_EXPIRED` (ask for a new code), 409 `IDENTITY_PIN_REQUIRED` |
+| `POST /verify/pin` | `{pin}` | `{verified, ...LinkState}` | 401 `IDENTITY_PIN_INVALID`, 429 `IDENTITY_PIN_LOCKED` / 423 `IDENTITY_PIN_DISABLED` (lockout text, reset only), 429 `IDENTITY_TOO_MANY_TRIES` |
+| `POST /pin` | `{pin}` | `{verified, ...LinkState}` | 403 `IDENTITY_CODE_REQUIRED`, 409 `IDENTITY_PIN_EXISTS`, 422 `IDENTITY_PIN_REJECTED` (the reason) |
+| `POST /pin/reset` | `{pin}` (after a `pin_reset` code) | `{verified, ...LinkState}` | as `/pin` |
+| `POST /bookings` + `Idempotency-Key` | `{serviceKey, addonKeys, date, startMin, vehicle: {label}, name?}` (`name` only when the link has no client name) | 201 `{bookingRef, status, start, end, deposit, confirmationBy, service, addons, when, member, bayCount}` (the page uses `bookingRef`, `deposit`, `confirmationBy`) | 403 `IDENTITY_STEP_UP_REQUIRED` (step-up, then again), `PUBLIC_SLOT_*` (pick another time), 409 `IDENTITY_LINK_USED` (dead) |
+| `POST /membership/start` | `{email}` | `{redirectUrl, membershipRef, checkoutExpiresAt}` (`redirectUrl` followed only when allowed) | 403 `IDENTITY_STEP_UP_REQUIRED` (step-up, then again), 422 with an `email` error (back to the e-mail step), 409 `LINK_ALREADY_MEMBER` / `LINK_CHECKOUT_UNAVAILABLE`, 403 `LINK_PRIVILEGES_HELD` (their words) |
+| `POST /pay/start` | `{}` | `{status: 'redirect', redirectUrl}` or `{status: 'link_pending', redirectUrl: null}` | 403 `IDENTITY_STEP_UP_REQUIRED`, 403 `LINK_PRIVILEGES_HELD`, 409 `IDENTITY_LINK_USED` |
 
 On every call: 401 `IDENTITY_SESSION_INVALID` → the token (still in memory) is exchanged again once and the call
 repeated (same Idempotency-Key), a failed re-exchange shows the dead-link notice; 401 `IDENTITY_LINK_INVALID`,
-409 `IDENTITY_LINK_USED`, 429 `IDENTITY_SESSION_LOCKED` end the link (notice). `pin` in the exchange answer is
-optional: without it the step-up starts with a texted code and switches to the PIN on `IDENTITY_PIN_REQUIRED`.
-The page treats a PIN or code entered in the last 4.5 minutes as fresh (the server's rule is 5) and asks again for a
-membership or a payment otherwise; the server's 403 `IDENTITY_STEP_UP_REQUIRED` is handled the same way.
+409 `IDENTITY_LINK_USED`, 429 `IDENTITY_SESSION_LOCKED` end the link (notice); 401 `LINK_WRONG_PURPOSE` shows its
+words. `stepUp.method` picks the step-up: `pin` opens the PIN entry (with "Forgot your PIN? Text me a code"), `code` a
+texted code; a 409 `IDENTITY_PIN_REQUIRED` (a PIN set meanwhile) switches to the PIN. "Create a PIN for next time" is
+offered only while `stepUp.canSetPinUntil` is set (never on a stranger's link). The page treats a PIN or code entered
+on it in the last 4.5 minutes as fresh (the server's rule is 5; an answer whose `stepUp.freshUntil` is null is not
+fresh) and asks again for a membership or a payment otherwise; the server's 403 `IDENTITY_STEP_UP_REQUIRED` is handled
+the same way. A membership link opens the join page of the plan's `tier` (else its `planKey` through `site.config.json`
+`catalog.plans`); a plan the website does not show is never guessed: "Let's finish this by text". A client the
+stale-record rule hides (`firstName` '' and no invoice until verified) is asked to confirm first: a booking asks for a
+name only if the step's answer still has none, a payment link shows its review once the step's answer carries the
+invoice.
 `POST /appointments/:ref/reschedule` is in the fixture but the page does not call it yet (no reschedule UI in this
 wave).
 
@@ -154,7 +176,7 @@ wave).
 | verify | the link sheet with the step-up card (PIN when set, else "Text me a code") | "You're verified" (until the trust date) + optional "Create a PIN for next time" |
 | pin | the step-up card: code (`pin_set`, or `pin_reset` when a PIN exists) → new PIN | "Your PIN is set" |
 | membership | `#/join?<plan>`: plan (the other plan says it is not this link's) → step-up in the join column → "Joining as MARIA ••51" + e-mail → terms ("Continue to checkout") | `POST /membership/start` → Squarespace checkout (allowlist) |
-| pay | the link sheet with the payment review (invoice, lines, balance due; "Verify & pay $54") | step-up (fresh every time) → `POST /pay/start` → the payment link (allowlist), "We'll text you a link", "Nothing to pay" |
+| pay | the link sheet with the payment review ("Invoice #20611", the visit's date, the items, tax and tip, what was already paid, balance due; "Verify & pay $54") | step-up (fresh every time) → `POST /pay/start` → the payment link (allowlist), "We'll text you a link", "Nothing to pay" |
 | dead | the link sheet: "This link expired" / "was used" / "was replaced" / "doesn't work" / "Too many tries" | "Text us for a new link" (sms: to the texting number) and "Back to home" |
 
 The link sheet (`state.sheet === 'link'`) hides the design's booking summary column (`site.sheetSummary`). All the view

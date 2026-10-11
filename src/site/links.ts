@@ -2,15 +2,18 @@
 // API's shapes, the checks on what it answers, and the words the page shows. Pure helpers; the flows live in the
 // "links" section of index.bridge.ts and the token capture in src/client/link.ts.
 //
-// The API (backend design docs/design/ai-assistant-and-phone-identity.md section 5; the routes this site calls are
-// listed in docs/site.md "Personal links"): everything under /api/v1/public/links, JSON only, the session as
-// `Authorization: Bearer <session>`, never cached. 404 on every route while PUBLIC_LINKS_ENABLED is off.
+// The API is the backend's personal-link API (backend docs/api-spec.md section 28, ADR 0160 W3c; design
+// docs/design/ai-assistant-and-phone-identity.md section 5; the routes this site calls are listed in docs/site.md
+// "Personal links"): everything under /api/v1/public/links, JSON only, the session as `Authorization: Bearer <session>`,
+// never cached. 404 on every route while PUBLIC_LINKS_ENABLED is off. The shapes below are the API's `LinkState`
+// (section 28.2) field for field; the fixture (tools/site/fixture-links.ts) answers the same.
 
 export type LinkKind = 'calendar' | 'verify' | 'pin' | 'membership' | 'pay' | 'book_again'
 export type LinkDeadReason = 'not_found' | 'expired' | 'used' | 'revoked'
 
 export interface LinkClient {
-  /** the client's first name (null for a stranger's calendar link) */
+  /** the client's first name; null for a stranger's link, a name the shop does not have yet, or a record the
+   *  stale-record rule hides until the page is verified (the API sends '' for all three) */
   firstName: string | null
   /** the last two digits of the number the link was texted to */
   last2: string
@@ -25,71 +28,130 @@ export interface LinkTrust {
   until: string | null
 }
 
+export interface LinkStepUp {
+  /** pin: the client has a PIN (enter it, or reset it with a code); code: a texted code */
+  method: 'pin' | 'code'
+  /** until when the last PIN or code entered on this page counts as fresh (memberships, payments); null when none */
+  freshUntil: string | null
+  /** a code confirmed on this page lets it choose a PIN (a new one after a reset code) until then; null otherwise */
+  canSetPinUntil: string | null
+}
+
 export interface LinkInvoice {
-  number: string
-  /** what the invoice is for, e.g. "Signature Hand Wash · Oct 9" */
-  title: string | null
+  /** the invoice number (the dashboard's invoice_no) */
+  number: number | null
+  /** the shop's calendar date of the visit, YYYY-MM-DD */
+  date: string | null
+  items: { name: string; priceCents: number }[]
+  subtotalCents: number
+  taxCents: number
+  tipCents: number
   totalCents: number
+  paidCents: number
   balanceCents: number
-  lines: { label: string; amountCents: number }[]
 }
 
 export interface LinkPlan {
-  /** the website's plan key (site.config.json catalog.plans): gold | vip */
-  key: string
-  label: string
+  /** the website tier of the plan (gold | vip), null for a plan the website does not show */
+  tier: 'gold' | 'vip' | null
+  /** the Settings catalog's plan key */
+  planKey: string
+  /** the public label */
+  name: string
   monthlyPriceCents: number | null
+  perks: string[]
 }
 
-export interface Exchanged {
-  session: string
+/** What the exchange, GET me and every verification step answer (the API's LinkState). */
+export interface LinkState {
   expiresAt: string
   kind: LinkKind
   client: LinkClient
   trust: LinkTrust
+  stepUp: LinkStepUp
   invoice: LinkInvoice | null
   plan: LinkPlan | null
-  /** whether the client has a PIN (optional in the answer; unknown = null, the page then starts with a code) */
-  pin: 'set' | 'none' | null
+}
+
+export interface Exchanged extends LinkState {
+  session: string
 }
 
 const KINDS: LinkKind[] = ['calendar', 'verify', 'pin', 'membership', 'pay', 'book_again']
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null)
 const cents = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : 0)
+const tierOf = (v: unknown): 'gold' | 'vip' | null => (v === 'gold' || v === 'vip' ? v : null)
 
-/** The exchange answer, checked; throws on a shape the page cannot use. */
-export function validateExchange(x: unknown): Exchanged {
+/** A page state (exchange, me, a step's answer), checked; throws on a shape the page cannot use. */
+export function validateState(x: unknown): LinkState {
   const o = (x ?? {}) as Record<string, unknown>
-  const session = str(o.session)
   const kind = str(o.kind) as LinkKind | null
-  if (!session || !kind || !KINDS.includes(kind)) throw new Error('exchange: no session or an unknown kind')
+  if (!kind || !KINDS.includes(kind)) throw new Error('link state: an unknown kind')
   const c = (o.client ?? {}) as Record<string, unknown>
   const last2 = String(c.last2 ?? '').replace(/\D/g, '').slice(-2)
-  const tier = c.tier === 'gold' || c.tier === 'vip' ? c.tier : null
   const t = (o.trust ?? {}) as Record<string, unknown>
+  const su = (o.stepUp ?? {}) as Record<string, unknown>
   const inv = o.invoice && typeof o.invoice === 'object' ? (o.invoice as Record<string, unknown>) : null
   const plan = o.plan && typeof o.plan === 'object' ? (o.plan as Record<string, unknown>) : null
   return {
-    session,
     expiresAt: str(o.expiresAt) ?? '',
     kind,
-    client: { firstName: str(c.firstName)?.trim() || null, last2, tier },
+    client: { firstName: str(c.firstName)?.trim() || null, last2, tier: tierOf(c.tier) },
     trust: { verified: t.verified === true, until: str(t.until) },
+    stepUp: { method: su.method === 'pin' ? 'pin' : 'code', freshUntil: str(su.freshUntil), canSetPinUntil: str(su.canSetPinUntil) },
     invoice: inv
       ? {
-          number: str(inv.number) ?? '',
-          title: str(inv.title),
-          totalCents: cents(inv.totalCents),
-          balanceCents: cents(inv.balanceCents),
-          lines: Array.isArray(inv.lines)
-            ? (inv.lines as Record<string, unknown>[]).map((l) => ({ label: String(l?.label ?? ''), amountCents: cents(l?.amountCents) }))
+          number: typeof inv.number === 'number' && Number.isFinite(inv.number) ? inv.number : null,
+          date: str(inv.date),
+          items: Array.isArray(inv.items)
+            ? (inv.items as Record<string, unknown>[]).map((l) => ({ name: String(l?.name ?? ''), priceCents: cents(l?.priceCents) }))
             : [],
+          subtotalCents: cents(inv.subtotalCents),
+          taxCents: cents(inv.taxCents),
+          tipCents: cents(inv.tipCents),
+          totalCents: cents(inv.totalCents),
+          paidCents: cents(inv.paidCents),
+          balanceCents: cents(inv.balanceCents),
         }
       : null,
-    plan: plan ? { key: String(plan.key ?? ''), label: String(plan.label ?? plan.key ?? ''), monthlyPriceCents: typeof plan.monthlyPriceCents === 'number' ? plan.monthlyPriceCents : null } : null,
-    pin: o.pin === 'set' || o.pin === 'none' ? o.pin : null,
+    plan: plan
+      ? {
+          tier: tierOf(plan.tier),
+          planKey: String(plan.planKey ?? ''),
+          name: String(plan.name ?? ''),
+          monthlyPriceCents: typeof plan.monthlyPriceCents === 'number' ? plan.monthlyPriceCents : null,
+          perks: Array.isArray(plan.perks) ? plan.perks.filter((p): p is string => typeof p === 'string') : [],
+        }
+      : null,
   }
+}
+
+/** The exchange answer (`{session, ...LinkState}`), checked; throws on a shape the page cannot use. */
+export function validateExchange(x: unknown): Exchanged {
+  const session = str((x as { session?: unknown } | null)?.session)
+  if (!session) throw new Error('exchange: no session')
+  return { session, ...validateState(x) }
+}
+
+/**
+ * The website tier a membership link's plan opens (the design's join page has Gold and VIP): the plan's own tier, else
+ * its key through site.config.json catalog.plans (design id -> plan key). null: a plan the website cannot show, so the
+ * page sends the client to a text instead of guessing a plan.
+ */
+export function planTier(plan: LinkPlan | null | undefined, plans: Record<string, string> = {}): 'gold' | 'vip' | null {
+  if (!plan) return null
+  if (plan.tier) return plan.tier
+  const id = Object.keys(plans).find((k) => plans[k] === plan.planKey)
+  return id === 'gold' || id === 'vip' ? id : null
+}
+
+/** "Thu, Oct 9" for an invoice's shop date (YYYY-MM-DD); '' when there is none. */
+export function shopDate(ymd: string | null): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd ?? '')
+  if (!m) return ''
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(t)
 }
 
 /** "MARIA ••51" (the eyebrow's who); "••51" for a stranger. */
@@ -157,8 +219,8 @@ export function deadReason(meta: unknown): LinkDeadReason {
   return r === 'expired' || r === 'used' || r === 'revoked' || r === 'not_found' ? r : 'not_found'
 }
 
-/** Step-up purposes of POST /links/verify/code. */
-export type StepUpPurpose = 'link_verify' | 'pin_set' | 'pin_reset'
+/** Step-up purposes of POST /links/verify/code (the API's CodeBody: verify | pin_set | pin_reset). */
+export type StepUpPurpose = 'verify' | 'pin_set' | 'pin_reset'
 
 /** A PIN the server will look at: 4 to 6 digits (the server owns the blocklist). */
 export const PIN_RE = /^\d{4,6}$/

@@ -43,7 +43,8 @@ const SMS_E164 = '+18623885827'
 const STATUS_TEXT: Record<number, string> = { 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict', 410: 'Gone', 422: 'Unprocessable Entity', 423: 'Locked', 429: 'Too Many Requests' }
 const CHECKOUT = 'https://oasis-auto-spa.squarespace.com/checkout/subscribe?plan=gold'
 const PAY_URL = 'https://oasis-auto-spa.squarespace.com/pay/inv-20611'
-const INVOICE = { number: 'INV-20611', title: 'Signature Hand Wash · Oct 9', totalCents: 5400, balanceCents: 5400, lines: [{ label: 'Signature Hand Wash', amountCents: 5400 }] }
+// the API's shapes (backend docs/api-spec.md 28.2): an invoice number is the dashboard's invoice_no, a plan has its tier
+const INVOICE = { number: 20611, date: '2026-10-09', items: [{ name: 'Signature Hand Wash', priceCents: 5000 }], taxCents: 400 }
 
 export async function runLinkChecks(d: LinkDeps): Promise<void> {
   const { browser, proxy, api, check } = d
@@ -276,7 +277,7 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
   // 15. membership: plan -> verify -> e-mail -> terms -> the Squarespace checkout; a pending membership + checkout intent
   {
     const phone = '+12015550165'
-    const M = issue({ kind: 'membership', phone, firstName: 'Sam', plan: { key: 'gold', label: 'Gold', monthlyPriceCents: 9900, checkoutUrl: CHECKOUT } })
+    const M = issue({ kind: 'membership', phone, firstName: 'Sam', plan: { tier: 'gold', planKey: 'gold', name: 'Gold', monthlyPriceCents: 9900, perks: ['Unlimited washes'], checkoutUrl: CHECKOUT } })
     const { page, close } = await open()
     await go(page, `${origin}/#/m/${M.token}`)
     await waitText(page, 'STEP 1 OF 4')
@@ -307,14 +308,14 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
     const P = issue({ kind: 'pay', phone, firstName: 'Ravi', pin: '7391', invoice: { ...INVOICE, url: PAY_URL } })
     const { page, close } = await open()
     await go(page, `${origin}/#/p/${P.token}`)
-    await waitText(page, 'Invoice INV-20611')
+    await waitText(page, 'Invoice #20611')
     const review = await page.locator('#dc-root').innerText()
     await btn(page, /^\s*Verify & pay \$54/).click()
     await page.locator('#dc-root input[placeholder="PIN"]').fill('7391')
     await btn(page, /^\s*Verify\s*$/).click()
     await page.waitForTimeout(800)
     const n = await navs(page)
-    check('links 16: the payment review shows the invoice and the balance', /PAYMENT FOR RAVI ••66/.test(review) && /Balance due/.test(review) && /\$54/.test(review))
+    check('links 16: the payment review shows the invoice, its lines and the balance', /PAYMENT FOR RAVI ••66/.test(review) && /Fri, Oct 9/.test(review) && /Signature Hand Wash/.test(review) && /Tax/.test(review) && /Balance due/.test(review) && /\$54/.test(review), review.replace(/\s+/g, ' ').slice(0, 400))
     check('links 16: after a fresh PIN the page goes to the invoice\'s Squarespace payment link', n.length === 1 && n[0] === PAY_URL, n.join(' | '))
     await csp(page)
     await close()
@@ -322,7 +323,7 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
     const Q = issue({ kind: 'pay', phone: '+12015550167', firstName: 'Ravi', pin: '7391', invoice: { ...INVOICE, url: 'https://pay.evil.example/inv-20611' } })
     const p2 = await open()
     await go(p2.page, `${origin}/#/p/${Q.token}`)
-    await waitText(p2.page, 'Invoice INV-20611')
+    await waitText(p2.page, 'Invoice #20611')
     await btn(p2.page, /^\s*Verify & pay \$54/).click()
     await p2.page.locator('#dc-root input[placeholder="PIN"]').fill('7391')
     await btn(p2.page, /^\s*Verify\s*$/).click()
