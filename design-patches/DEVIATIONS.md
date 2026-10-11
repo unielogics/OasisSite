@@ -90,7 +90,7 @@ a link fragment, or when the API answers 404 (links switched off, the default), 
 the entries above say: the new blocks are `sc-if`s that render nothing, and the parity runs stay at zero. The linked
 states have no counterpart in the design, so they are not in the parity harness: they are pinned by port goldens
 (`src/site/__goldens__/link-*.html`, rendered from the patched template with the bridge's own view model), a style-token
-test (every declaration of the new blocks is one the design itself uses) and the e2e (docs/e2e.md checks 10-20).
+test (every declaration of the new blocks is one the design itself uses) and the e2e (docs/e2e.md checks 10-21).
 
 - **DV-LINK** The token rides in the URL fragment (never sent to a server, never in a Referer or a link preview).
   `src/client/link.ts` takes it out of the address bar and the history entry (`history.replaceState`, same document)

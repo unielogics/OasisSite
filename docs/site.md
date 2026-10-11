@@ -94,6 +94,72 @@ Written by the build, imported by the bridge and the prerender, bundled into the
 `window.__oasisNavigate(url)` is a test hook: when defined, sms:/tel: navigations go to it instead of
 `location.href` (scripts/e2e-site.ts).
 
+## Personal links (DV-LINK, DV-STEPUP, DV-LINK-JOIN, DV-LINK-PAY, DV-LINK-DEAD)
+
+A text from the shop can carry a personal link, `https://oasisautospanj.com/#/<path>/<token>` with `path` `c`
+(calendar, book again), `m` (membership), `p` (payment), `pin` (create / reset a PIN) or `v` (verify), the token 43
+base64url characters (backend design `docs/design/ai-assistant-and-phone-identity.md` sections 5 and 7; the identity
+core in backend `docs/api-spec.md` section 27). The site side:
+
+```
+#/c/<token> ─► src/client/link.ts (while the bundle is evaluated, before hydrateRoot): history.replaceState(…, "/")
+               (address bar + history entry scrubbed), token kept in memory, a hashchange listener for a second link
+           ─► bridge __lkMount (componentDidMount): POST /api/v1/public/links/exchange {token}  (the ONLY place the token goes)
+           ─► session (memory) ─► calendar: the booking sheet in linked mode | verify, pin: the step-up card
+                                  membership: the join steps | pay: the payment review | 401: a dead-link notice | 404: nothing
+```
+
+Nothing changes without a fragment, and a 404 from the exchange (`PUBLIC_LINKS_ENABLED` off on the API, the default)
+leaves the page exactly as it is without a link (the fragment is still scrubbed). Links work in both booking modes
+(`SITE_BOOKING=sms|live`): a linked booking never goes to `/public/bookings` or to an sms: text. `site.config.json`
+`links` holds the base path, the redirect host allowlist (`redirectHosts`: `squarespace.com` and its subdomains, https
+only, no credentials or port) and the "text us for a new link" body; the code is in `src/client/link.ts` (capture),
+`src/site/links.ts` (shapes, allowlist, words) and the "links (W3f)" section of `src/site/index.bridge.ts`.
+
+### The link API the site calls
+
+Base `/api/v1/public/links` (same origin through nginx's `/api/v1/public/` location), JSON in and out, `credentials:
+'omit'`, `cache: 'no-store'`, `referrerPolicy: 'no-referrer'`; every route but the exchange carries
+`Authorization: Bearer <session>`. Problems are `application/problem+json` with `code`, `title`, `detail` (written
+for the client: the page shows `detail`, else `title`) and `meta`. The fixture (`tools/site/fixture-links.ts`)
+implements exactly this.
+
+| call | body | answer the site uses | problems the site handles |
+| --- | --- | --- | --- |
+| `POST /exchange` | `{token}` | `{session, expiresAt, kind: calendar\|verify\|pin\|membership\|pay\|book_again, client: {firstName\|null, last2, tier: gold\|vip\|null}, trust: {verified, until\|null}, invoice?: {number, title, totalCents, balanceCents, lines: [{label, amountCents}]}, plan?: {key, label, monthlyPriceCents}, pin?: set\|none}` | 404 (links off: nothing shown), 401 `IDENTITY_LINK_INVALID` `meta.reason` expired\|used\|revoked\|not_found (dead-link notice), 429 |
+| `GET /availability?days=7&service=<key>` | | the public availability payload, the client's own (VIP-aware once verified) | any failure: back to the public board |
+| `POST /verify/code` | `{purpose: link_verify\|pin_set\|pin_reset}` (never a phone) | 202 `{challengeId}` | 409 `IDENTITY_PIN_REQUIRED` (switch to the PIN), `IDENTITY_PIN_EXISTS` (offer the reset), `IDENTITY_PIN_NOT_SET`, 429 limits |
+| `POST /verify/code/confirm` | `{challengeId, code}` | `{verified, trust}` | 401 `PUBLIC_OTP_INVALID`, 429 `PUBLIC_OTP_LOCKED` / 410 `PUBLIC_OTP_EXPIRED` (ask for a new code), 409 `IDENTITY_PIN_REQUIRED` |
+| `POST /verify/pin` | `{pin}` | `{trust}` | 401 `IDENTITY_PIN_INVALID`, 429 `IDENTITY_PIN_LOCKED` / 423 `IDENTITY_PIN_DISABLED` (lockout text, reset only), 429 `IDENTITY_TOO_MANY_TRIES` |
+| `POST /pin` | `{pin}` | `{trust}` | 403 `IDENTITY_CODE_REQUIRED`, 409 `IDENTITY_PIN_EXISTS`, 422 `IDENTITY_PIN_REJECTED` (the reason) |
+| `POST /pin/reset` | `{pin}` (after a `pin_reset` code) | `{trust, memberPrivilegesHeldUntil}` | as `/pin` |
+| `POST /bookings` + `Idempotency-Key` | `{serviceKey, addonKeys, date, startMin, vehicle: {label}, name?}` (`name` only when the link has no client name) | 201 `{bookingRef, deposit?, confirmationBy?}` | 403 `IDENTITY_STEP_UP_REQUIRED` / `IDENTITY_NOT_TRUSTED` (step-up, then again), `PUBLIC_SLOT_*` (pick another time), 409 `IDENTITY_LINK_USED` (dead) |
+| `POST /membership/start` | `{email}` | `{redirectUrl}` (followed only when allowed) | 403 `IDENTITY_STEP_UP_REQUIRED` (step-up, then again), 422 with an `email` error (back to the e-mail step) |
+| `POST /pay/start` | `{}` | `{redirectUrl}` or `{status: 'link_pending'}` | 403 `IDENTITY_STEP_UP_REQUIRED`, 409 `IDENTITY_LINK_USED` |
+
+On every call: 401 `IDENTITY_SESSION_INVALID` → the token (still in memory) is exchanged again once and the call
+repeated (same Idempotency-Key), a failed re-exchange shows the dead-link notice; 401 `IDENTITY_LINK_INVALID`,
+409 `IDENTITY_LINK_USED`, 429 `IDENTITY_SESSION_LOCKED` end the link (notice). `pin` in the exchange answer is
+optional: without it the step-up starts with a texted code and switches to the PIN on `IDENTITY_PIN_REQUIRED`.
+The page treats a PIN or code entered in the last 4.5 minutes as fresh (the server's rule is 5) and asks again for a
+membership or a payment otherwise; the server's 403 `IDENTITY_STEP_UP_REQUIRED` is handled the same way.
+`POST /appointments/:ref/reschedule` is in the fixture but the page does not call it yet (no reschedule UI in this
+wave).
+
+### Linked states
+
+| link | opens | then |
+| --- | --- | --- |
+| calendar, book again | the booking sheet at "Choose your wash", eyebrow "BOOKING FOR MARIA ••51 · STEP 1 OF 3", no back to the who step, the tier from the link (member prices / no fee), the client's own board; every Book button of the page books for the client | review → (not trusted: the step-up card as a sheet step "Confirm it's you", then the booking goes on by itself) → `POST /bookings` → the design's done step with the reference |
+| verify | the link sheet with the step-up card (PIN when set, else "Text me a code") | "You're verified" (until the trust date) + optional "Create a PIN for next time" |
+| pin | the step-up card: code (`pin_set`, or `pin_reset` when a PIN exists) → new PIN | "Your PIN is set" |
+| membership | `#/join?<plan>`: plan (the other plan says it is not this link's) → step-up in the join column → "Joining as MARIA ••51" + e-mail → terms ("Continue to checkout") | `POST /membership/start` → Squarespace checkout (allowlist) |
+| pay | the link sheet with the payment review (invoice, lines, balance due; "Verify & pay $54") | step-up (fresh every time) → `POST /pay/start` → the payment link (allowlist), "We'll text you a link", "Nothing to pay" |
+| dead | the link sheet: "This link expired" / "was used" / "was replaced" / "doesn't work" / "Too many tries" | "Text us for a new link" (sms: to the texting number) and "Back to home" |
+
+The link sheet (`state.sheet === 'link'`) hides the design's booking summary column (`site.sheetSummary`). All the view
+model of the new blocks lives under `site.link` (the bridge's own key, already allow-listed for the vals check).
+
 ## Catalog keys
 
 The booking keys come from the live catalog (`GET /api/v1/public/catalog`, fetched once per page in every booking

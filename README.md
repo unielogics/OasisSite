@@ -5,7 +5,7 @@ The marketing site at https://oasisautospanj.com, built from the owner's Claude 
 dashboard: the design is followed pixel for pixel, every deviation is listed in `design-patches/DEVIATIONS.md` with a
 DV id (the owner's decisions of 2026-10-10: live hours with Sunday closed, real availability and booking with an SMS
 fallback, no card capture, placeholder photos, self-hosted fonts, the theme following the visitor's device, a separate
-texting number), and a parity harness proves zero difference between
+texting number, personal links from the shop's texts: DV-LINK…), and a parity harness proves zero difference between
 the original and `dist/` (DOM, computed style and rects, pixels at threshold 0, `renderVals`, console) at 390x844 and
 1440x900 in both themes, with the owner's decisions applied to the original as text swaps.
 
@@ -76,13 +76,14 @@ design/          the original document + loose files (design/original), design/f
 design-patches/  index.patch.json, copy-map.json (incl. toConfig contact entries), href-map.json, DEVIATIONS.md
 site.config.json seo.json           site facts (contact, catalog keys, booking endpoints, parity viewports) and the page's SEO
 src/dc/          the dc runtime port (DCLogic, DCHost, text/list/style helpers, image-slot placeholder, x-import resolution)
-src/site/        env.ts, hours.ts, availability.ts, index.bridge.ts (the site layer over the design's logic)
-src/client/      boot.tsx (hydration + the build-instant freeze), hours/theme helpers for designs without a bridge
+src/site/        env.ts, hours.ts, availability.ts, links.ts, index.bridge.ts (the site layer over the design's logic),
+                 __goldens__/ (port goldens of the personal-link blocks)
+src/client/      boot.tsx (hydration + the build-instant freeze), link.ts (personal-link capture), hours/theme helpers
 tools/intake/    unpack, raw, fonts, inventory, probe-original
 tools/dc-compile/ the template compiler (+ goldens and the reference interpreter in tests/)
 tools/prerender/ render, shims, head, seo, site-env, placeholder, build, check-dist helpers
 tools/parity/    the harness: serve-original (raw + bundles), cdn intercepts, serve-dist, drivers, diffs, selftest, phone, scenarios/site.ts
-tools/site/      fixture-api.ts (the public API contract in memory), proxy.ts (the nginx host for the e2e)
-scripts/         e2e-site.ts, check-dist.ts, assert-react.mjs, verify-design.mjs
+tools/site/      fixture-api.ts (the public API contract in memory), fixture-links.ts (the link API), proxy.ts (the nginx host for the e2e)
+scripts/         e2e-site.ts, e2e-links.ts, check-dist.ts, assert-react.mjs, verify-design.mjs
 parity/          allowlist.json, tolerances.json, console-baseline.json, fonts/ + fontconfig/ (pinned fallback fonts)
 ```
