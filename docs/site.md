@@ -25,6 +25,7 @@ Written by the build, imported by the bridge and the prerender, bundled into the
 | `buildNow` | `SITE_BUILD_NOW` / `PRERENDER_NOW` / now | the prerender instant; the client's first render is pinned to it (DV-CLOCK) |
 | `hours`, `hoursSource` | `SITE_HOURS_JSON` or `src/data/hours.fallback.json` | the public hours payload (Sunday closed) |
 | `availability`, `availabilitySource` | `SITE_AVAILABILITY_JSON` or none | the public availability payload baked into the board |
+| `catalogSnapshot`, `catalogSource` | `SITE_CATALOG_JSON` or none | the public catalog payload (DV-CATALOG), kept only when it is website-ready |
 | `contact`, `catalog`, `fee` | `site.config.json` | the calling number (`phoneE164`/`phoneDisplay`), the texting number (`smsE164`/`smsDisplay`), e-mail, address, maps link; the design's service and add-on ids → catalog keys; the booking fee text |
 
 ## What the bridge replaces
@@ -103,15 +104,35 @@ else the item whose name is the design's name (the same slug, the way the backen
 there is no closest match. **Fail safe:** a wash or add-on the catalog does not carry has no key; a live booking that
 needs one is refused before any request ("Signature Hand Wash can't be booked online yet. Text WASH to …", "… Remove it,
 or text WASH to …"), the board then asks for the API's default wash, and the sms texts name the design's items as
-before. On 2026-10-10 the production catalog carries none of the design's two washes (its packages are Express Hand
-Wash, Premium Hand Wash + Interior, …) and only some add-ons (Leather conditioning, Odor removal, Pet hair removal,
-Interior deep clean by key; "Wax", "Engine bay cleaning", "Rain repellent" are other items), so `SITE_BOOKING=live` books
-nothing until the catalog and the site agree (the coming wave makes the dashboard's Settings the one catalog source).
-The design's prices stay static content (owner decision).
+before. Production's catalog (2026-10-11) still carries the dashboard's own services (Express Hand Wash, Premium Hand
+Wash + Interior, …) until the owner runs the backend's `website-catalog` seed, so `SITE_BOOKING=live` books nothing
+until then; the seed gives every design item its key (an add-on new to the design is booked under its catalog key).
+
+## Catalog content (DV-CATALOG)
+
+The same catalog payload is the page's content once it is **website-ready** (`src/site/catalog.ts` `websiteCatalog`):
+both washes under their keys with a description, a duration and whole-dollar member and guest prices, both plans with a
+monthly price and perks, a whole-dollar fee and the guest markup. Then the design's data fields (`WASH`, `DURING`,
+`TINT`, `VEH`, `FEE`) carry the catalog's content and the bridge's catalog section writes the view models' fixed
+numbers again from it (price groups, wash cards, booking sheet, Gold calculator, "What VIP is worth", the join flow's
+plans, the fee lines and FAQ); the template's fixed price texts are `site.cat` strings (18 `replace-text` ops). Each
+section falls back to the design's list on its own (add-ons, tint, detailing, quote-only items), and anything short of
+ready keeps the design's content exactly. The build bakes `SITE_CATALOG_JSON` (only when ready); the browser's catalog
+load applies the live answer after mount (`forceUpdate`), so a not-ready answer brings the design's content back and a
+failed load keeps the snapshot. Shown prices are the starting prices (`memberPriceCents`/`guestPriceCents`, a tint row's
+`memberMinCents`/`guestMinCents`), never `priceCents`, each item's own (the booking sheet's guest prices too: the bridge
+writes them by item over the design's `g(member)`); a picked add-on or vehicle type a new catalog drops leaves the
+visitor's choice. Fixtures: `tools/site/catalog-fixture.ts` (`designCatalog()` =
+the design's content in the backend's shape, what the parity build bakes and its server answers; `unseededCatalog()` =
+production before the seed). Tests: `src/site/catalog.test.ts`, `src/site/bridge-catalog.test.ts` (every price state
+equal to the built-in content with the design catalog, a changed price showing, an item's own guest price on the
+booking sheet, a dropped vehicle type, the unseeded fallback),
+`tools/prerender/prerender.test.ts` (the baked snapshot) and the e2e's catalog checks.
 
 ## Deployment inputs
 
 `deploy/scripts/site-deploy.sh` (backend kit) passes `SITE_URL`, `SITE_HOURS_JSON` (from the local API) and should pass
-`SITE_AVAILABILITY_JSON` (`GET /api/v1/public/availability?days=7`) and `SITE_BOOKING=live` once the SMS tablet is
+`SITE_AVAILABILITY_JSON` (`GET /api/v1/public/availability?days=7`), `SITE_CATALOG_JSON` (`GET /api/v1/public/catalog`;
+harmless before the seed: not ready, a warning, the design's content) and `SITE_BOOKING=live` once the SMS tablet is
 live; until then the default `sms` keeps every Book/Join action on the design's own sms: links. nginx must proxy the
 whole `/api/v1/public/` prefix (the backend's `oasis-site.conf.template` does since the booking API landed).

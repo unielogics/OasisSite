@@ -50,6 +50,153 @@
       "expectTag": "sc-if",
       "html": "<sc-if value=\"{{ site.guestDetails }}\"><div style=\"display:flex;flex-direction:column;gap:10px;\"><input value=\"{{ site.name }}\" onInput=\"{{ site.setName }}\" autocomplete=\"name\" placeholder=\"Full name\" style=\"height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;\"><sc-if value=\"{{ site.askPhone }}\"><input value=\"{{ site.phone }}\" onInput=\"{{ site.setPhone }}\" inputmode=\"tel\" autocomplete=\"tel\" placeholder=\"Mobile number\" style=\"height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;\"><div style=\"font-size:12.5px;color:var(--ink3);\">We'll text your confirmation to this number.</div></sc-if></div></sc-if>",
       "dv": "DV-BOOK"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 60,
+      "expectTag": "span",
+      "expect": "from $99",
+      "with": "{{= site.cat.fromGold }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 86,
+      "expectTag": "div",
+      "expect": "$99",
+      "with": "{{= site.cat.gold }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 97,
+      "expectTag": "span",
+      "expect": "$99",
+      "with": "{{= site.cat.gold }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 112,
+      "expectTag": "span",
+      "expect": "$169",
+      "with": "{{= site.cat.vip }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 127,
+      "expectTag": "div",
+      "child": 0,
+      "expect": "Guests can book with prices 20% higher and a ",
+      "with": "{{= site.cat.markupLine }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 128,
+      "expectTag": "b",
+      "expect": "$25 non-refundable booking fee",
+      "with": "{{= site.cat.feeTerms }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 219,
+      "expectTag": "div",
+      "expect": "$99/mo",
+      "with": "{{= site.cat.goldMo }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 222,
+      "expectTag": "div",
+      "expect": "$169/mo",
+      "with": "{{= site.cat.vipMo }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 389,
+      "expectTag": "div",
+      "expect": "$25",
+      "with": "{{= site.cat.fee }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 393,
+      "expectTag": "div",
+      "expect": "SAVE $25",
+      "with": "{{= site.cat.saveFee }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 436,
+      "expectTag": "div",
+      "child": 2,
+      "expect": " · VIP $169",
+      "with": "{{= site.cat.vipTotal }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 476,
+      "expectTag": "div",
+      "expect": "Carbon and ceramic film. VIP from $229, guest from $275.",
+      "with": "{{= site.cat.tintFrom }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 525,
+      "expectTag": "button",
+      "expect": "Join VIP · $169/mo",
+      "with": "{{= site.cat.joinVip }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 650,
+      "expectTag": "div",
+      "child": 0,
+      "expect": "VIP · $169",
+      "with": "{{= site.cat.barVip }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 652,
+      "expectTag": "div",
+      "expect": "Priority times · Gold from $99",
+      "with": "{{= site.cat.barGold }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 691,
+      "expectTag": "span",
+      "expect": "This wash is included. Gold $99 or VIP $169 a month.",
+      "with": "{{= site.cat.included }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 697,
+      "expectTag": "span",
+      "expect": "Guest prices · $25 non-refundable booking fee",
+      "with": "{{= site.cat.guestFee }}",
+      "dv": "DV-CATALOG"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 757,
+      "expectTag": "span",
+      "expect": "I understand the $25 booking fee is non-refundable, including if I cancel or don't show.",
+      "with": "{{= site.cat.ack }}",
+      "dv": "DV-CATALOG"
     }
   ]
 }

@@ -27,7 +27,8 @@ export interface CopyEntry {
 
 /** Every op carries `dv`, the DEVIATIONS.md id that explains it. */
 export type PatchOp = { dv: string } & (
-  | { op: 'replace-text'; tpl: number; expectTag?: string; expect: string; with: string }
+  /** `child`: the index of the text node to replace when the element holds other nodes too (default: its only text) */
+  | { op: 'replace-text'; tpl: number; expectTag?: string; expect: string; with: string; child?: number }
   | { op: 'rewrite-href'; tpl: number; expectTag?: string; expect: string; to: string }
   | { op: 'set-attr'; tpl: number; expectTag?: string; name: string; expect: string | null; value: string }
   | { op: 'wrap-if'; tpl: number; expectTag?: string; expectTextStarts?: string; cond: string }
@@ -218,11 +219,17 @@ export function applyPatches(nodes: Node[], cfg: PatchConfig, screen: string): N
       guard(el.tag === op.expectTag, `${where}: expected <${op.expectTag}>, found <${el.tag}>`)
     switch (op.op) {
       case 'replace-text': {
-        guard(
-          el.children.length === 1 && el.children[0]!.kind === 'text',
-          `${where}: element must hold a single text node`,
-        )
-        const t = el.children[0] as Extract<Node, { kind: 'text' }>
+        if (op.child === undefined)
+          guard(
+            el.children.length === 1 && el.children[0]!.kind === 'text',
+            `${where}: element must hold a single text node`,
+          )
+        else
+          guard(
+            Number.isInteger(op.child) && el.children[op.child]?.kind === 'text',
+            `${where}: child ${op.child} must be a text node`,
+          )
+        const t = el.children[op.child ?? 0] as Extract<Node, { kind: 'text' }>
         guard(
           t.value === op.expect,
           `${where}: expected text ${JSON.stringify(op.expect)}, found ${JSON.stringify(t.value)}`,

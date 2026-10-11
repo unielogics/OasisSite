@@ -10,7 +10,9 @@ pnpm e2e:site --stack site             # the dashboard's live stack named "site"
 ```
 
 Two builds are made per run (`dist-e2e-live`: `SITE_BOOKING=live` with the API's hours and availability baked in;
-`dist-e2e-sms`: the launch default) and served on `--port` (3301) and `--port`+1. `--skip-build` reuses them.
+`dist-e2e-sms`: the launch default) and served on `--port` (3301) and `--port`+1; with `--api fixture` a third one,
+`dist-e2e-catalog` (the launch default with a changed catalog as its `SITE_CATALOG_JSON` snapshot), is served on
+`--port`+3 for the catalog check below. `--skip-build` reuses them.
 Results: the console and `parity-reports/e2e-site.json`.
 
 ## The live stack
@@ -51,6 +53,12 @@ are redacted) and the pending membership row.
    receipts.") → the checkout step has no card field → terms → Start Gold → 201 `pending_payment`,
    `next: checkout_link_by_sms`; a pending membership row exists for the number.
 6. The honeypot (`website` non-empty) answers 202 with a fake reference and creates nothing.
+   Catalog (DV-CATALOG, fixture only; the live build bakes the API's catalog as `SITE_CATALOG_JSON`): with the fixture's
+   catalog changed (Signature Hand Wash at $50 for members, Gold at $109) `#/wash` shows "SAVE $60" after the page's
+   catalog load and `#/membership` shows $109. Over `dist-e2e-catalog` (snapshot: Signature Hand Wash at $52, "SAVE
+   $62") with the catalog request held, `#/wash` first shows the snapshot; released, production's unseeded catalog
+   brings the design's services and prices back ("SAVE $54", no "SAVE $62", Hand wax, Interior deep clean) and none of
+   the dashboard's own services.
 7. SMS mode: Book composes `sms:+18623885827?&body=WASH booking: …` (wash, vehicle, time), Join composes
    `JOIN VIP: name · phone · car`, the design's own text links carry the texting number, and no POST reaches the API.
    Texting vs calling (DV-CONTACT): over the home view, the open menu, every hash route and the live join welcome step,

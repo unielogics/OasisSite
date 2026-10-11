@@ -23,6 +23,7 @@ Environment:
 | `SITE_URL`               | no       | canonical origin (default `site.config.json` `siteUrl`): canonical links, Open Graph, sitemap, robots                           |
 | `SITE_HOURS_JSON`        | no       | body of `GET /api/v1/public/hours`; invalid or unset = committed fallback (Sunday closed) + a build warning                     |
 | `SITE_AVAILABILITY_JSON` | no       | body of `GET /api/v1/public/availability?days=7`; unset = the board shows the hours with "text to check times" + a warning     |
+| `SITE_CATALOG_JSON`      | no       | body of `GET /api/v1/public/catalog` (DV-CATALOG); baked in only when website-ready, else the design's services and prices + a warning |
 | `SITE_BOOKING`           | no       | `sms` (default: Book/Join compose sms: texts, no API calls) or `live` (the public booking API; needs the SMS tablet)           |
 | `SITE_API_ORIGIN`        | no       | API origin for the browser; default `''` = same origin (nginx proxies `/api/v1/public/*`)                                      |
 | `SITE_BUILD_NOW`         | no       | the prerender instant (default: now); `PRERENDER_NOW` pins it for parity builds, never set that one in production             |

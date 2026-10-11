@@ -10,12 +10,30 @@
 //   DV-CLOCK  the first client render is pinned to the build instant so hydration matches the prerendered markup
 //   DV-HASH   the home view is prerendered; #/… views render after mount
 //   DV-THEME  the theme follows the device (prefers-color-scheme) live until the visitor picks one, which is remembered
+//   DV-CATALOG services, add-ons, tint, detailing, quote-only items, plan prices/perks and the guest fee from GET
+//             /api/v1/public/catalog (build snapshot + the refresh after mount) when it is website-ready (src/site/catalog.ts)
 import type { PublicHours } from '../hours/format'
 import { validatePublicHours } from '../hours/format'
 import { daysFromAvailability, daysFromHours, isoDate, validateAvailability, type Availability, type DesignDay } from './availability'
 import type { SiteEnv } from './env'
 import { decideTheme, LIGHT_QUERY, readStoredTheme, storeTheme, type ThemeConfig } from '../client/theme'
 import { designTime, hoursRows, hoursTable, withToday, type HoursTable } from './hours'
+import {
+  catalogMatch,
+  catalogTexts,
+  DESIGN_DETAIL,
+  DESIGN_FILMS,
+  DESIGN_MORE,
+  DESIGN_PLANS,
+  designContentOf,
+  priceFacts,
+  swapAmount,
+  websiteCatalog,
+  type DesignContent,
+  type SiteCatalog,
+} from './catalog'
+
+export { catalogMatch, slugOfName } from './catalog'
 
 type AnyLogic = new (props?: any) => any
 
@@ -38,29 +56,6 @@ interface Problem {
 interface Catalog {
   services: { key: string; name: string; kind?: string; durationMin?: number }[]
   addons: { key: string; name: string }[]
-}
-
-/** A name as a catalog key (the backend's keys are the slug of the item's name). */
-export const slugOfName = (s: string): string =>
-  s
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/\+/g, ' plus ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-/**
- * The catalog entry for one of the design's items: the configured key when the live catalog has it, else the entry
- * whose name is the design's name (same slug). Nothing else: an item the catalog does not carry has no key (null) and
- * is never substituted by a look-alike.
- */
-export function catalogMatch<T extends { key: string; name: string }>(items: T[], key: string | undefined, name: string): T | null {
-  if (key) {
-    const k = items.find((x) => x.key === key)
-    if (k) return k
-  }
-  const want = slugOfName(name)
-  return items.find((x) => x.key === want || slugOfName(x.name) === want) ?? null
 }
 
 /** How long a payload's "bays open now" stays believable (the board refreshes every few minutes). */
@@ -128,6 +123,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     constructor(props?: any) {
       super(props)
       this.HOURS = this.__table()
+      // DV-CATALOG: the build's snapshot (null: the design's content); the browser's catalog load applies the live one
+      this.__applyCatalog(env.catalogSnapshot)
     }
 
     // ---- DV-HASH / DV-CLOCK: the prerendered first render is the home view at the build instant ----------------------
@@ -302,6 +299,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         if (!res.ok) return
         const c = (await res.json()) as { services?: unknown; addons?: unknown }
         if (Array.isArray(c.services) && Array.isArray(c.addons)) this.__catalog = { services: c.services as any, addons: c.addons as any }
+        // DV-CATALOG: the live answer decides the content (a catalog that is not website-ready brings the design's back)
+        if (this.__applyCatalog(c)) this.forceUpdate()
       } catch {
         /* no catalog: the board asks for the API's default wash, and bookings are refused until it loads */
       }
@@ -396,6 +395,281 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       if (p && 'svc' in p) void this.__refreshAvailability()
     }
 
+    // ==== DV-CATALOG (the catalog section, W3e) ===========================================================================
+    // The website's services, add-ons, tint table, detailing, quote-only items, plan prices and perks and the guest fee
+    // from the Settings catalog (src/site/catalog.ts). While no website-ready catalog is applied (__site null) every
+    // override below answers the design's own value. With one, the design's data fields (WASH, DURING, TINT, VEH, FEE)
+    // carry the catalog's content and the view models' fixed numbers (the price lists, the plans, the fee, the
+    // calculators) are written again from it with the design's own formulas and words.
+    __design: DesignContent | null = null
+    __site: SiteCatalog | null = null
+
+    /** Applies a catalog payload (null: none); answers whether the page's content changed. */
+    __applyCatalog(raw: unknown): boolean {
+      // only over the design's own data model (a logic class without it is left alone)
+      if (!Array.isArray(this.WASH) || !Array.isArray(this.DURING) || !Array.isArray(this.VEH) || !this.TINT || typeof this.FEE !== 'number') return false
+      if (!this.__design) this.__design = { WASH: this.WASH, DURING: this.DURING, TINT: this.TINT, VEH: this.VEH, FEE: this.FEE }
+      const site = raw ? websiteCatalog(raw, env.catalog, this.__design).site : null
+      const changed = JSON.stringify(site) !== JSON.stringify(this.__site)
+      this.__site = site
+      Object.assign(this, designContentOf(site, this.__design))
+      // an add-on or a vehicle type the new lists do not carry leaves the visitor's choice (the tint page and the booking
+      // sheet look the chosen vehicle type up in VEH and TINT); a vehicle falls back to the list's first, as the design starts
+      const has = (id: string) => this.DURING.some((a: any) => a.id === id)
+      const veh = (k: unknown) => this.VEH.some(([v]: [string, string]) => v === k)
+      const s = this.state
+      const stale =
+        !!s && ((Array.isArray(s.bk?.addons) && !s.bk.addons.every(has)) || (s.bk && !veh(s.bk.vehicle)) || (s.tintVeh != null && !veh(s.tintVeh)))
+      if (changed && stale)
+        this.setState((ss: any) => {
+          const first = this.VEH[0][0]
+          return {
+            ...(ss.tintVeh != null && !veh(ss.tintVeh) ? { tintVeh: first } : {}),
+            bk: { ...ss.bk, addons: Array.isArray(ss.bk.addons) ? ss.bk.addons.filter(has) : ss.bk.addons, vehicle: veh(ss.bk.vehicle) ? ss.bk.vehicle : first },
+          }
+        })
+      return changed
+    }
+
+    /**
+     * The guest price of a member price the design computes with no catalog item behind it (its fallbacks): the
+     * catalog's markup. Every item the page lists shows its own guest price instead (gp, __washGuest, __addonGuest, a
+     * tint row's guest prices), also where the design's booking sheet asks g(member) (__catalogSheet).
+     */
+    g(m: number): number {
+      const site = this.__site
+      if (!site) return super.g(m)
+      return Math.floor((m * (100 + site.markupPct) + 50) / 100)
+    }
+
+    /** The guest price of a wash by the design's id. */
+    __washGuest(w: { id: string; m: number }): number {
+      return this.__site?.wash.find((x) => x.id === w.id)?.gp ?? this.g(w.m)
+    }
+
+    /** The guest price of an add-on by the design's id. */
+    __addonGuest(id: string): number {
+      const a = this.__site?.during?.find((x) => x.id === id)
+      if (a) return a.gp
+      const dm = this.__design!.DURING.find((x) => x.id === id)
+      return this.g(dm ? dm.m : 0)
+    }
+
+    __catalogTexts(): Record<string, string> {
+      if (!this.__design) return {}
+      return catalogTexts(priceFacts(this.__site, this.__design!, (m) => this.g(m)))
+    }
+
+    homeVM(): Record<string, any> {
+      const v = super.homeVM()
+      const site = this.__site
+      if (!site) return v
+      // the Gold calculator: n guest Signature washes with their fees against the Gold price
+      const sig = site.wash.find((w) => w.id === 'signature') ?? site.wash[0]!
+      const per = sig.gp + site.fee
+      const gold = site.plans.gold.price
+      const n = this.state.washes
+      const save = n * per - gold
+      const k = Math.floor(gold / per) + 1
+      return {
+        ...v,
+        calcGuest: this.$(n * per),
+        calcGuestSub: n + ' × ($' + sig.gp + ' wash + $' + site.fee + ' fee)',
+        calcSave: save > 0 ? 'Save ' + this.$(save) + '/mo' : 'Pays off at ' + k + ' washes',
+        calcSaveSub: save > 0 ? 'with Gold at ' + n + ' wash' + (n > 1 ? 'es' : '') + ' a month' : k + ' guest washes cost ' + this.$(k * per),
+        nextSub:
+          typeof v.nextSub === 'string'
+            ? v.nextSub.replace(/Signature Hand Wash takes about 45 min$/, () => `${sig.name} takes about ${sig.durationMin} min`)
+            : v.nextSub,
+      }
+    }
+
+    /** The design's price groups (priceVM's G) written from the catalog, row for row in the design's formulas. */
+    __priceRows(site: SiteCatalog): Record<string, any[]> {
+      let i = 0
+      const row = (name: string, sub: string, m: number, gp: number, o?: Record<string, any>) => ({
+        name,
+        sub,
+        priced: true,
+        quote: false,
+        pre: '',
+        g: '$' + gp,
+        v: '$' + m,
+        save: 'SAVE $' + (gp - m),
+        vSize: '20px',
+        nameSize: '16px',
+        delay: i++ * 60 + 'ms',
+        ...(o || {}),
+      })
+      const incl = (name: string, sub: string, gp: number) => row(name, sub, 0, gp, { v: 'Included', vSize: '17px', save: 'SAVE $' + gp })
+      const tintGuest = (f: string, k: string): number[] => (site.tint ? site.tint.guest[f]![k]! : this.TINT[f][k].map((x: number) => this.g(x)))
+      const films = site.tint ? site.tint.films : DESIGN_FILMS
+      const wash = site.wash.map((w) => incl(w.name, w.sub, w.gp)).map((r) => ({ ...r, nameSize: '18px' }))
+      const during = this.DURING.map((a: any) => {
+        const gp = this.__addonGuest(a.id)
+        return a.vip ? incl(a.name, a.vip === 'incl' ? a.sub + ' · included with VIP' : a.sub + ' · ' + a.vip + ' with VIP', gp) : row(a.name, a.sub, a.m, gp)
+      })
+      const tint = this.VEH.map(([k, l]: [string, string]) => row(l, 'Carbon or ceramic film · side & rear windows', this.TINT.carbon[k][0], tintGuest('carbon', k)[0]!, { pre: 'from' }))
+      const tintFull = this.VEH.flatMap(([k, l]: [string, string]) =>
+        Object.keys(DESIGN_FILMS).map((f) => {
+          const r = this.TINT[f][k]
+          const gr = tintGuest(f, k)
+          return row(l + ' · ' + films[f], 'VIP ' + this.$(r[0]) + '–' + this.$(r[1]) + ' · guest ' + this.$(gr[0]) + '–' + this.$(gr[1]), r[0], gr[0]!, { pre: 'from' })
+        }),
+      )
+      const detail = (site.detail ?? DESIGN_DETAIL.map((d) => ({ ...d, gp: this.g(d.m) }))).map((d) => row(d.name, d.sub, d.m, d.gp))
+      const more = (site.more ?? DESIGN_MORE).map((nm) => ({ name: nm, sub: '', priced: false, nameSize: '15.5px' }))
+      return { wash, during, tint, tintFull, detail, more }
+    }
+
+    priceVM(): Record<string, any> {
+      const v = super.priceVM()
+      const site = this.__site
+      if (!site) return v
+      const G = this.__priceRows(site)
+      // the design's groups by their number and title (priceVM's G keys)
+      const KEY: Record<string, string> = {
+        '01|Hand wash': 'wash',
+        '02|Add during your wash': 'during',
+        '03|Window tint': 'tint',
+        '01|Window tint': 'tintFull',
+        '04|Detailing': 'detail',
+        '05|More services': 'more',
+      }
+      // "What VIP is worth a month", the design's items at the catalog's guest prices
+      const sig = site.wash.find((w) => w.id === 'signature') ?? site.wash[0]!
+      const vm: [string, number][] = [
+        ['4 Signature washes', 4 * sig.gp],
+        ['4 booking fees', 4 * site.fee],
+        ['Hand wax ×4', 4 * this.__addonGuest('wax')],
+        ['Engine bay wash', this.__addonGuest('engine')],
+        ['Leather conditioning ×2', 2 * this.__addonGuest('leather')],
+        ['Stain removal', this.__addonGuest('stain')],
+      ]
+      const total = vm.reduce((a, x) => a + x[1], 0)
+      return {
+        ...v,
+        prGroups: (v.prGroups || []).map((gr: any) => {
+          const k = KEY[gr.n + '|' + gr.title]
+          return k && G[k] ? { ...gr, rows: G[k] } : gr
+        }),
+        vipMonth: vm.map(([label, x]) => ({ label, value: this.$(x) })),
+        vipMonthGuest: this.$(total),
+        vipMonthSave: 'Save ' + this.$(total - site.plans.vip.price) + '/mo',
+        faqs: (v.faqs || []).map((f: any) => ({ ...f, a: swapAmount(f.a, this.__design!.FEE, site.fee) })),
+      }
+    }
+
+    pagesVM(): Record<string, any> {
+      const v = super.pagesVM()
+      const site = this.__site
+      if (!site) return v
+      const s = this.state
+      const from = this.__design!.FEE
+      const r = this.TINT[s.film][s.tintVeh]
+      const gr: number[] = site.tint ? site.tint.guest[s.film]![s.tintVeh]! : r.map((x: number) => this.g(x))
+      const cardWash = ['signature', 'exterior'] // washCards: the design's two cards, in this order
+      return {
+        ...v,
+        compRows: (v.compRows || []).map((row: any) =>
+          row.f === 'Booking fee' ? { ...row, cells: row.cells.map((c: any) => ('t' in c ? { ...c, t: swapAmount(c.t, from, site.fee) } : c)) } : row,
+        ),
+        washCards: (v.washCards || []).map((c: any, i: number) => {
+          const w = site.wash.find((x) => x.id === cardWash[i])
+          return w ? { ...c, name: w.name, g: '$' + w.gp } : c
+        }),
+        tintGuest: this.$(gr[0]) + ' – ' + this.$(gr[1]),
+        tintSave: 'save ' + this.$(gr[0]! - r[0]) + '+',
+      }
+    }
+
+    /** The join flow's plans (joinVM's T): the catalog's monthly prices and perks under the design's names. */
+    __catalogJoin(r: Record<string, any>): Record<string, any> {
+      const site = this.__site
+      const jv = r.jv
+      const tier = this.state.jn?.tier as 'gold' | 'vip'
+      if (!site || !jv || this.state.page !== 'join' || !Array.isArray(jv.tiers) || !(tier in site.plans)) return r
+      const KEY: Record<string, 'gold' | 'vip'> = { Gold: 'gold', VIP: 'vip' }
+      const from = DESIGN_PLANS[tier].price
+      const to = site.plans[tier].price
+      return {
+        ...r,
+        jv: {
+          ...jv,
+          tiers: jv.tiers.map((t: any) => {
+            const k = KEY[t.name]
+            return k ? { ...t, price: '$' + site.plans[k].price, perks: site.plans[k].perks } : t
+          }),
+          agreeText: swapAmount(jv.agreeText, from, to),
+          lines: (jv.lines || []).map((l: any, i: number) => (i === 0 ? { ...l, value: swapAmount(l.value, from, to) } : l)),
+          due: swapAmount(jv.due, from, to),
+          ctaLabel: swapAmount(jv.ctaLabel, from, to),
+        },
+      }
+    }
+
+    /**
+     * What the visit costs at the shop (sheetVals' atShop). byItem: at each item's own guest price (what the sheet shows);
+     * otherwise as the design's logic computed it, with g(member).
+     */
+    __atShop(byItem: boolean): number {
+      const s = this.state
+      const b = s.bk
+      const isG = b.who === 'guest'
+      const vip = s.tier === 'vip'
+      const wash = this.WASH.find((w: any) => w.id === b.svc) || this.WASH[0]
+      const guestWash = (w: any) => (byItem ? this.__washGuest(w) : this.g(w.m))
+      const guestAddon = (a: any) => (byItem ? this.__addonGuest(a.id) : this.g(a.m))
+      const addonPrice = (a: any) => (isG ? guestAddon(a) : vip && a.vip ? 0 : a.m)
+      return (isG ? guestWash(wash) : 0) + this.DURING.filter((a: any) => b.addons.includes(a.id)).reduce((x: number, a: any) => x + addonPrice(a), 0)
+    }
+
+    /**
+     * The booking sheet with the catalog: a guest's wash and add-on prices are each item's own guest price (the design's
+     * logic asks g(member), which cannot tell two items with one member price apart), and the fee amounts are the
+     * catalog's. The sheet's lists follow WASH and DURING in order (sheetVals: washes, addons; review lines: the wash,
+     * the picked add-ons, the fee; sumLines: the vehicle, the wash, the picked add-ons, the fee).
+     */
+    __catalogSheet(r: Record<string, any>): Record<string, any> {
+      const site = this.__site
+      const d = this.__design
+      const sh = r.sh
+      const s = this.state
+      if (!site || !d || !sh || s.sheet !== 'book') return r
+      const from = d.FEE
+      const to = site.fee
+      const out: Record<string, any> = { ...sh }
+      const b = s.bk
+      if (b.who === 'guest') {
+        const price = (o: any, field: string, logic: number, own: number) => (o && typeof o[field] === 'string' ? { ...o, [field]: swapAmount(o[field], logic, own) } : o)
+        const wash = this.WASH.find((w: any) => w.id === b.svc) || this.WASH[0]
+        const ads = this.DURING.filter((a: any) => b.addons.includes(a.id))
+        const fixWash = (o: any, w: any, field: string) => price(o, field, this.g(w.m), this.__washGuest(w))
+        const fixAddon = (o: any, a: any, field: string) => price(o, field, this.g(a.m), this.__addonGuest(a.id))
+        if (Array.isArray(sh.washes)) out.washes = sh.washes.map((o: any, i: number) => (this.WASH[i] ? fixWash(o, this.WASH[i], 'price') : o))
+        if (Array.isArray(sh.addons)) out.addons = sh.addons.map((o: any, i: number) => (this.DURING[i] ? fixAddon(o, this.DURING[i], 'price') : o))
+        if (Array.isArray(sh.lines))
+          out.lines = sh.lines.map((o: any, i: number) => (i === 0 ? fixWash(o, wash, 'value') : ads[i - 1] ? fixAddon(o, ads[i - 1], 'value') : o))
+        if (Array.isArray(sh.sumLines))
+          out.sumLines = sh.sumLines.map((o: any, i: number) => (i === 1 ? fixWash(o, wash, 'value') : i >= 2 && ads[i - 2] ? fixAddon(o, ads[i - 2], 'value') : o))
+      }
+      const logicAt = this.__atShop(false)
+      const ownAt = this.__atShop(true)
+      if (Array.isArray(out.lines))
+        out.lines = out.lines.map((l: any) => (l.label === 'Booking fee · non-refundable' ? { ...l, value: swapAmount(l.value, from, to) } : l))
+      if (Array.isArray(out.sumLines)) out.sumLines = out.sumLines.map((l: any) => (l.label === 'Booking fee' ? { ...l, value: swapAmount(l.value, from, to) } : l))
+      if (sh.bReview && sh.isGuest) {
+        out.due = swapAmount(sh.due, from, to)
+        if (typeof sh.dueSub === 'string')
+          out.dueSub = sh.dueSub
+            .replace(new RegExp(`^\\$${from}(?![0-9])`), () => `$${to}`)
+            .replace(`Pay ${this.$(logicAt)}`, () => `Pay ${this.$(ownAt)}`)
+      }
+      if (sh.bReview && typeof sh.upsell === 'string') out.upsell = sh.upsell.replace(this.$(logicAt + from), () => this.$(ownAt + to))
+      return { ...r, sh: out }
+    }
+    // ==== end of DV-CATALOG =================================================================================================
+
     // ---- the view models ------------------------------------------------------------------------------------------------
     renderVals(): Record<string, any> {
       const v = super.renderVals()
@@ -430,6 +704,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         busy: this.__busy,
         smsHref: smsUrl(env.contact.smsKeyword),
       }
+      v.site.cat = this.__catalogTexts() // DV-CATALOG: the template's static price texts
       if (themeCfg) {
         // the visitor's own choice (header toggle, menu Dark/Light) is remembered on the device (DV-THEME); the design's
         // handlers set state synchronously, so this.theme() already reads the new theme
@@ -448,7 +723,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     sheetVals(): Record<string, any> {
-      const r = super.sheetVals()
+      const r = this.__catalogSheet(super.sheetVals())
       const s = this.state
       let sh = r.sh
       if (s.sheet !== 'book') return r
@@ -491,7 +766,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     joinVM(): Record<string, any> {
-      const r = super.joinVM()
+      const r = this.__catalogJoin(super.joinVM())
       const j = this.state.jn
       const jv = r.jv
       if (!jv || this.state.page !== 'join') return r

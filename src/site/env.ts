@@ -4,6 +4,7 @@
 import type { PublicHours } from '../hours/format'
 import type { Availability } from './availability'
 import type { ThemeConfig } from '../client/theme'
+import type { PublicCatalog } from './catalog'
 
 export type BookingMode = 'sms' | 'live'
 
@@ -52,6 +53,12 @@ export interface SiteEnv {
   availabilityDays: number
   contact: ContactConfig
   catalog: CatalogConfig
+  /**
+   * DV-CATALOG: the GET /api/v1/public/catalog snapshot baked into the page (SITE_CATALOG_JSON), kept only when it is
+   * website-ready (src/site/catalog.ts websiteCatalog); null: the design's built-in content until the browser's refresh
+   */
+  catalogSnapshot: PublicCatalog | null
+  catalogSource: 'SITE_CATALOG_JSON' | 'none'
   fee: { cents: number; text: string }
   brand: string
   /** site.config.json theme: the bridge follows the device setting and stores the visitor's choice (DV-THEME) */

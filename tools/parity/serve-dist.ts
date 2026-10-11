@@ -11,6 +11,7 @@ import { DEFAULT_DIST_PORT, FIXED_NOW, ROOT, TIMEZONE } from './config'
 import { designAvailability } from '../../src/site/availability'
 import { hoursTable } from '../../src/site/hours'
 import { validatePublicHours } from '../../src/hours/format'
+import { designCatalog } from '../site/catalog-fixture'
 
 export type HoursFixture = 'design' | 'alt'
 
@@ -64,22 +65,12 @@ export function hoursFixture(kind: HoursFixture): string {
 }
 
 /**
- * The catalog the harness answers with: the site's configured keys (site.config.json `catalog`), so the bridge's
- * catalog load (made in every booking mode before the first availability query) resolves the configured keys as is.
+ * The catalog the harness answers with (DV-CATALOG): the design's own content in the backend's shape after the
+ * website-catalog seed (tools/site/catalog-fixture.ts), the same snapshot `pnpm build:parity` bakes, so the port's
+ * catalog-driven content must equal the original and the refresh after mount changes nothing.
  */
 export function catalogFixture(): string {
-  const site = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'utf8')) as {
-    catalog: { services: Record<string, { key: string; name: string }>; addons: Record<string, string> }
-  }
-  return JSON.stringify({
-    generatedAt: FIXED_NOW,
-    services: Object.entries(site.catalog.services).map(([id, s]) => ({ key: s.key, name: s.name, shortName: s.name, durationMin: id === 'signature' ? 45 : 30, priceCents: 0, tags: [] })),
-    addons: Object.entries(site.catalog.addons).map(([id, key]) => ({ key, name: id, priceCents: 0, tags: [] })),
-    plans: [
-      { key: 'gold', name: 'Gold', planKey: 'premium', planName: 'Premium', perks: [], priceCents: null },
-      { key: 'vip', name: 'VIP', planKey: 'executive', planName: 'Executive', perks: [], priceCents: null },
-    ],
-  })
+  return JSON.stringify(designCatalog(new Date(FIXED_NOW).toISOString()))
 }
 
 /**

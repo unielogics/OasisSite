@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as React from 'react'
+import { afterEach } from 'vitest'
 import { DCLogic } from '../dc/DCLogic'
 import { applyCopy, loadPatchConfig } from '../../tools/dc-compile/patches'
 import { loadSiteConfig } from '../../tools/prerender/seo'
@@ -44,6 +45,8 @@ export interface SiteOptions {
   booking?: 'sms' | 'live'
   availability?: Availability | null
   hours?: PublicHours | null
+  /** DV-CATALOG: the GET /public/catalog snapshot the build bakes (SITE_CATALOG_JSON); none by default */
+  catalog?: unknown
   /** path (without query) -> handler; anything else answers 404 */
   routes?: Record<string, Handler>
 }
@@ -57,6 +60,22 @@ export interface SiteUnderTest {
   vals: () => any
 }
 
+const sites: any[] = []
+
+/**
+ * Detaches every site made so far: the design's timers still pending (the toast's 2.6 s flash, the join flow's delayed
+ * openBook) and late fetch answers then update nothing, so none of them reaches `document` after jsdom is torn down.
+ * Runs after each test of every file that uses the kit.
+ */
+export function disposeSites(): void {
+  for (const c of sites.splice(0)) {
+    clearTimeout(c._tt)
+    clearTimeout(c._smsT)
+    c.__host = undefined
+  }
+}
+afterEach(disposeSites)
+
 export function makeSite(o: SiteOptions = {}): SiteUnderTest {
   const site = loadSiteConfig(ROOT)
   const env = buildSiteEnv({
@@ -64,6 +83,7 @@ export function makeSite(o: SiteOptions = {}): SiteUnderTest {
     hours: o.hours ?? FALLBACK_HOURS,
     hoursSource: 'fallback',
     availabilityJson: o.availability ? JSON.stringify(o.availability) : null,
+    catalogJson: o.catalog === undefined ? null : JSON.stringify(o.catalog),
     booking: o.booking ?? 'sms',
     apiOrigin: '',
     now: new Date().toISOString(),
@@ -87,6 +107,7 @@ export function makeSite(o: SiteOptions = {}): SiteUnderTest {
   }
   const Site = bridge(designComponent(), env)
   const c = new Site({ theme: 'dark', beads: true, stickyBar: true })
+  sites.push(c)
   let updating = false
   let dirty = false
   const commit = () => {
