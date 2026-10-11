@@ -11,8 +11,9 @@
 // GET /api/v1/ops/snapshot as the seeded manager); the slot turns last/booked on reload; the OTP member path books
 // without a fee (the code read from the fixture's texts, or recovered from the stack's challenge hash because the
 // simulator delivers the text instantly and delivered one-time codes are redacted); a join creates a pending
-// membership; the honeypot creates nothing; no page error, no 5xx, no external request; and in sms mode every
-// Book/Join action produces an sms: link with the composed body.
+// membership; the honeypot creates nothing; the catalog's prices show (DV-CATALOG: a changed price in the fixture's catalog
+// appears after the page's catalog load, an unseeded catalog leaves the design's content); no page error, no 5xx, no
+// external request; and in sms mode every Book/Join action produces an sms: link with the composed body.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import '../tools/parity/env'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -24,6 +25,7 @@ import { parseArgs } from 'node:util'
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { buildSite } from '../tools/prerender/build'
 import { startFixtureApi, type FixtureApi } from '../tools/site/fixture-api'
+import { designCatalog, unseededCatalog, withMemberPrice } from '../tools/site/catalog-fixture'
 import { startSiteProxy, type SiteProxy } from '../tools/site/proxy'
 import { ROOT, CHROMIUM_FLAGS } from '../tools/parity/config'
 
@@ -349,10 +351,12 @@ async function main(): Promise<number> {
   assert(hours.status === 200, `GET /public/hours -> ${hours.status}`)
   const avail0 = await getJson(`${api.origin}/api/v1/public/availability?days=7`)
   assert(avail0.status === 200, `GET /public/availability -> ${avail0.status}`)
+  const catalog0 = await getJson(`${api.origin}/api/v1/public/catalog`)
+  assert(catalog0.status === 200, `GET /public/catalog -> ${catalog0.status}`)
   const liveDir = path.join(ROOT, 'dist-e2e-live')
   const smsDir = path.join(ROOT, 'dist-e2e-sms')
   if (!values['skip-build'] || !fs.existsSync(path.join(liveDir, 'index.html'))) {
-    await buildSite({ root: ROOT, variant: 'prod', outDir: liveDir, hoursJson: JSON.stringify(hours.body), availabilityJson: JSON.stringify(avail0.body), booking: 'live', apiOrigin: '', log: () => {} })
+    await buildSite({ root: ROOT, variant: 'prod', outDir: liveDir, hoursJson: JSON.stringify(hours.body), availabilityJson: JSON.stringify(avail0.body), catalogJson: JSON.stringify(catalog0.body), booking: 'live', apiOrigin: '', log: () => {} })
     await buildSite({ root: ROOT, variant: 'prod', outDir: smsDir, hoursJson: JSON.stringify(hours.body), availabilityJson: null, booking: 'sms', apiOrigin: '', log: () => {} })
     log('built dist-e2e-live and dist-e2e-sms')
   }
@@ -641,6 +645,45 @@ async function main(): Promise<number> {
       check('honeypot: 202 with a fake reference and no record', r.status === 202 && /OAS-/.test(r.body) && !created, `${r.status} ${r.body.slice(0, 80)}`)
       await ctx.close()
     }
+
+    // 7b. DV-CATALOG: the website's prices come from the catalog (fixture only: the test swaps the API's catalog)
+    if (api.kind === 'fixture') {
+      const fixture = api.fixture!
+      const pageText = (page: Page) => page.evaluate(() => document.getElementById('dc-root')?.innerText ?? '')
+      try {
+        // a changed price: the Signature wash at $50 for members ($60 for guests), Gold at $109
+        const changed = withMemberPrice(designCatalog(), 'signature-hand-wash', 50)
+        changed.plans[0]!.priceCents = 10900
+        fixture.state.catalog = changed
+        const { ctx, page, t } = await newPage(browser, proxy.origin)
+        trackers.push(t)
+        await page.goto(`${proxy.origin}/#/wash`, { waitUntil: 'load' })
+        await ready(page)
+        await page.waitForFunction(() => /SAVE \$60/.test(document.getElementById('dc-root')?.innerText ?? ''), null, { timeout: 20_000 }).catch(() => {})
+        const wash = await pageText(page)
+        check('catalog: a changed price in the API\'s catalog shows on the wash page after the catalog load (live build)', /SAVE \$60/.test(wash), wash.slice(0, 200).replace(/\s+/g, ' '))
+        await page.goto(`${proxy.origin}/#/membership`, { waitUntil: 'load' })
+        await page.waitForTimeout(800)
+        check('catalog: the Gold price follows the catalog on the membership page', /\$109/.test(await pageText(page)))
+        await ctx.close()
+        // an unseeded catalog (production before the website-catalog seed): the design's own content, never the dashboard's list
+        fixture.state.catalog = unseededCatalog()
+        const u = await newPage(browser, proxy.origin)
+        trackers.push(u.t)
+        await u.page.goto(`${proxy.origin}/#/wash`, { waitUntil: 'load' })
+        await ready(u.page)
+        await u.page.waitForTimeout(1500)
+        const plain = await pageText(u.page)
+        check(
+          'catalog: an unseeded catalog keeps the built-in services and prices (no dashboard-internal items)',
+          /SAVE \$54/.test(plain) && /Hand wax/.test(plain) && /Interior deep clean/.test(plain) && !/Express Hand Wash|Premium Hand Wash/.test(plain),
+          plain.slice(0, 200).replace(/\s+/g, ' '),
+        )
+        await u.ctx.close()
+      } finally {
+        fixture.state.catalog = designCatalog()
+      }
+    } else log('skip catalog price checks (they swap the fixture API\'s catalog)')
     void guestKey
   } finally {
     await proxy.close()

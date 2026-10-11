@@ -6,11 +6,14 @@
 //                                   kit's site-deploy.sh passes a file); else src/data/hours.fallback.json + a warning
 //   SITE_AVAILABILITY_JSON          GET /api/v1/public/availability body, inline or a file path (else no slots: the
 //                                   board shows the hours and "text to check times")
+//   SITE_CATALOG_JSON               GET /api/v1/public/catalog body, inline or a file path (DV-CATALOG): baked in only when
+//                                   it is website-ready (src/site/catalog.ts), else the design's built-in content + a warning
 //   SITE_BUILD_NOW / PRERENDER_NOW  the build instant (default: now); the parity build pins it to the harness's clock
 import fs from 'node:fs'
 import path from 'node:path'
 import type { PublicHours } from '../../src/hours/format'
 import { validateAvailability, type Availability } from '../../src/site/availability'
+import { configDesign, websiteCatalog, type PublicCatalog } from '../../src/site/catalog'
 import type { SiteEnv } from '../../src/site/env'
 import type { SiteConfig } from './seo'
 
@@ -30,6 +33,7 @@ export interface SiteEnvInput {
   hours: PublicHours
   hoursSource: 'SITE_HOURS_JSON' | 'fallback'
   availabilityJson?: string | null
+  catalogJson?: string | null
   booking?: string | null
   apiOrigin?: string | null
   now: string
@@ -55,6 +59,18 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
   for (const k of ['phoneE164', 'phoneDisplay', 'smsE164', 'smsDisplay'] as const)
     if (typeof s.contact[k] !== 'string' || !s.contact[k])
       throw new Error(`site.config.json contact.${k} is required (calls use phone*, texts use sms*)`)
+  // DV-CATALOG: the catalog snapshot, kept only when the page would use it (website-ready)
+  let catalogSnapshot: PublicCatalog | null = null
+  if (i.catalogJson) {
+    try {
+      const raw = readSnapshot(i.catalogJson)
+      const ready = websiteCatalog(raw, s.catalog, configDesign(s.catalog))
+      if (ready.site) catalogSnapshot = raw as PublicCatalog
+      else i.warn(`SITE_CATALOG_JSON is not website-ready (${ready.reason}); the page shows the design's built-in services and prices`)
+    } catch (e) {
+      i.warn(`SITE_CATALOG_JSON is not a catalog payload (${e instanceof Error ? e.message : String(e)}); the page shows the design's built-in services and prices`)
+    }
+  } else i.warn('SITE_CATALOG_JSON is not set; the page shows the design\'s built-in services and prices until the browser loads the catalog')
   return {
     booking,
     apiOrigin: (i.apiOrigin ?? '').replace(/\/+$/, ''),
@@ -77,6 +93,8 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
     availabilityDays: s.availability.days,
     contact: s.contact,
     catalog: s.catalog,
+    catalogSnapshot,
+    catalogSource: catalogSnapshot ? 'SITE_CATALOG_JSON' : 'none',
     fee: { cents: s.booking.feeCents, text: s.booking.feeText },
     brand: s.name,
     theme: s.theme ?? null,

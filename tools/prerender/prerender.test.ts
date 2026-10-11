@@ -409,6 +409,42 @@ describe('build on the configured page (design/pages.json: the raw Oasis Site v2
   })
 })
 
+describe('DV-CATALOG: the catalog snapshot (SITE_CATALOG_JSON)', { timeout: 300_000 }, () => {
+  it('the design catalog prerenders the design byte for byte; a changed price is baked in; an unseeded one is not used', async () => {
+    const { designCatalog, unseededCatalog, withMemberPrice } = await import('../site/catalog-fixture')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-dist-c-'))
+    const build = async (catalogJson: string | null) => {
+      const r = await buildSite({ root, variant: 'prod', outDir: dir, htmlOnly: true, hoursJson: null, availabilityJson: null, catalogJson, booking: 'sms', now: '2026-06-13T10:36:00-04:00', log: () => {} })
+      return { r, index: fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), manifest: JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')) }
+    }
+    const none = await build(null)
+    expect(none.r.catalogSource).toBe('none')
+    expect(none.r.warnings.some((w) => w.includes('SITE_CATALOG_JSON is not set'))).toBe(true)
+    expect(none.index).toContain('from $99')
+    expect(none.index).toContain('Guests can book with prices 20% higher and a ')
+    const same = await build(JSON.stringify(designCatalog()))
+    expect(same.r.catalogSource).toBe('SITE_CATALOG_JSON')
+    expect(same.manifest.catalogSource).toBe('SITE_CATALOG_JSON')
+    expect(same.index).toBe(none.index)
+    const cat = withMemberPrice(designCatalog(), 'signature-hand-wash', 50)
+    cat.plans[0]!.priceCents = 10900
+    const changed = await build(JSON.stringify(cat))
+    expect(changed.index).not.toBe(none.index)
+    expect(changed.index).toContain('from $109')
+    expect(changed.index).not.toContain('from $99')
+    expect(none.index).not.toContain('SAVE $60')
+    expect(changed.index).toContain('SAVE $60') // the Signature row: guest $60, included for members
+    const unseeded = await build(JSON.stringify(unseededCatalog()))
+    expect(unseeded.r.catalogSource).toBe('none')
+    expect(unseeded.r.warnings.some((w) => /SITE_CATALOG_JSON is not website-ready \(the catalog has no signature-hand-wash\)/.test(w))).toBe(true)
+    expect(unseeded.index).toBe(none.index)
+    const broken = await build('{"services":')
+    expect(broken.r.catalogSource).toBe('none')
+    expect(broken.index).toBe(none.index)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+})
+
 describe('renderPage', () => {
   it('fails loudly on a logic class that throws, instead of shipping the error card', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-gen-'))

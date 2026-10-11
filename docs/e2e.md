@@ -51,6 +51,10 @@ are redacted) and the pending membership row.
    receipts.") → the checkout step has no card field → terms → Start Gold → 201 `pending_payment`,
    `next: checkout_link_by_sms`; a pending membership row exists for the number.
 6. The honeypot (`website` non-empty) answers 202 with a fake reference and creates nothing.
+   Catalog (DV-CATALOG, fixture only; the live build bakes the API's catalog as `SITE_CATALOG_JSON`): with the fixture's
+   catalog changed (Signature Hand Wash at $50 for members, Gold at $109) `#/wash` shows "SAVE $60" after the page's
+   catalog load and `#/membership` shows $109; with production's unseeded catalog the page keeps the design's services
+   and prices ("SAVE $54", Hand wax, Interior deep clean) and shows none of the dashboard's own services.
 7. SMS mode: Book composes `sms:+18623885827?&body=WASH booking: …` (wash, vehicle, time), Join composes
    `JOIN VIP: name · phone · car`, the design's own text links carry the texting number, and no POST reaches the API.
    Texting vs calling (DV-CONTACT): over the home view, the open menu, every hash route and the live join welcome step,

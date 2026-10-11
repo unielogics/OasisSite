@@ -44,6 +44,8 @@ export interface SiteOptions {
   booking?: 'sms' | 'live'
   availability?: Availability | null
   hours?: PublicHours | null
+  /** DV-CATALOG: the GET /public/catalog snapshot the build bakes (SITE_CATALOG_JSON); none by default */
+  catalog?: unknown
   /** path (without query) -> handler; anything else answers 404 */
   routes?: Record<string, Handler>
 }
@@ -64,6 +66,7 @@ export function makeSite(o: SiteOptions = {}): SiteUnderTest {
     hours: o.hours ?? FALLBACK_HOURS,
     hoursSource: 'fallback',
     availabilityJson: o.availability ? JSON.stringify(o.availability) : null,
+    catalogJson: o.catalog === undefined ? null : JSON.stringify(o.catalog),
     booking: o.booking ?? 'sms',
     apiOrigin: '',
     now: new Date().toISOString(),

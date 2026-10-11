@@ -39,7 +39,7 @@ See `docs/intake.md`, `docs/compiler.md`, `docs/site.md` (the bridge: hours, ava
   stylesheet, on the home page and the 404 page; `pnpm check:dist` enforces the placement);
   **no external request** of any kind (fonts, scripts and images are all under `/assets/`).
 - Environment read at build time: `SITE_URL`, `SITE_HOURS_JSON` (fallback: `src/data/hours.fallback.json`, Sunday
-  closed), `SITE_AVAILABILITY_JSON`, `SITE_BOOKING` (`sms` default | `live`), `SITE_API_ORIGIN` (default same origin),
+  closed), `SITE_AVAILABILITY_JSON`, `SITE_CATALOG_JSON` (DV-CATALOG), `SITE_BOOKING` (`sms` default | `live`), `SITE_API_ORIGIN` (default same origin),
   `SITE_BUILD_NOW` — see `docs/deploy-contract.md`.
 - `pnpm check:dist` verifies the output and the deploy kit runs it after the build.
 

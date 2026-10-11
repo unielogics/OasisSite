@@ -49,6 +49,33 @@ of every entry below.
   201-598-6304 everywhere; the harness applies the same entries to the original as text swaps. E-mail and address
   values equal the design's. The placeholder phone "(201) 555-0123" of the member sign-in field becomes "Mobile number"
   (the design's own wording for the join flow). The text keyword "WASH" stays as designed.
+- **DV-CATALOG** The services, add-ons, tint table, detailing, quote-only items, plan prices and perks and the guest
+  booking fee come from the dashboard's Settings through `GET /api/v1/public/catalog` (backend ADR 0160 W2a, owner
+  decision: Settings is the one catalog), prerendered from `SITE_CATALOG_JSON` (the build snapshot, like the hours) and
+  applied again from the browser's catalog load after mount (`src/site/catalog.ts`, the bridge's catalog section).
+  **Safety:** the catalog is used only when it is *website-ready*: both of the design's washes under their keys
+  (`signature-hand-wash`, `exterior-hand-wash`) with a description, a duration and whole-dollar member and guest prices,
+  both plans (`gold`, `vip`) with a monthly price and perks, a whole-dollar fee and the guest markup. Anything less
+  (production before the owner runs the `website-catalog` seed, an unknown payload, a missing key, cents in a price)
+  keeps the design's built-in content exactly as it is, and a live answer that is not ready brings the design's content
+  back (a failed load keeps what the page has). Inside a ready catalog each section falls back to the design's own list
+  on its own: add-ons (only those with a description and prices, in the catalog's order; the design's ids are kept for
+  the items it knows, a new one is keyed by its catalog key), tint (needs the design's three vehicle types and both
+  films, carbon and ceramic, priced), detailing (the `detail` packages with a description and prices), quote-only items
+  (the catalog's `quotes`). Prices shown are the catalog's member and guest **starting** prices (`memberPriceCents` /
+  `guestPriceCents`, a tint row's `memberMinCents` / `guestMinCents`; never `priceCents`) in the design's words: the
+  price rows ("SAVE $9", "from $229", "Included"), the wash cards, the booking sheet, the Gold calculator ("4 × ($54 wash
+  + $25 fee)", "Pays off at 2 washes"), "What VIP is worth", the join flow's plan cards, terms, summary and button, the
+  comparison table's fee, the fee FAQ and the review step's fee lines. The template's 18 fixed price texts ("$99",
+  "$169/mo", "$25 non-refundable booking fee", "Guests can book with prices 20% higher", "VIP from $229, guest from
+  $275.", …) are bound to `site.cat` with `replace-text` ops (three of them name one text node of a mixed element with
+  the op's new `child` index). Unchanged design copy: the wash names in the "VIP is worth" list and the SMS demo, the
+  wash cards' steps, the home page's longer Gold/VIP perk lists, the plan names (Gold, VIP), "Carbon or ceramic film ·
+  side & rear windows", the film words in "Carbon and ceramic film", the VLT options and film descriptions. The guest
+  price of a member price the design computes with `g()` is the catalog's item with that member price (the first one if
+  two items share a member price with different guest prices), else the catalog's markup rounded half up.
+  Harness: no swap; `pnpm build:parity` bakes and `serve-dist` answers the design's content in the backend's shape
+  (`tools/site/catalog-fixture.ts` `designCatalog()`), so the catalog-driven page must equal the original at zero diff.
 
 ## Booking and membership
 

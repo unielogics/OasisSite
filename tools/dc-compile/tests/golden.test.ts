@@ -504,6 +504,38 @@ describe('patch layer', () => {
     }
   })
 
+  it('replace-text with `child` replaces one text node of an element that holds other nodes too (DV-CATALOG)', () => {
+    const html = '<div>Guests pay <b>$25</b> · VIP $169</div>'
+    const nodes = fresh(html)
+    applyPatches(
+      nodes,
+      cfg({
+        ops: [
+          { op: 'replace-text', tpl: 0, expectTag: 'div', child: 0, expect: 'Guests pay ', with: '{{= site.a }}', dv: 'DV-T1' },
+          { op: 'replace-text', tpl: 0, expectTag: 'div', child: 2, expect: ' · VIP $169', with: '{{= site.b }}', dv: 'DV-T1' },
+        ],
+      }),
+      't',
+    )
+    const tsx = emit(nodes)
+    expect(tsx).toContain('{$v.site?.a}')
+    expect(tsx).toContain('{$v.site?.b}')
+    expect(tsx).toContain('"$25"')
+    for (const op of [
+      { op: 'replace-text', tpl: 0, child: 1, expect: '$25', with: 'x', dv: 'DV-T1' },
+      { op: 'replace-text', tpl: 0, child: 0, expect: 'Guests pay', with: 'x', dv: 'DV-T1' },
+      { op: 'replace-text', tpl: 0, expect: 'Guests pay ', with: 'x', dv: 'DV-T1' },
+    ]) {
+      try {
+        applyPatches(fresh(html), cfg({ ops: [op as any] }), 't')
+        throw new Error('expected failure for ' + JSON.stringify(op))
+      } catch (e) {
+        expect(e).toBeInstanceOf(CompileError)
+        expect((e as CompileError).exit).toBe(3)
+      }
+    }
+  })
+
   it('raw {{= }} interpolation is only legal in patch-supplied text', () => {
     expect(() => compileSnippet('<i>{{= a }}</i>')).toThrow(CompileError)
   })

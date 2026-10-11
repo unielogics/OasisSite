@@ -1,6 +1,7 @@
 // A stand-in for the backend's public API (docs/api-spec.md of the backend, section 26) for developing and testing
 // the site without the live stack: hours (the committed fallback with today/next derived), availability (the
-// design's pattern over the hours, with bookings taken out), catalog (the site's configured keys), OTP (the code is
+// design's pattern over the hours, with bookings taken out), catalog (DV-CATALOG: the design's content in the shape the
+// backend answers after the website-catalog seed, tools/site/catalog-fixture.ts; `state.catalog` can be swapped), OTP (the code is
 // returned in a dev header and listed at GET /__fixture/texts), bookings (409 when a slot is taken, honeypot 202),
 // memberships (pending). In-memory; one process per run. Used by scripts/e2e-site.ts --api fixture and by
 // `pnpm serve:dist --api fixture`. Never part of the build.
@@ -14,6 +15,7 @@ import { validatePublicHours } from '../../src/hours/format'
 import type { PublicHours } from '../../src/hours/format'
 import { designAvailability, type Availability } from '../../src/site/availability'
 import { hoursTable, withToday } from '../../src/site/hours'
+import { designCatalog, type CatalogPayload } from './catalog-fixture'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -40,6 +42,8 @@ export interface FixtureState {
   idem: Map<string, { status: number; body: unknown; sig: string }>
   /** phones that are members (the seeded ones) */
   members: Map<string, { firstName: string; tier: 'gold' | 'vip'; washesLeft: number }>
+  /** DV-CATALOG: what GET /api/v1/public/catalog answers (the design's content; a test may swap it) */
+  catalog: CatalogPayload | Record<string, unknown>
 }
 
 const json = (res: http.ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -59,9 +63,6 @@ const e164 = (s: string): string | null => {
 export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<FixtureApi> {
   const now = o.now ?? (() => new Date())
   const base = o.hours ?? validatePublicHours(JSON.parse(fs.readFileSync(path.join(ROOT, 'src/data/hours.fallback.json'), 'utf8')))
-  const site = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'utf8')) as {
-    catalog: { services: Record<string, { key: string; name: string }>; addons: Record<string, string> }
-  }
   const state: FixtureState = {
     texts: [],
     challenges: new Map(),
@@ -70,17 +71,11 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
     memberships: [],
     idem: new Map(),
     members: new Map([['+12015550199', { firstName: 'Dana', tier: 'vip', washesLeft: 3 }]]),
+    catalog: designCatalog(),
   }
   let seq = 100
-  const services = Object.entries(site.catalog.services).map(([id, s], i) => ({
-    key: s.key,
-    name: s.name,
-    shortName: s.name,
-    durationMin: id === 'signature' ? 45 : 30,
-    priceCents: i === 0 ? 5400 : 3800,
-    tags: [] as string[],
-  }))
-  const addons = Object.entries(site.catalog.addons).map(([id, key]) => ({ key, name: id, priceCents: 2500, tags: [] as string[] }))
+  // the bookable packages (availability and bookings know these keys whatever the catalog answer is swapped to)
+  const services = designCatalog().services
   // The design's pattern and `today` are computed from LOCAL hours: always in the shop's zone, whatever the process
   // zone is (the prerender shims set TZ to the shop's zone when it is unset, so an in-process fixture must not drift).
   const inShopZone = <T,>(fn: () => T): T => {
@@ -133,16 +128,7 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
       if (!services.some((s) => s.key === service)) return problem(res, 422, 'PUBLIC_VALIDATION', `Unknown service ${service}.`)
       return json(res, 200, availability(days, service), { 'cache-control': 'public, max-age=60' })
     }
-    if (p === '/api/v1/public/catalog')
-      return json(res, 200, {
-        generatedAt: now().toISOString(),
-        services,
-        addons,
-        plans: [
-          { key: 'gold', name: 'Gold', planKey: 'premium', planName: 'Premium', perks: [], priceCents: null },
-          { key: 'vip', name: 'VIP', planKey: 'executive', planName: 'Executive', perks: [], priceCents: null },
-        ],
-      })
+    if (p === '/api/v1/public/catalog') return json(res, 200, { ...state.catalog, generatedAt: now().toISOString() })
     if (req.method !== 'POST') return problem(res, 404, 'NOT_FOUND', 'Not found')
     let body: Record<string, unknown>
     try {
