@@ -149,6 +149,79 @@ describe('a changed price in the catalog shows on the page', () => {
     expect(sh.sumLines.find((l: any) => l.label === 'Booking fee').value).toBe('$30')
   })
 
+  it('an item\'s own guest price shows everywhere, the booking sheet included (not the guest price of another item at the same member price)', () => {
+    // Engine bay wash: member $45 like the Signature wash ($54 for guests), but its own guest price is $59 (Settings may
+    // set guest_price_cents instead of the markup)
+    const cat = clone(designCatalog())
+    const engine = cat.addons.find((a) => a.key === 'engine-bay-wash')!
+    engine.guestPriceCents = 5900
+    engine.priceCents = 5900
+    const t = makeSite({ booking: 'sms', availability: board, catalog: cat })
+    const v = t.vals()
+    expect(rows(v, 'Add during your wash').find((r: any) => r.name === 'Engine bay wash')).toMatchObject({ g: '$59', save: 'SAVE $59' })
+    expect(rows(v, 'Hand wash')[0]).toMatchObject({ name: 'Signature Hand Wash', g: '$54' })
+    expect(v.vipMonth.find((x: any) => x.label === 'Engine bay wash').value).toBe('$59')
+    // guest sheet, wash step
+    t.c.setState({ page: 'home', sheet: 'book', step: 'svc', bk: { ...t.c.state.bk, who: 'guest', addons: ['wax', 'engine'], day: 1, slot: 540 } })
+    let sh = t.vals().sh
+    expect(sh.washes.map((w: any) => [w.name, w.price])).toEqual([
+      ['Signature Hand Wash', '$54'],
+      ['Exterior Hand Wash', '$38'],
+    ])
+    expect(sh.addons.find((a: any) => a.name === 'Engine bay wash').price).toBe('+$59')
+    expect(sh.addons.find((a: any) => a.name === 'Hand wax').price).toBe('+$47')
+    expect(sh.sumLines.map((l: any) => [l.label, l.value])).toEqual([
+      ['Vehicle', 'Sedan / Coupe'],
+      ['Signature Hand Wash', '$54'],
+      ['Hand wax', '$47'],
+      ['Engine bay wash', '$59'],
+      ['Booking fee', '$25'],
+    ])
+    // guest sheet, review: 54 + 47 + 59 = 160 at the shop, 185 with the fee
+    t.c.setState({ step: 'review' })
+    sh = t.vals().sh
+    expect(sh.lines.map((l: any) => [l.label, l.value])).toEqual([
+      ['Signature Hand Wash', '$54'],
+      ['Hand wax', '$47'],
+      ['Engine bay wash', '$59'],
+      ['Booking fee · non-refundable', '$25'],
+    ])
+    expect(sh.due).toBe('$25')
+    expect(sh.dueSub).toMatch(/ Pay \$160 after your wash\.$/)
+    expect(sh.upsell).toMatch(/^You’d pay \$185 as a guest\. As VIP: \$0,/)
+    // the member side reads member prices (unchanged)
+    t.c.setState({ tier: 'gold', step: 'svc', bk: { ...t.c.state.bk, who: 'member' } })
+    sh = t.vals().sh
+    expect(sh.addons.find((a: any) => a.name === 'Engine bay wash').price).toBe('+$45')
+    expect(sh.washes[0].price).toBe('$0')
+  })
+
+  it('a vehicle type the next catalog drops leaves the visitor\'s tint and booking choice instead of breaking the page', async () => {
+    const cat = clone(designCatalog())
+    cat.tint.vehicleTypes.push({ key: 'van', label: 'Van' })
+    for (const film of ['carbon', 'ceramic'])
+      (cat.tint.prices as any[]).push({ vehicle: 'van', film, memberMinCents: 29900, memberMaxCents: 34900, guestMinCents: 35900, guestMaxCents: 41900 })
+    const t = makeSite({ booking: 'sms', availability: board, catalog: cat, routes: routes(unseededCatalog()) })
+    expect(t.c.VEH.map((v: any) => v[0])).toEqual(['sedan', 'suv', 'truck', 'van'])
+    t.c.setState({ page: 'tint', film: 'ceramic', tintVeh: 'van', bk: { ...t.c.state.bk, vehicle: 'van' } })
+    expect(t.vals().tintGuest).toBe('$359 – $419')
+    t.c.__refreshAll()
+    await t.settle()
+    expect(t.c.__site).toBeNull()
+    expect(t.c.state.tintVeh).toBe('sedan')
+    expect(t.c.state.bk.vehicle).toBe('sedan')
+    expect(() => t.vals()).not.toThrow()
+    expect(t.vals().tintGuest).toBe('$455 – $539')
+    t.c.setState({ page: 'home', sheet: 'book', step: 'review', bk: { ...t.c.state.bk, who: 'guest', day: 1, slot: 540 } })
+    expect(t.vals().sh.vehLabel).toBe('Sedan / Coupe')
+    // a ready catalog without the van does the same
+    const back = makeSite({ booking: 'sms', availability: board, catalog: cat })
+    back.c.setState({ page: 'tint', tintVeh: 'van', bk: { ...back.c.state.bk, vehicle: 'van' } })
+    expect(back.c.__applyCatalog(designCatalog())).toBe(true)
+    expect([back.c.state.tintVeh, back.c.state.bk.vehicle]).toEqual(['sedan', 'sedan'])
+    expect(() => back.vals()).not.toThrow()
+  })
+
   it('a new add-on in the catalog is offered and booked under its key; one the catalog dropped leaves the visitor\'s pick', async () => {
     const cat = clone(designCatalog())
     cat.addons.push({ ...cat.addons[0]!, key: 'headlight-restoration', name: 'Headlight restoration', description: 'Sand, polish, seal', memberPriceCents: 4000, guestPriceCents: 4800, priceCents: 4800, vipInclusion: 'none', vipNote: null })

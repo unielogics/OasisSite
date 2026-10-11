@@ -92,6 +92,11 @@ paused at `FIXED_NOW` (time moves only through `runFor`), a fresh context per ru
 settling through `MessageChannel` round trips (not the fake clock). Viewport 1480x1000; screenshots are
 **full page**, and the document scroll size is compared (a marketing page is taller than the viewport).
 
+Known intermittent step (rerun `pnpm parity:all` before investigating): `index/sheet-guest@light/phone/back-time` once
+failed its pixel check (58089 px) in a full gate run on 2026-10-11 and passed in every rerun on the same tree (one
+targeted rerun, two more full gates). It is the sheet's slide back from review to the time step; the cause is not
+known. A failure that repeats on a rerun is real.
+
 ## The five checks
 
 | Check     | What is compared                                                                                                                                                                                                            | Tolerance                     |

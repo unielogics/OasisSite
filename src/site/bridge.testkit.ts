@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as React from 'react'
+import { afterEach } from 'vitest'
 import { DCLogic } from '../dc/DCLogic'
 import { applyCopy, loadPatchConfig } from '../../tools/dc-compile/patches'
 import { loadSiteConfig } from '../../tools/prerender/seo'
@@ -59,6 +60,22 @@ export interface SiteUnderTest {
   vals: () => any
 }
 
+const sites: any[] = []
+
+/**
+ * Detaches every site made so far: the design's timers still pending (the toast's 2.6 s flash, the join flow's delayed
+ * openBook) and late fetch answers then update nothing, so none of them reaches `document` after jsdom is torn down.
+ * Runs after each test of every file that uses the kit.
+ */
+export function disposeSites(): void {
+  for (const c of sites.splice(0)) {
+    clearTimeout(c._tt)
+    clearTimeout(c._smsT)
+    c.__host = undefined
+  }
+}
+afterEach(disposeSites)
+
 export function makeSite(o: SiteOptions = {}): SiteUnderTest {
   const site = loadSiteConfig(ROOT)
   const env = buildSiteEnv({
@@ -90,6 +107,7 @@ export function makeSite(o: SiteOptions = {}): SiteUnderTest {
   }
   const Site = bridge(designComponent(), env)
   const c = new Site({ theme: 'dark', beads: true, stickyBar: true })
+  sites.push(c)
   let updating = false
   let dirty = false
   const commit = () => {

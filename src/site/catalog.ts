@@ -273,24 +273,6 @@ export function configDesign(keys: CatalogKeys): Pick<DesignContent, 'WASH' | 'D
   }
 }
 
-/** The member -> guest price map of a ready catalog (the design asks `g(member)` for a guest price). */
-export function guestPrices(site: SiteCatalog): Map<number, number> {
-  const out = new Map<number, number>()
-  const put = (m: number, g: number) => {
-    if (!out.has(m)) out.set(m, g)
-  }
-  for (const w of site.wash) put(w.m, w.gp)
-  for (const a of site.during ?? []) put(a.m, a.gp)
-  for (const d of site.detail ?? []) put(d.m, d.gp)
-  if (site.tint)
-    for (const film of Object.keys(site.tint.member))
-      for (const [v] of site.tint.veh) {
-        put(site.tint.member[film]![v]![0], site.tint.guest[film]![v]![0])
-        put(site.tint.member[film]![v]![1], site.tint.guest[film]![v]![1])
-      }
-  return out
-}
-
 /** The design's content with a ready catalog applied (the built-in content when there is none). */
 export function designContentOf(site: SiteCatalog | null, design: DesignContent): DesignContent {
   if (!site) return design

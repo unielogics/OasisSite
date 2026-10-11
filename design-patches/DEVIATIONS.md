@@ -71,9 +71,13 @@ of every entry below.
   $275.", …) are bound to `site.cat` with `replace-text` ops (three of them name one text node of a mixed element with
   the op's new `child` index). Unchanged design copy: the wash names in the "VIP is worth" list and the SMS demo, the
   wash cards' steps, the home page's longer Gold/VIP perk lists, the plan names (Gold, VIP), "Carbon or ceramic film ·
-  side & rear windows", the film words in "Carbon and ceramic film", the VLT options and film descriptions. The guest
-  price of a member price the design computes with `g()` is the catalog's item with that member price (the first one if
-  two items share a member price with different guest prices), else the catalog's markup rounded half up.
+  side & rear windows", the film words in "Carbon and ceramic film", the VLT options and film descriptions. Every item
+  shows its own guest price, also on the booking sheet, where the design's logic asks `g(member)` (the bridge writes the
+  wash and add-on prices, the review and summary lines, "Pay $X after your wash" and the guest upsell from each item, so
+  two items with one member price and different guest prices never share one); `g()` itself answers only for the
+  design's fallback values that have no catalog item behind them: the catalog's markup, rounded half up. When a new
+  catalog drops a vehicle type the visitor had picked (tint page or booking sheet), the choice moves to the list's first
+  type, as a dropped add-on leaves the picks.
   Harness: no swap; `pnpm build:parity` bakes and `serve-dist` answers the design's content in the backend's shape
   (`tools/site/catalog-fixture.ts` `designCatalog()`), so the catalog-driven page must equal the original at zero diff.
 

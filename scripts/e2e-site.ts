@@ -3,7 +3,7 @@
 //   pnpm e2e:site --api fixture                       the in-process fixture API (tools/site/fixture-api.ts)
 //   pnpm e2e:site --stack site [--dashboard ~/oasis/dashboard]   a live stack started with the dashboard's
 //                                                     `pnpm live:up --name site --backend <wt> --profile design,demo`
-//   options: --port 3301 (the site's host), --skip-build (reuse dist-e2e-live / dist-e2e-sms), --headed
+//   options: --port 3301 (the site's host), --skip-build (reuse dist-e2e-live / dist-e2e-sms / dist-e2e-catalog), --headed
 //
 // Builds the site twice (SITE_BOOKING=live with the stack's hours and availability baked in, and the launch default
 // SITE_BOOKING=sms), serves each through tools/site/proxy.ts (nginx's same-origin /api/v1/public/* mapping) and checks:
@@ -355,10 +355,20 @@ async function main(): Promise<number> {
   assert(catalog0.status === 200, `GET /public/catalog -> ${catalog0.status}`)
   const liveDir = path.join(ROOT, 'dist-e2e-live')
   const smsDir = path.join(ROOT, 'dist-e2e-sms')
-  if (!values['skip-build'] || !fs.existsSync(path.join(liveDir, 'index.html'))) {
+  // DV-CATALOG (fixture only): a changed catalog (Signature Hand Wash at $50 for members, $60 for guests; Gold $109) for
+  // the live checks, and the launch default built with another changed catalog as its SNAPSHOT (Signature at $52, $62
+  // for guests: no other item costs a guest $62), so an unseeded live answer restoring the design's content is observable
+  const changedCatalog = withMemberPrice(designCatalog(), 'signature-hand-wash', 50)
+  changedCatalog.plans[0]!.priceCents = 10900
+  const catalogDir = path.join(ROOT, 'dist-e2e-catalog')
+  const snapshotCatalog = withMemberPrice(designCatalog(), 'signature-hand-wash', 52)
+  const dirs = api.kind === 'fixture' ? [liveDir, smsDir, catalogDir] : [liveDir, smsDir]
+  if (!values['skip-build'] || dirs.some((d) => !fs.existsSync(path.join(d, 'index.html')))) {
     await buildSite({ root: ROOT, variant: 'prod', outDir: liveDir, hoursJson: JSON.stringify(hours.body), availabilityJson: JSON.stringify(avail0.body), catalogJson: JSON.stringify(catalog0.body), booking: 'live', apiOrigin: '', log: () => {} })
     await buildSite({ root: ROOT, variant: 'prod', outDir: smsDir, hoursJson: JSON.stringify(hours.body), availabilityJson: null, booking: 'sms', apiOrigin: '', log: () => {} })
-    log('built dist-e2e-live and dist-e2e-sms')
+    if (api.kind === 'fixture')
+      await buildSite({ root: ROOT, variant: 'prod', outDir: catalogDir, hoursJson: JSON.stringify(hours.body), availabilityJson: null, catalogJson: JSON.stringify(snapshotCatalog), booking: 'sms', apiOrigin: '', log: () => {} })
+    log(`built ${dirs.map((d) => path.basename(d)).join(', ')}`)
   }
   const proxy: SiteProxy = await startSiteProxy({ dir: liveDir, apiOrigin: api.origin, port })
   log(`site (live) at ${proxy.origin}`)
@@ -652,9 +662,7 @@ async function main(): Promise<number> {
       const pageText = (page: Page) => page.evaluate(() => document.getElementById('dc-root')?.innerText ?? '')
       try {
         // a changed price: the Signature wash at $50 for members ($60 for guests), Gold at $109
-        const changed = withMemberPrice(designCatalog(), 'signature-hand-wash', 50)
-        changed.plans[0]!.priceCents = 10900
-        fixture.state.catalog = changed
+        fixture.state.catalog = changedCatalog
         const { ctx, page, t } = await newPage(browser, proxy.origin)
         trackers.push(t)
         await page.goto(`${proxy.origin}/#/wash`, { waitUntil: 'load' })
@@ -666,20 +674,40 @@ async function main(): Promise<number> {
         await page.waitForTimeout(800)
         check('catalog: the Gold price follows the catalog on the membership page', /\$109/.test(await pageText(page)))
         await ctx.close()
-        // an unseeded catalog (production before the website-catalog seed): the design's own content, never the dashboard's list
+        // an unseeded catalog (production before the website-catalog seed) over a page whose build snapshot is the
+        // changed catalog: the page first shows the snapshot (Signature "SAVE $62"), and the unseeded live answer brings the
+        // design's own content back ("SAVE $54"), never the dashboard's list. The catalog request is held until the
+        // snapshot was seen.
         fixture.state.catalog = unseededCatalog()
-        const u = await newPage(browser, proxy.origin)
-        trackers.push(u.t)
-        await u.page.goto(`${proxy.origin}/#/wash`, { waitUntil: 'load' })
-        await ready(u.page)
-        await u.page.waitForTimeout(1500)
-        const plain = await pageText(u.page)
-        check(
-          'catalog: an unseeded catalog keeps the built-in services and prices (no dashboard-internal items)',
-          /SAVE \$54/.test(plain) && /Hand wax/.test(plain) && /Interior deep clean/.test(plain) && !/Express Hand Wash|Premium Hand Wash/.test(plain),
-          plain.slice(0, 200).replace(/\s+/g, ' '),
-        )
-        await u.ctx.close()
+        const catProxy = await startSiteProxy({ dir: catalogDir, apiOrigin: api.origin, port: port + 3 })
+        try {
+          const u = await newPage(browser, catProxy.origin)
+          trackers.push(u.t)
+          let release: () => void = () => {}
+          const held = new Promise<void>((r) => (release = r))
+          let asked = 0
+          await u.page.route('**/api/v1/public/catalog*', async (route) => {
+            asked++
+            await held
+            await route.continue()
+          })
+          await u.page.goto(`${catProxy.origin}/#/wash`, { waitUntil: 'load' })
+          await ready(u.page)
+          const before = await pageText(u.page)
+          release()
+          await u.page.waitForFunction(() => !/SAVE \$62/.test(document.getElementById('dc-root')?.innerText ?? ''), null, { timeout: 20_000 }).catch(() => {})
+          await u.page.waitForTimeout(500)
+          const plain = await pageText(u.page)
+          check('catalog: the build snapshot shows before the catalog load (Signature SAVE $62)', asked > 0 && /SAVE \$62/.test(before), `asked=${asked} ${before.slice(0, 160).replace(/\s+/g, ' ')}`)
+          check(
+            'catalog: an unseeded live catalog brings the built-in services and prices back (no dashboard-internal items)',
+            /SAVE \$54/.test(plain) && !/SAVE \$62/.test(plain) && /Hand wax/.test(plain) && /Interior deep clean/.test(plain) && !/Express Hand Wash|Premium Hand Wash/.test(plain),
+            plain.slice(0, 200).replace(/\s+/g, ' '),
+          )
+          await u.ctx.close()
+        } finally {
+          await catProxy.close()
+        }
       } finally {
         fixture.state.catalog = designCatalog()
       }

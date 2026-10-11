@@ -120,10 +120,13 @@ section falls back to the design's list on its own (add-ons, tint, detailing, qu
 ready keeps the design's content exactly. The build bakes `SITE_CATALOG_JSON` (only when ready); the browser's catalog
 load applies the live answer after mount (`forceUpdate`), so a not-ready answer brings the design's content back and a
 failed load keeps the snapshot. Shown prices are the starting prices (`memberPriceCents`/`guestPriceCents`, a tint row's
-`memberMinCents`/`guestMinCents`), never `priceCents`. Fixtures: `tools/site/catalog-fixture.ts` (`designCatalog()` =
+`memberMinCents`/`guestMinCents`), never `priceCents`, each item's own (the booking sheet's guest prices too: the bridge
+writes them by item over the design's `g(member)`); a picked add-on or vehicle type a new catalog drops leaves the
+visitor's choice. Fixtures: `tools/site/catalog-fixture.ts` (`designCatalog()` =
 the design's content in the backend's shape, what the parity build bakes and its server answers; `unseededCatalog()` =
 production before the seed). Tests: `src/site/catalog.test.ts`, `src/site/bridge-catalog.test.ts` (every price state
-equal to the built-in content with the design catalog, a changed price showing, the unseeded fallback),
+equal to the built-in content with the design catalog, a changed price showing, an item's own guest price on the
+booking sheet, a dropped vehicle type, the unseeded fallback),
 `tools/prerender/prerender.test.ts` (the baked snapshot) and the e2e's catalog checks.
 
 ## Deployment inputs

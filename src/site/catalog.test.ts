@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { designCatalog, unseededCatalog, withMemberPrice } from '../../tools/site/catalog-fixture'
-import { catalogTexts, configDesign, DESIGN_PLANS, DESIGN_VEHICLES, guestPrices, priceFacts, swapAmount, websiteCatalog, type CatalogKeys } from './catalog'
+import { catalogTexts, configDesign, DESIGN_PLANS, DESIGN_VEHICLES, priceFacts, swapAmount, websiteCatalog, type CatalogKeys } from './catalog'
 import { designComponent, ROOT } from './bridge.testkit'
 
 const keys = (JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'utf8')) as { catalog: CatalogKeys }).catalog
@@ -25,7 +25,9 @@ describe('the design catalog fixture is the design (what the website-catalog see
     expect(site!.fee).toBe(d.FEE)
     expect(site!.plans).toEqual({ gold: { price: 99, perks: [...DESIGN_PLANS.gold.perks] }, vip: { price: 169, perks: [...DESIGN_PLANS.vip.perks] } })
     // the design's guest rule g(m) = round(m * 1.2) gives the catalog's guest prices
-    for (const [m, g] of guestPrices(site!)) expect(g).toBe(Math.round(m * 1.2))
+    for (const x of [...site!.wash, ...site!.during!, ...site!.detail!]) expect(x.gp).toBe(Math.round(x.m * 1.2))
+    for (const film of Object.keys(site!.tint!.member))
+      for (const [v] of site!.tint!.veh) expect(site!.tint!.guest[film]![v]).toEqual(site!.tint!.member[film]![v]!.map((m) => Math.round(m * 1.2)))
     expect(DESIGN_VEHICLES).toEqual(d.VEH.map(([k]: [string, string]) => k))
   })
 

@@ -26,7 +26,6 @@ import {
   DESIGN_MORE,
   DESIGN_PLANS,
   designContentOf,
-  guestPrices,
   priceFacts,
   swapAmount,
   websiteCatalog,
@@ -404,7 +403,6 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     // calculators) are written again from it with the design's own formulas and words.
     __design: DesignContent | null = null
     __site: SiteCatalog | null = null
-    __guest: Map<number, number> | null = null
 
     /** Applies a catalog payload (null: none); answers whether the page's content changed. */
     __applyCatalog(raw: unknown): boolean {
@@ -414,21 +412,39 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const site = raw ? websiteCatalog(raw, env.catalog, this.__design).site : null
       const changed = JSON.stringify(site) !== JSON.stringify(this.__site)
       this.__site = site
-      this.__guest = site ? guestPrices(site) : null
       Object.assign(this, designContentOf(site, this.__design))
-      // an add-on the new list does not carry leaves the visitor's choice
+      // an add-on or a vehicle type the new lists do not carry leaves the visitor's choice (the tint page and the booking
+      // sheet look the chosen vehicle type up in VEH and TINT); a vehicle falls back to the list's first, as the design starts
       const has = (id: string) => this.DURING.some((a: any) => a.id === id)
-      const picked = this.state?.bk?.addons
-      if (changed && Array.isArray(picked) && !picked.every(has))
-        this.setState((ss: any) => ({ bk: { ...ss.bk, addons: ss.bk.addons.filter(has) } }))
+      const veh = (k: unknown) => this.VEH.some(([v]: [string, string]) => v === k)
+      const s = this.state
+      const stale =
+        !!s && ((Array.isArray(s.bk?.addons) && !s.bk.addons.every(has)) || (s.bk && !veh(s.bk.vehicle)) || (s.tintVeh != null && !veh(s.tintVeh)))
+      if (changed && stale)
+        this.setState((ss: any) => {
+          const first = this.VEH[0][0]
+          return {
+            ...(ss.tintVeh != null && !veh(ss.tintVeh) ? { tintVeh: first } : {}),
+            bk: { ...ss.bk, addons: Array.isArray(ss.bk.addons) ? ss.bk.addons.filter(has) : ss.bk.addons, vehicle: veh(ss.bk.vehicle) ? ss.bk.vehicle : first },
+          }
+        })
       return changed
     }
 
-    /** The guest price of a member price: the catalog's item (or tint row) with that member price, else its markup. */
+    /**
+     * The guest price of a member price the design computes with no catalog item behind it (its fallbacks): the
+     * catalog's markup. Every item the page lists shows its own guest price instead (gp, __washGuest, __addonGuest, a
+     * tint row's guest prices), also where the design's booking sheet asks g(member) (__catalogSheet).
+     */
     g(m: number): number {
       const site = this.__site
       if (!site) return super.g(m)
-      return this.__guest!.get(m) ?? Math.floor((m * (100 + site.markupPct) + 50) / 100)
+      return Math.floor((m * (100 + site.markupPct) + 50) / 100)
+    }
+
+    /** The guest price of a wash by the design's id. */
+    __washGuest(w: { id: string; m: number }): number {
+      return this.__site?.wash.find((x) => x.id === w.id)?.gp ?? this.g(w.m)
     }
 
     /** The guest price of an add-on by the design's id. */
@@ -592,37 +608,64 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       }
     }
 
-    /** What the visit costs at the shop (sheetVals' atShop), for the guest upsell line. */
-    __atShop(): number {
+    /**
+     * What the visit costs at the shop (sheetVals' atShop). byItem: at each item's own guest price (what the sheet shows);
+     * otherwise as the design's logic computed it, with g(member).
+     */
+    __atShop(byItem: boolean): number {
       const s = this.state
       const b = s.bk
       const isG = b.who === 'guest'
       const vip = s.tier === 'vip'
       const wash = this.WASH.find((w: any) => w.id === b.svc) || this.WASH[0]
-      const addonPrice = (a: any) => (isG ? this.g(a.m) : vip && a.vip ? 0 : a.m)
-      return (isG ? this.g(wash.m) : 0) + this.DURING.filter((a: any) => b.addons.includes(a.id)).reduce((x: number, a: any) => x + addonPrice(a), 0)
+      const guestWash = (w: any) => (byItem ? this.__washGuest(w) : this.g(w.m))
+      const guestAddon = (a: any) => (byItem ? this.__addonGuest(a.id) : this.g(a.m))
+      const addonPrice = (a: any) => (isG ? guestAddon(a) : vip && a.vip ? 0 : a.m)
+      return (isG ? guestWash(wash) : 0) + this.DURING.filter((a: any) => b.addons.includes(a.id)).reduce((x: number, a: any) => x + addonPrice(a), 0)
     }
 
-    /** The booking sheet's fee amounts (the wash and add-on prices already come from the catalog through g). */
+    /**
+     * The booking sheet with the catalog: a guest's wash and add-on prices are each item's own guest price (the design's
+     * logic asks g(member), which cannot tell two items with one member price apart), and the fee amounts are the
+     * catalog's. The sheet's lists follow WASH and DURING in order (sheetVals: washes, addons; review lines: the wash,
+     * the picked add-ons, the fee; sumLines: the vehicle, the wash, the picked add-ons, the fee).
+     */
     __catalogSheet(r: Record<string, any>): Record<string, any> {
       const site = this.__site
       const d = this.__design
       const sh = r.sh
-      if (!site || !d || !sh || this.state.sheet !== 'book' || site.fee === d.FEE) return r
+      const s = this.state
+      if (!site || !d || !sh || s.sheet !== 'book') return r
       const from = d.FEE
       const to = site.fee
       const out: Record<string, any> = { ...sh }
-      if (Array.isArray(sh.lines))
-        out.lines = sh.lines.map((l: any) => (l.label === 'Booking fee · non-refundable' ? { ...l, value: swapAmount(l.value, from, to) } : l))
-      if (Array.isArray(sh.sumLines)) out.sumLines = sh.sumLines.map((l: any) => (l.label === 'Booking fee' ? { ...l, value: swapAmount(l.value, from, to) } : l))
+      const b = s.bk
+      if (b.who === 'guest') {
+        const price = (o: any, field: string, logic: number, own: number) => (o && typeof o[field] === 'string' ? { ...o, [field]: swapAmount(o[field], logic, own) } : o)
+        const wash = this.WASH.find((w: any) => w.id === b.svc) || this.WASH[0]
+        const ads = this.DURING.filter((a: any) => b.addons.includes(a.id))
+        const fixWash = (o: any, w: any, field: string) => price(o, field, this.g(w.m), this.__washGuest(w))
+        const fixAddon = (o: any, a: any, field: string) => price(o, field, this.g(a.m), this.__addonGuest(a.id))
+        if (Array.isArray(sh.washes)) out.washes = sh.washes.map((o: any, i: number) => (this.WASH[i] ? fixWash(o, this.WASH[i], 'price') : o))
+        if (Array.isArray(sh.addons)) out.addons = sh.addons.map((o: any, i: number) => (this.DURING[i] ? fixAddon(o, this.DURING[i], 'price') : o))
+        if (Array.isArray(sh.lines))
+          out.lines = sh.lines.map((o: any, i: number) => (i === 0 ? fixWash(o, wash, 'value') : ads[i - 1] ? fixAddon(o, ads[i - 1], 'value') : o))
+        if (Array.isArray(sh.sumLines))
+          out.sumLines = sh.sumLines.map((o: any, i: number) => (i === 1 ? fixWash(o, wash, 'value') : i >= 2 && ads[i - 2] ? fixAddon(o, ads[i - 2], 'value') : o))
+      }
+      const logicAt = this.__atShop(false)
+      const ownAt = this.__atShop(true)
+      if (Array.isArray(out.lines))
+        out.lines = out.lines.map((l: any) => (l.label === 'Booking fee · non-refundable' ? { ...l, value: swapAmount(l.value, from, to) } : l))
+      if (Array.isArray(out.sumLines)) out.sumLines = out.sumLines.map((l: any) => (l.label === 'Booking fee' ? { ...l, value: swapAmount(l.value, from, to) } : l))
       if (sh.bReview && sh.isGuest) {
         out.due = swapAmount(sh.due, from, to)
-        if (typeof sh.dueSub === 'string') out.dueSub = sh.dueSub.replace(new RegExp(`^\\$${from}(?![0-9])`), () => `$${to}`)
+        if (typeof sh.dueSub === 'string')
+          out.dueSub = sh.dueSub
+            .replace(new RegExp(`^\\$${from}(?![0-9])`), () => `$${to}`)
+            .replace(`Pay ${this.$(logicAt)}`, () => `Pay ${this.$(ownAt)}`)
       }
-      if (sh.bReview && typeof sh.upsell === 'string') {
-        const atShop = this.__atShop()
-        out.upsell = sh.upsell.replace(this.$(atShop + from), () => this.$(atShop + to))
-      }
+      if (sh.bReview && typeof sh.upsell === 'string') out.upsell = sh.upsell.replace(this.$(logicAt + from), () => this.$(ownAt + to))
       return { ...r, sh: out }
     }
     // ==== end of DV-CATALOG =================================================================================================
