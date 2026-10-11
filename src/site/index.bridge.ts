@@ -1450,9 +1450,14 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     /** After the design has shown the join page (its hashchange handler resets the steps): the link's plan and name. */
     __lkJoinSync(): void {
-      if (!this.__lkJoinInit || this.state.page !== 'join' || this.__lk?.kind !== 'membership') return
-      this.__lkJoinInit = false
-      this.setJn({ tier: this.__lkTier(), name: this.__lk.client.firstName ?? '', step: 0, err: '', agree: false })
+      if (this.state.page !== 'join' || this.__lk?.kind !== 'membership') return
+      if (this.__lkJoinInit) {
+        this.__lkJoinInit = false
+        this.setJn({ tier: this.__lkTier(), name: this.__lk.client.firstName ?? '', step: 0, err: '', agree: false })
+        return
+      }
+      // the join page reopened through another button (Join VIP, …): still this link's plan
+      if (this.state.jn?.tier !== this.__lkTier()) this.setJn({ tier: this.__lkTier() })
     }
 
     __lkJoinVM(r: any): any {

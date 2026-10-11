@@ -474,6 +474,16 @@ describe('DV-LINK-JOIN: plan -> verify -> e-mail -> terms -> Squarespace', () =>
     expect(t.calls.filter((x) => x.path === '/api/v1/public/memberships')).toEqual([])
   })
 
+  it('the join page reopened through another plan\'s button stays on the link\'s plan', async () => {
+    const t = openWith('m', TOKEN, { [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'membership', plan })) })
+    await t.settle()
+    const c = t.c
+    c.setState({ page: 'join', jn: c.freshJn('gold') })
+    c.setState({ page: 'home' })
+    c.setState({ page: 'join', jn: c.freshJn('vip') }) // the design's "Join VIP" button
+    expect(c.state.jn.tier).toBe('gold')
+  })
+
   it('a checkout URL off the allowlist is not followed', async () => {
     const t = openWith('m', TOKEN, {
       [`${BASE}/exchange`]: () => ok(exchanged({ kind: 'membership', plan, pin: 'set' })),
