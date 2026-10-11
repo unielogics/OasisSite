@@ -56,4 +56,16 @@ export interface SiteEnv {
   brand: string
   /** site.config.json theme: the bridge follows the device setting and stores the visitor's choice (DV-THEME) */
   theme: ThemeConfig | null
+  /** site.config.json links: personal links (DV-LINK); null = the page never exchanges a link fragment */
+  links: LinksConfig | null
+}
+
+/** Personal links (DV-LINK): the link API's base path and the hosts a membership / payment redirect may go to. */
+export interface LinksConfig {
+  /** '/api/v1/public/links' */
+  base: string
+  /** squarespace.com: a redirect must be https to one of these hosts or a subdomain of one */
+  redirectHosts: string[]
+  /** the body of the "Text us for a new link" sms: link */
+  newLinkText: string
 }

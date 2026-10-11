@@ -10,12 +10,21 @@
 //   DV-CLOCK  the first client render is pinned to the build instant so hydration matches the prerendered markup
 //   DV-HASH   the home view is prerendered; #/… views render after mount
 //   DV-THEME  the theme follows the device (prefers-color-scheme) live until the visitor picks one, which is remembered
+//   DV-LINK   personal links (#/c|m|p|pin|v/<token>): the token is scrubbed before hydration and exchanged for a session;
+//             DV-STEPUP (PIN / texted code / create PIN), DV-LINK-JOIN, DV-LINK-PAY, DV-LINK-DEAD: see the "links" section
 import type { PublicHours } from '../hours/format'
 import { validatePublicHours } from '../hours/format'
 import { daysFromAvailability, daysFromHours, isoDate, validateAvailability, type Availability, type DesignDay } from './availability'
 import type { SiteEnv } from './env'
 import { decideTheme, LIGHT_QUERY, readStoredTheme, storeTheme, type ThemeConfig } from '../client/theme'
 import { designTime, hoursRows, hoursTable, withToday, type HoursTable } from './hours'
+// ---- links (W3f): imports ----
+import { installLinkCapture, onLink, takeLink, type CapturedLink } from '../client/link'
+import { allowedRedirect, DEAD_COPY, deadReason, money, PIN_RE, trustDate, validateExchange, whoLabel, whoText, type Exchanged, type LinkDeadReason, type StepUpPurpose } from './links'
+
+// DV-LINK: the token leaves the address bar while this module is evaluated, before boot() hydrates (src/client/link.ts)
+installLinkCapture()
+// ---- end links imports ----
 
 type AnyLogic = new (props?: any) => any
 
@@ -81,6 +90,52 @@ const navigate = (url: string): void => {
   else window.location.href = url
 }
 
+// ---- links (W3f): the linked views -----------------------------------------------------------------------------------------
+/** What the link sheet (state.sheet 'link') shows. */
+type LinkView =
+  | { v: 'stepup' }
+  | { v: 'pay' }
+  | {
+      v: 'notice'
+      tone: 'ok' | 'warn'
+      eyebrow: string
+      title: string
+      text: string
+      action?: { label: string; run: () => void } | null
+      /** an sms: link to the texting number ("Text us for a new link") */
+      sms?: string | null
+    }
+
+/** The step-up block (DV-STEPUP): PIN, texted code, or a new PIN; and what runs once it succeeds. */
+interface StepUp {
+  mode: 'pin' | 'send' | 'code' | 'create'
+  purpose: StepUpPurpose
+  challengeId: string | null
+  value: string
+  err: string
+  /** the PIN is locked or disabled: no PIN input, only the reset by code */
+  locked: boolean
+  then: 'book' | 'join' | 'join-start' | 'pay' | 'verified' | 'pinset'
+  /** a PIN offered after a code ("Skip for now") */
+  optional: boolean
+}
+
+interface LinkAnswer {
+  ok: boolean
+  /** 0 = no answer (network) */
+  status: number
+  body: any
+  problem: (Problem & { meta?: Record<string, unknown> }) | null
+}
+
+/** A membership or payment needs a PIN or code from this page within 5 minutes (the server's rule); a little less here. */
+const STEP_UP_FRESH_MS = 4.5 * 60_000
+/** POST /links/pin is allowed within 10 minutes of a code (the server's rule); a little less here. */
+const PIN_AFTER_CODE_MS = 9 * 60_000
+/** The design's CTA button on (sheetVals ctaStyle(true)). */
+const CTA_STYLE = { width: '100%', height: '58px', borderRadius: '17px', fontWeight: 800, fontSize: '16.5px', background: '#1FB6FF', color: '#00131D', boxShadow: '0 10px 30px rgba(31,182,255,.3)' }
+// ---- end links types ----
+
 export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
   if (!Base) throw new Error('bridge: the design did not define a Component class')
   const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
@@ -124,6 +179,24 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     __catalogReady: Promise<void> | null = null
     __schemeMq: MediaQueryList | null = null
     __onScheme: ((e: { matches: boolean }) => void) | null = null
+    // ---- links (W3f): state, all in memory (the token and the session never reach storage, the DOM or a log) ----
+    /** the open personal link: its token (for a re-exchange), the session and what the exchange said */
+    __lk: (Exchanged & { token: string; stepUpAt: number | null; codeAt: number | null }) | null = null
+    /** bumps on every new link: an answer for an earlier link is dropped */
+    __lkSeq = 0
+    /** the sheet's linked view (sheet 'link'): the step-up block, the payment review or a notice */
+    __lkView: LinkView | null = null
+    /** the step-up block (PIN / texted code / create PIN) and what happens once it succeeds */
+    __su: StepUp | null = null
+    /** the linked join: the verify step is showing */
+    __lkJoinVerify = false
+    /** the linked join was just opened: its fields are set once the design shows the join page */
+    __lkJoinInit = false
+    /** Idempotency-Key of a linked booking, kept only for a retry of the same body */
+    __lkIdem: { key: string; sig: string } | null = null
+    /** the per-client board failed (the session ended): the public board again */
+    __lkAvailOff = false
+    __lkOff: (() => void) | null = null
 
     constructor(props?: any) {
       super(props)
@@ -144,6 +217,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       if (typeof location !== 'undefined' && location.hash.replace(/^#\/?/, '') !== '') this._hc()
       this.__followDevice()
       this.__refreshAll()
+      this.__lkMount() // links (W3f)
       // the hours' state and the board are snapshots: fetched again while the page stays open, and when it comes back
       if (typeof setInterval === 'function') this.__refreshTimer = setInterval(() => this.__refreshAll(), REFRESH_MS)
       if (typeof document !== 'undefined') {
@@ -161,6 +235,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     componentWillUnmount(): void {
+      this.__lkOff?.() // links (W3f)
       if (this.__refreshTimer) clearInterval(this.__refreshTimer)
       if (this.__onVisible && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.__onVisible)
       const mq = this.__schemeMq as any
@@ -174,6 +249,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     componentDidUpdate(...args: any[]): void {
       if (typeof super.componentDidUpdate === 'function') super.componentDidUpdate(...args)
       this.__syncPick()
+      this.__lkJoinSync() // links (W3f)
       // <html data-oasis-theme> (set by the head script, DV-THEME) follows the page's theme
       if (themeCfg && typeof document !== 'undefined') {
         const t = this.theme()
@@ -314,7 +390,9 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       // add-ons never change the answer (the API ignores them): the query is the wash only, one URL per wash for the
       // cache in front; a wash the catalog does not carry asks for the API's default wash
       const service = this.__serviceKey()
-      const q = `?days=${fetchDays}${service ? `&service=${service}` : ''}`
+      // links (W3f): a calendar link's page reads the client's own board (VIP-aware once verified), never cached
+      const lkAuth = this.__lkBoardAuth()
+      const q = `?days=${fetchDays}${service ? `&service=${service}` : ''}${lkAuth ? '&linked=1' : ''}`
       if (this.__availFor === q + '|pending') return
       // only the latest query may land: an older answer arriving last would show another wash's times
       const seq = ++this.__availSeq
@@ -322,11 +400,18 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       try {
         const ctl = new AbortController()
         const t = setTimeout(() => ctl.abort(), env.timeouts.availability)
-        const res = await fetch(api(env.endpoints.availability + q), { signal: ctl.signal, credentials: 'omit', headers: { accept: 'application/json' } })
+        const res = lkAuth
+          ? await fetch(api(lkAuth.base + '/availability' + q.replace('&linked=1', '')), { signal: ctl.signal, credentials: 'omit', cache: 'no-store', headers: { accept: 'application/json', authorization: lkAuth.auth } })
+          : await fetch(api(env.endpoints.availability + q), { signal: ctl.signal, credentials: 'omit', headers: { accept: 'application/json' } })
         clearTimeout(t)
         if (seq !== this.__availSeq) return
         if (!res.ok) {
           this.__availFor = ''
+          // links (W3f): the session ended: back to the public board
+          if (lkAuth) {
+            this.__lkAvailOff = true
+            void this.__refreshAvailability()
+          }
           return
         }
         const avail = validateAvailability(await res.json())
@@ -382,6 +467,12 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     openBook(p?: any): void {
       if (p && 'day' in p) this.__pickDate = this.__dateAt(p.day)
+      // links (W3f): with a calendar link open, every Book button books for that client (no who / phone / code)
+      if (this.__lkCalendar()) {
+        this.__lkOpenBook(p)
+        void this.__refreshAvailability()
+        return
+      }
       // live mode: the sheet opens on the member side only for a verified active member (a tier set by a join that is
       // not paid yet, or by the design's own sign-in, proves nothing)
       if (env.booking === 'live' && this.state.tier && !this.__member?.member.active) this.setState({ tier: null })
@@ -401,6 +492,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const v = super.renderVals()
       const unknown = this.days.length > 0 && this.days.every((d: DesignDay) => d.unknown)
       v.hoursList = hoursRows(this.__hours)
+      const lkName = this.__lkCalendar() ? !this.__lk!.client.firstName : null // links (W3f): a stranger's link asks the name
       if (unknown) {
         v.dayCards = (v.dayCards || []).map((c: any) => ({ ...c, count: 'text us' }))
         v.hasNext = false
@@ -416,8 +508,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
             : '',
         // live mode, review step: guests give a name and a mobile number; a member gives the name to book under (the
         // API keeps what a verified member types as their name, so nothing is sent that they did not type)
-        guestDetails: !!(sh.bReview && env.booking === 'live'),
-        askPhone: !!(sh.bReview && sh.isGuest && env.booking === 'live'),
+        guestDetails: !!(sh.bReview && (lkName === null ? env.booking === 'live' : lkName)),
+        askPhone: !!(sh.bReview && sh.isGuest && env.booking === 'live' && lkName === null),
         name: this.state.bk?.name || '',
         setName: (e: any) => this.setBk({ name: e.target.value }),
         phone: this.state.bk?.phone || '',
@@ -429,6 +521,9 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         codeErr: this.state.bk?.codeErr || '',
         busy: this.__busy,
         smsHref: smsUrl(env.contact.smsKeyword),
+        // links (W3f): the linked blocks' view model; the booking summary column hides on the link sheet
+        link: this.__lkVals(),
+        sheetSummary: this.state.sheet !== 'link',
       }
       if (themeCfg) {
         // the visitor's own choice (header toggle, menu Dark/Light) is remembered on the device (DV-THEME); the design's
@@ -451,6 +546,9 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const r = super.sheetVals()
       const s = this.state
       let sh = r.sh
+      // links (W3f): the link sheet (step-up, payment, notices) and the linked booking's own lines
+      if (s.sheet === 'link') return { ...r, sh: this.__lkSheet() }
+      if (s.sheet === 'book' && this.__lkCalendar()) sh = r.sh = this.__lkBookSh(sh)
       if (s.sheet !== 'book') return r
       if (s.step === 'code' && this.__otp) {
         const base = { bWho: false, bSvc: false, bTime: false, bReview: false, bDone: false, hasCta: false, canBack: true, isGuest: false }
@@ -495,6 +593,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const j = this.state.jn
       const jv = r.jv
       if (!jv || this.state.page !== 'join') return r
+      if (this.__lkJoining()) return this.__lkJoinVM(r) // links (W3f)
       const st = j.step
       const digits = (x: string) => x.replace(/\D/g, '')
       const validate = (): string => {
@@ -637,6 +736,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     async __submitBooking(): Promise<void> {
+      if (this.__lkCalendar()) return this.__lkBook() // links (W3f)
       const b = this.state.bk
       if (env.booking !== 'live') {
         if (b.who === 'guest' && !b.ack) {
@@ -715,6 +815,804 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       this.setJn({ step: 4, err: '' })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
+
+    // ==== links (W3f) =========================================================================================================
+    // DV-LINK, DV-STEPUP, DV-LINK-JOIN, DV-LINK-PAY, DV-LINK-DEAD. A personal link's token (captured and scrubbed by
+    // src/client/link.ts) is sent once, in the body of POST {links.base}/exchange, for an in-memory bearer session; the
+    // page then opens: the booking sheet in linked mode (calendar, book again: "BOOKING FOR MARIA ••51", no who / phone /
+    // code step, the client's own board), the step-up block (verify, PIN links), the join steps (membership: plan ->
+    // verify -> e-mail -> terms -> Squarespace), the payment review (pay: review -> verify -> Squarespace) or a dead-link
+    // notice. A 404 (PUBLIC_LINKS_ENABLED off) leaves the site exactly as it is without a link.
+
+    __lkMount(): void {
+      if (!env.links) return
+      this.__lkOff = onLink((l) => void this.__lkOpen(l))
+      const first = takeLink()
+      if (first) void this.__lkOpen(first)
+    }
+
+    __lkBase(): string {
+      return (env.links?.base ?? '/api/v1/public/links').replace(/\/+$/, '')
+    }
+
+    /** A calendar or book-again link is open: Book books for its client. */
+    __lkCalendar(): boolean {
+      const k = this.__lk?.kind
+      return k === 'calendar' || k === 'book_again'
+    }
+
+    /** The membership link's join steps are showing. */
+    __lkJoining(): boolean {
+      return this.__lk?.kind === 'membership' && this.state.page === 'join'
+    }
+
+    /** The per-client board's auth (null: the public board). */
+    __lkBoardAuth(): { base: string; auth: string } | null {
+      if (!this.__lkCalendar() || this.__lkAvailOff || !this.__lk?.session) return null
+      return { base: this.__lkBase(), auth: 'Bearer ' + this.__lk.session }
+    }
+
+    /** A PIN or code was entered on this page recently enough for a membership or a payment. */
+    __lkFresh(): boolean {
+      const t = this.__lk?.stepUpAt
+      return t != null && realNow() - t < STEP_UP_FRESH_MS
+    }
+
+    __lkWho(): string {
+      return this.__lk ? whoLabel(this.__lk.client) : ''
+    }
+
+    /** Opens a link: forgets any earlier one (a second link in the same tab), exchanges the token, routes by kind. */
+    async __lkOpen(l: CapturedLink): Promise<void> {
+      const seq = ++this.__lkSeq
+      const was = this.__lk
+      this.__lk = null
+      this.__su = null
+      this.__lkView = null
+      this.__lkJoinVerify = false
+      this.__lkJoinInit = false
+      this.__lkIdem = null
+      this.__lkAvailOff = false
+      if (was) {
+        this.__booking = null
+        if (this.state.sheet) this.setState({ sheet: null })
+      }
+      const r = await this.__lkRaw('POST', '/exchange', { token: l.token }, null)
+      if (seq !== this.__lkSeq) return
+      if (r.status === 404) return // personal links are switched off: the site as without a link
+      if (r.status === 401) {
+        this.__lkDead(deadReason(r.problem?.meta))
+        return
+      }
+      let x: Exchanged | null = null
+      if (r.ok) {
+        try {
+          x = validateExchange(r.body)
+        } catch {
+          x = null
+        }
+      }
+      if (!x) {
+        this.flash(
+          r.status === 0
+            ? `No connection. Open the link again, or text ${env.contact.smsKeyword} to ${env.contact.smsDisplay}.`
+            : this.__lkProblemText(r, 'We couldn’t open your link. Try again in a minute.'),
+        )
+        return
+      }
+      this.__lk = { ...x, token: l.token, stepUpAt: null, codeAt: null }
+      if (was?.kind === 'calendar' || was?.kind === 'book_again' || x.kind === 'calendar' || x.kind === 'book_again') void this.__refreshAvailability()
+      switch (x.kind) {
+        case 'calendar':
+        case 'book_again':
+          this.__lkOpenBook()
+          return
+        case 'verify':
+          if (x.trust.verified) this.__lkNoticeVerified(false)
+          else this.__lkStepUp('verified')
+          return
+        case 'pin':
+          this.__lkStepUp('pinset', { purpose: x.pin === 'set' ? 'pin_reset' : 'pin_set', mode: 'send' })
+          return
+        case 'membership':
+          this.__lkOpenJoin()
+          return
+        case 'pay':
+          this.__lkOpenPay()
+          return
+      }
+    }
+
+    // ---- transport: every call but the exchange carries the session; a session that ended is exchanged again once ----
+    async __lkRaw(method: 'GET' | 'POST', path: string, body: unknown, session: string | null, idem?: string): Promise<LinkAnswer> {
+      try {
+        const ctl = new AbortController()
+        const t = setTimeout(() => ctl.abort(), env.timeouts.api)
+        const res = await fetch(api(this.__lkBase() + path), {
+          method,
+          signal: ctl.signal,
+          credentials: 'omit',
+          cache: 'no-store',
+          referrerPolicy: 'no-referrer',
+          headers: {
+            accept: 'application/json',
+            ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
+            ...(session ? { authorization: 'Bearer ' + session } : {}),
+            ...(idem ? { 'idempotency-key': idem } : {}),
+          },
+          body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
+        })
+        clearTimeout(t)
+        let data: any = null
+        try {
+          data = await res.json()
+        } catch {
+          data = null
+        }
+        return { ok: res.ok, status: res.status, body: res.ok ? data : null, problem: res.ok ? null : (data as LinkAnswer['problem']) }
+      } catch {
+        return { ok: false, status: 0, body: null, problem: null }
+      }
+    }
+
+    /** One call with the session. null = handled here (the link died, no connection, busy). */
+    async __lkCall(method: 'GET' | 'POST', path: string, body: unknown, idem?: string): Promise<LinkAnswer | null> {
+      const lk = this.__lk
+      if (!lk || this.__busy) return null
+      this.__busy = true
+      this.forceUpdate()
+      try {
+        let r = await this.__lkRaw(method, path, body, lk.session, idem)
+        if (r.status === 401 && r.problem?.code === 'IDENTITY_SESSION_INVALID' && this.__lk === lk) {
+          // the page timed out (15 min idle, 1 h at most): open the link again with the token still in memory
+          const again = await this.__lkRaw('POST', '/exchange', { token: lk.token }, null)
+          let x: Exchanged | null = null
+          if (again.ok) {
+            try {
+              x = validateExchange(again.body)
+            } catch {
+              x = null
+            }
+          }
+          if (!x) {
+            this.__lkDead(again.status === 401 ? deadReason(again.problem?.meta) : 'expired')
+            return null
+          }
+          lk.session = x.session
+          lk.trust = x.trust
+          lk.stepUpAt = null
+          r = await this.__lkRaw(method, path, body, lk.session, idem)
+        }
+        if (this.__lk !== lk) return null
+        if (r.status === 0) {
+          this.flash(`No connection. Try again, or text ${env.contact.smsKeyword} to ${env.contact.smsDisplay}.`)
+          return null
+        }
+        const code = String(r.problem?.code ?? '')
+        if (code === 'IDENTITY_LINK_INVALID' || code === 'IDENTITY_SESSION_INVALID') {
+          this.__lkDead(code === 'IDENTITY_LINK_INVALID' ? deadReason(r.problem?.meta) : 'expired')
+          return null
+        }
+        if (code === 'IDENTITY_LINK_USED') {
+          this.__lkDead('used')
+          return null
+        }
+        if (code === 'IDENTITY_SESSION_LOCKED') {
+          this.__lkDead('locked')
+          return null
+        }
+        return r
+      } finally {
+        this.__busy = false
+        this.forceUpdate()
+      }
+    }
+
+    /** The API's words for the visitor (the identity problems are written for this page), else `fallback`. */
+    __lkProblemText(r: LinkAnswer, fallback = 'Something went wrong. Try again, or text us.'): string {
+      const p = r.problem
+      const detail = typeof p?.detail === 'string' && !/[{}]/.test(p.detail) ? p.detail : ''
+      return detail || (typeof p?.title === 'string' ? p.title : '') || (r.status === 429 ? 'Too many tries. Please wait a minute.' : fallback)
+    }
+
+    // ---- DV-LINK-DEAD and the notices ----------------------------------------------------------------------------------------
+    __lkNotice(n: Omit<Extract<LinkView, { v: 'notice' }>, 'v'>): void {
+      this.__lkView = { v: 'notice', ...n }
+      this.setState({ menu: false, sheet: 'link' })
+    }
+
+    /** The link can't be used: expired, used, replaced / turned off, unknown, or too many wrong tries on this page. */
+    __lkDead(reason: LinkDeadReason | 'locked'): void {
+      const c = DEAD_COPY[reason]
+      this.__lk = null
+      this.__su = null
+      this.__lkJoinVerify = false
+      this.__lkNotice({ tone: 'warn', eyebrow: 'PERSONAL LINK', title: c.title, text: c.text, sms: env.links?.newLinkText || 'Please send me a new link' })
+    }
+
+    __lkNoticeVerified(offerPin = true): void {
+      const lk = this.__lk
+      if (!lk) return
+      const until = trustDate(lk.trust.until, env.tz)
+      const canPin = offerPin && lk.pin !== 'set' && lk.codeAt != null && realNow() - lk.codeAt < PIN_AFTER_CODE_MS
+      this.__su = null
+      this.__lkNotice({
+        tone: 'ok',
+        eyebrow: 'VERIFIED · ' + this.__lkWho(),
+        title: 'You’re verified',
+        text: `${lk.client.firstName ? `Thanks, ${lk.client.firstName}. ` : ''}Your number is verified${until ? ` until ${until}` : ' for 30 days'}. Go back to your texts and we’ll take it from there.`,
+        action: canPin ? { label: 'Create a PIN for next time', run: () => this.__lkStepUp('pinset', { purpose: 'pin_set', mode: 'create', optional: true }) } : null,
+      })
+    }
+
+    __lkNoticePinSet(): void {
+      this.__su = null
+      this.__lkNotice({
+        tone: 'ok',
+        eyebrow: 'YOUR PIN · ' + this.__lkWho(),
+        title: 'Your PIN is set',
+        text: 'Use it on our links to confirm it’s you. Never share it, and never text it to us.',
+      })
+    }
+
+    /** "Back to home" of a notice: close the sheet, leave a join page. */
+    __lkHome(): void {
+      this.setState({ sheet: null })
+      if (this.state.page !== 'home') this.go('home')
+    }
+
+    // ---- DV-LINK: the booking sheet in linked mode -----------------------------------------------------------------------------
+    __lkOpenBook(p?: any): void {
+      const tier = this.__lk!.client.tier
+      this.setState((s: any) => ({
+        menu: false,
+        sheet: 'book',
+        step: 'svc',
+        tier,
+        bk: { ...s.bk, who: tier ? 'member' : 'guest', ack: false, lock: null, phoneErr: false, ...(p || {}) },
+      }))
+    }
+
+    /** The design's booking steps for the link's client: the eyebrow names them, the wash step has no way back to "who". */
+    __lkBookSh(sh: any): any {
+      const s = this.state
+      const who = 'BOOKING FOR ' + this.__lkWho()
+      if (s.step === 'verify') {
+        return {
+          bWho: false,
+          bSvc: false,
+          bTime: false,
+          bReview: false,
+          bDone: false,
+          hasCta: false,
+          isGuest: false,
+          canBack: true,
+          back: () => {
+            this.__su = null
+            this.setState({ step: 'review' })
+          },
+          eyebrow: who,
+          title: 'Confirm it’s you',
+          progress: '95%',
+          sumWho: sh.sumWho,
+          sumWhen: sh.sumWhen,
+          sumLines: sh.sumLines,
+        }
+      }
+      const out = { ...sh }
+      if (typeof out.eyebrow === 'string') out.eyebrow = out.eyebrow.replace(/^(GUEST|MEMBER) BOOKING/, who)
+      if (s.step === 'svc') out.canBack = false
+      return out
+    }
+
+    /** Book on a linked page: POST {base}/bookings for the session's client (verified or trusted first). */
+    async __lkBook(): Promise<void> {
+      const lk = this.__lk
+      if (!lk) return
+      const b = this.state.bk
+      const member = !!lk.client.tier && b.who === 'member'
+      if (!member && !b.ack) {
+        this.flash('Please confirm the booking fee terms')
+        return
+      }
+      if (!lk.client.firstName && !String(b.name || '').trim()) {
+        this.flash('Add your full name')
+        return
+      }
+      if (this.__busy) return
+      if (!this.__catalog) {
+        this.__catalogReady = null
+        await this.__loadCatalog()
+      }
+      const r0 = this.__bookingBody()
+      if ('error' in r0) {
+        this.flash(r0.error)
+        return
+      }
+      if (!lk.trust.verified) {
+        this.__lkStepUp('book')
+        return
+      }
+      const x = r0.body
+      const body: Record<string, unknown> = {
+        serviceKey: x.serviceKey,
+        addonKeys: x.addonKeys,
+        date: x.date,
+        startMin: x.startMin,
+        vehicle: x.vehicle,
+        ...(lk.client.firstName ? {} : { name: x.name }),
+      }
+      const sig = JSON.stringify(body)
+      if (!this.__lkIdem || this.__lkIdem.sig !== sig) this.__lkIdem = { key: randomId(), sig }
+      const r = await this.__lkCall('POST', '/bookings', body, this.__lkIdem.key)
+      if (!r) return
+      if (r.ok) {
+        this.__lkIdem = null
+        this.__booking = { bookingRef: String(r.body?.bookingRef ?? ''), confirmationBy: String(r.body?.confirmationBy ?? 'sms'), deposit: r.body?.deposit }
+        this.setState({ step: 'done' })
+        void this.__refreshAvailability()
+        return
+      }
+      const code = String(r.problem?.code ?? '')
+      if (code === 'IDENTITY_STEP_UP_REQUIRED' || code === 'IDENTITY_NOT_TRUSTED' || code === 'IDENTITY_NOT_VERIFIED') {
+        lk.trust = { verified: false, until: null }
+        this.__lkStepUp('book')
+        return
+      }
+      if (code.startsWith('PUBLIC_SLOT_')) {
+        this.flash(r.problem?.title || 'That time is no longer available. Pick another.')
+        this.setBk({ slot: null })
+        this.setState({ step: 'time' })
+        void this.__refreshAvailability()
+        return
+      }
+      this.flash(this.__lkProblemText(r))
+    }
+
+    // ---- DV-STEPUP: PIN / texted code / create PIN ----------------------------------------------------------------------------
+    __lkStepUp(then: StepUp['then'], o: { purpose?: StepUpPurpose; optional?: boolean; mode?: StepUp['mode'] } = {}): void {
+      const lk = this.__lk
+      if (!lk) return
+      const purpose = o.purpose ?? 'link_verify'
+      // a PIN outranks a texted code once set (the server refuses the code then: IDENTITY_PIN_REQUIRED)
+      const mode = o.mode ?? (purpose === 'link_verify' && lk.pin === 'set' ? 'pin' : 'send')
+      this.__su = { mode, purpose, challengeId: null, value: '', err: '', locked: false, then, optional: !!o.optional }
+      if (then === 'book') this.setState({ step: 'verify' })
+      else if (then === 'join' || then === 'join-start') {
+        this.__lkJoinVerify = true
+        this.forceUpdate()
+        if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') window.scrollTo({ top: 0, behavior: 'smooth' })
+      } else {
+        this.__lkView = { v: 'stepup' }
+        this.setState({ menu: false, sheet: 'link' })
+      }
+    }
+
+    __suSwitch(mode: StepUp['mode'], purpose: StepUpPurpose): void {
+      const su = this.__su
+      if (!su) return
+      Object.assign(su, { mode, purpose, challengeId: null, value: '', err: '', locked: false })
+      this.forceUpdate()
+    }
+
+    /** "Text me a code": POST {base}/verify/code {purpose}; the code goes to the link's number only. */
+    async __suSend(): Promise<void> {
+      const su = this.__su
+      if (!su) return
+      const r = await this.__lkCall('POST', '/verify/code', { purpose: su.purpose })
+      if (!r || this.__su !== su) return
+      const lk = this.__lk!
+      if (r.ok) {
+        Object.assign(su, { mode: 'code', challengeId: String(r.body?.challengeId ?? ''), value: '', err: '' })
+      } else {
+        const code = String(r.problem?.code ?? '')
+        if (code === 'IDENTITY_PIN_REQUIRED') {
+          lk.pin = 'set'
+          Object.assign(su, { mode: 'pin', purpose: 'link_verify', value: '', err: '' })
+        } else if (code === 'IDENTITY_PIN_EXISTS') {
+          lk.pin = 'set'
+          Object.assign(su, { mode: 'send', purpose: 'pin_reset', err: 'You already have a PIN. We can text you a code to choose a new one.' })
+        } else if (code === 'IDENTITY_PIN_NOT_SET') {
+          lk.pin = 'none'
+          Object.assign(su, { mode: 'send', purpose: su.then === 'pinset' ? 'pin_set' : 'link_verify', err: '' })
+        } else su.err = this.__lkProblemText(r)
+      }
+      this.forceUpdate()
+    }
+
+    /** Verify / Save of the block: the code, the PIN, or the new PIN. */
+    async __suSubmit(): Promise<void> {
+      const su = this.__su
+      if (!su || su.locked) return
+      const v = su.value
+      const lk = this.__lk!
+      const fail = (err: string, more: Partial<StepUp> = {}) => {
+        Object.assign(su, { err, ...more })
+        this.forceUpdate()
+      }
+      if (su.mode === 'code') {
+        if (!/^\d{6}$/.test(v)) return fail('Enter the 6-digit code we texted you.')
+        const r = await this.__lkCall('POST', '/verify/code/confirm', { challengeId: su.challengeId, code: v })
+        if (!r || this.__su !== su) return
+        if (r.ok) {
+          lk.codeAt = realNow()
+          if (su.purpose !== 'pin_reset') this.__lkVerified(r.body)
+          if (su.purpose === 'link_verify') return this.__suDone()
+          // a PIN link (set or reset): the new PIN next
+          Object.assign(su, { mode: 'create', value: '', err: '', optional: false })
+          this.forceUpdate()
+          return
+        }
+        const code = String(r.problem?.code ?? '')
+        if (code === 'IDENTITY_PIN_REQUIRED') {
+          lk.pin = 'set'
+          return fail('', { mode: 'pin', purpose: 'link_verify', value: '' })
+        }
+        if (code === 'PUBLIC_OTP_LOCKED' || code === 'PUBLIC_OTP_EXPIRED') return fail(this.__lkProblemText(r), { mode: 'send', challengeId: null, value: '' })
+        return fail(this.__lkProblemText(r), { value: '' })
+      }
+      if (su.mode === 'pin') {
+        if (!PIN_RE.test(v)) return fail('Enter your 4 to 6 digit PIN.')
+        const r = await this.__lkCall('POST', '/verify/pin', { pin: v })
+        if (!r || this.__su !== su) return
+        if (r.ok) {
+          this.__lkVerified(r.body)
+          return this.__suDone()
+        }
+        const code = String(r.problem?.code ?? '')
+        // locked for a while (or for good until a reset): the PIN field goes, the reset by code stays
+        if (code === 'IDENTITY_PIN_LOCKED' || code === 'IDENTITY_PIN_DISABLED') return fail(this.__lkProblemText(r), { locked: true, value: '' })
+        return fail(this.__lkProblemText(r), { value: '' })
+      }
+      if (su.mode === 'create') {
+        if (!PIN_RE.test(v)) return fail('Choose 4 to 6 digits.')
+        const reset = su.purpose === 'pin_reset'
+        const r = await this.__lkCall('POST', reset ? '/pin/reset' : '/pin', { pin: v })
+        if (!r || this.__su !== su) return
+        if (r.ok) {
+          lk.pin = 'set'
+          this.__lkVerified(r.body)
+          return this.__suDone()
+        }
+        const code = String(r.problem?.code ?? '')
+        if (code === 'IDENTITY_CODE_REQUIRED') return fail(this.__lkProblemText(r), { mode: 'send', value: '', optional: false })
+        if (code === 'IDENTITY_PIN_EXISTS') {
+          lk.pin = 'set'
+          return fail(this.__lkProblemText(r), { mode: su.then === 'pinset' ? 'send' : 'pin', purpose: su.then === 'pinset' ? 'pin_reset' : 'link_verify', value: '' })
+        }
+        return fail(this.__lkProblemText(r), { value: '' })
+      }
+    }
+
+    /** The page is verified (PIN or code): the number is trusted (30 days) and a fresh step-up is on record. */
+    __lkVerified(body: any): void {
+      const lk = this.__lk
+      if (!lk) return
+      const until = typeof body?.trust?.until === 'string' ? body.trust.until : lk.trust.until
+      lk.trust = { verified: true, until }
+      lk.stepUpAt = realNow()
+    }
+
+    __suDone(): void {
+      const su = this.__su
+      if (!su) return
+      this.__su = null
+      switch (su.then) {
+        case 'book':
+          this.setState({ step: 'review' })
+          void this.__lkBook()
+          return
+        case 'join':
+          this.__lkJoinVerify = false
+          this.setJn({ step: 2, err: '' })
+          return
+        case 'join-start':
+          this.__lkJoinVerify = false
+          this.setJn({ step: 3, err: '' })
+          void this.__lkJoinStart()
+          return
+        case 'pay':
+          void this.__lkPayStart()
+          return
+        case 'verified':
+          this.__lkNoticeVerified()
+          return
+        case 'pinset':
+          this.__lkNoticePinSet()
+          return
+      }
+    }
+
+    __suVals(su: StepUp): Record<string, any> {
+      const lk = this.__lk
+      const to = lk?.client.last2 ? `••${lk.client.last2}` : 'your number'
+      const common = {
+        value: su.value,
+        setValue: (e: any) => {
+          su.value = String(e?.target?.value ?? '').replace(/\D/g, '').slice(0, 6)
+          su.err = ''
+          this.forceUpdate()
+        },
+        submit: () => void this.__suSubmit(),
+        sendCode: () => void this.__suSend(),
+        err: su.err,
+        note: 'We only ask for your PIN or a code on this page, never by text.',
+        pin: false,
+        code: false,
+        create: false,
+        send: false,
+        alt: '',
+        altClick: () => {},
+      }
+      switch (su.mode) {
+        case 'pin':
+          return {
+            ...common,
+            title: su.locked ? 'Your PIN is locked' : 'Enter your PIN',
+            sub: su.locked ? `We can text a code to ${to} so you can choose a new PIN.` : 'The 4 to 6 digit PIN you made for Oasis.',
+            pin: !su.locked,
+            submitLabel: 'Verify',
+            alt: 'Forgot your PIN? Text me a code',
+            altClick: () => this.__suSwitch('send', 'pin_reset'),
+          }
+        case 'send':
+          return {
+            ...common,
+            title: su.purpose === 'pin_reset' ? 'Reset your PIN' : su.purpose === 'pin_set' ? 'Create your PIN' : 'Confirm it’s you',
+            sub: `We’ll text a 6-digit code to ${to}.`,
+            send: true,
+            sendLabel: 'Text me a code',
+            alt: su.purpose === 'pin_reset' && su.then !== 'pinset' ? 'Use my PIN instead' : '',
+            altClick: () => this.__suSwitch('pin', 'link_verify'),
+          }
+        case 'code':
+          return {
+            ...common,
+            title: 'Enter the code we texted',
+            sub: `Sent to ${to} · 6 digits, 3 tries`,
+            code: true,
+            submitLabel: 'Verify',
+            alt: 'Send a new code',
+            altClick: () => void this.__suSend(),
+          }
+        case 'create':
+          return {
+            ...common,
+            title: su.purpose === 'pin_reset' ? 'Choose a new PIN' : 'Create your PIN',
+            sub: '4 to 6 digits. Skip easy ones like 1234 or a birth year.',
+            create: true,
+            submitLabel: 'Save',
+            alt: su.optional ? 'Skip for now' : '',
+            altClick: () => this.__lkNoticeVerified(false),
+          }
+      }
+    }
+
+    // ---- DV-LINK-PAY: review -> verify -> Squarespace --------------------------------------------------------------------------
+    __lkOpenPay(): void {
+      const inv = this.__lk!.invoice
+      if (!inv || inv.balanceCents <= 0) {
+        this.__lkNotice({ tone: 'ok', eyebrow: 'PAYMENT · ' + this.__lkWho(), title: 'Nothing to pay', text: 'This invoice is paid. Thank you!' })
+        return
+      }
+      this.__lkView = { v: 'pay' }
+      this.setState({ menu: false, sheet: 'link' })
+    }
+
+    __lkPay(): void {
+      if (!this.__lkFresh()) this.__lkStepUp('pay')
+      else void this.__lkPayStart()
+    }
+
+    async __lkPayStart(): Promise<void> {
+      const r = await this.__lkCall('POST', '/pay/start', {})
+      if (!r) return
+      const eyebrow = 'PAYMENT · ' + this.__lkWho()
+      if (r.ok) {
+        if (r.body?.status === 'link_pending') {
+          this.__lkNotice({ tone: 'ok', eyebrow, title: 'We’ll text you a link', text: 'This invoice doesn’t have an online payment link yet. We’ll text you one shortly.' })
+          return
+        }
+        const url = r.body?.redirectUrl
+        if (allowedRedirect(url, env.links?.redirectHosts ?? [])) {
+          this.__lkNotice({ tone: 'ok', eyebrow, title: 'Opening checkout', text: 'Taking you to Squarespace’s secure checkout to pay.' })
+          navigate(String(url))
+          return
+        }
+        this.__lkNotice({ tone: 'warn', eyebrow, title: 'We couldn’t open the payment page', text: `Text us at ${env.contact.smsDisplay} and we’ll send you a new payment link.`, sms: 'Hi, my payment link didn’t open. Can you send a new one?' })
+        return
+      }
+      if (String(r.problem?.code ?? '') === 'IDENTITY_STEP_UP_REQUIRED') {
+        this.__lk!.stepUpAt = null
+        this.__lkStepUp('pay')
+        return
+      }
+      this.flash(this.__lkProblemText(r))
+    }
+
+    // ---- DV-LINK-JOIN: plan -> verify -> e-mail -> terms -> Squarespace --------------------------------------------------------
+    /** The design's tier for the link's plan (site.config.json catalog.plans maps the design's ids to plan keys). */
+    __lkTier(): 'gold' | 'vip' {
+      const key = this.__lk?.plan?.key
+      const plans = env.catalog?.plans ?? {}
+      const id = Object.keys(plans).find((k) => k === key || plans[k] === key)
+      return id === 'gold' ? 'gold' : 'vip'
+    }
+
+    __lkOpenJoin(): void {
+      const tier = this.__lkTier()
+      this.__lkJoinInit = true
+      this.__lkJoinVerify = false
+      if (this.state.sheet || this.state.menu) this.setState({ sheet: null, menu: false })
+      if (this.state.page === 'join') this.__lkJoinSync()
+      else this.go('join', tier)
+    }
+
+    /** After the design has shown the join page (its hashchange handler resets the steps): the link's plan and name. */
+    __lkJoinSync(): void {
+      if (!this.__lkJoinInit || this.state.page !== 'join' || this.__lk?.kind !== 'membership') return
+      this.__lkJoinInit = false
+      this.setJn({ tier: this.__lkTier(), name: this.__lk.client.firstName ?? '', step: 0, err: '', agree: false })
+    }
+
+    __lkJoinVM(r: any): any {
+      const jv = { ...r.jv }
+      const j = this.state.jn
+      const tier = this.__lkTier()
+      const plan = this.__lk?.plan?.label || (tier === 'vip' ? 'VIP' : 'Gold')
+      jv.tiers = (jv.tiers || []).map((t: any) =>
+        String(t.name).toLowerCase() === tier ? t : { ...t, onClick: () => this.flash(`This link is for ${plan}. Text us to switch plans.`) },
+      )
+      const toPlan = () => {
+        this.__lkJoinVerify = false
+        this.__su = null
+        this.setJn({ step: 0, err: '' })
+      }
+      const top = () => {
+        if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+      if (this.__lkJoinVerify) {
+        return {
+          ...r,
+          jv: { ...jv, s0: false, s1: false, s2: false, s3: false, s4: false, eyebrow: 'STEP 2 OF 4 · CONFIRM IT’S YOU', t1: 'Confirm', t2: 'it’s you.', sub: 'Memberships always need your PIN or a code we text you.', progress: '40%', canBack: true, back: toPlan, hasCta: false, err: '' },
+        }
+      }
+      const st = j.step
+      if (st <= 1) {
+        jv.next = () => {
+          if (this.__lkFresh()) {
+            this.setJn({ step: 2, err: '' })
+            top()
+          } else this.__lkStepUp('join')
+        }
+      } else if (st === 2) {
+        Object.assign(jv, { s2: false, eyebrow: 'STEP 3 OF 4 · EMAIL', t1: 'Your', t2: 'email.', sub: 'Use the email you’ll pay with on Squarespace. Your receipts go there.', progress: '60%', canBack: true, back: toPlan })
+        jv.next = () => {
+          if (!EMAIL.test(String(j.email || '').trim())) {
+            this.setJn({ err: 'Add your email for the receipts.' })
+            return
+          }
+          this.setJn({ step: 3, err: '' })
+          top()
+        }
+      } else if (st === 3) {
+        Object.assign(jv, { sub: 'You’ll finish on Squarespace’s secure checkout. Your membership starts once it’s paid.', progress: '80%', ctaLabel: 'Continue to checkout', back: () => this.setJn({ step: 2, err: '' }) })
+        jv.next = () => {
+          if (!j.agree) {
+            this.setJn({ err: 'Please accept the membership terms.' })
+            return
+          }
+          void this.__lkJoinStart()
+        }
+      }
+      return { ...r, jv }
+    }
+
+    async __lkJoinStart(): Promise<void> {
+      if (!this.__lkFresh()) {
+        this.__lkStepUp('join-start')
+        return
+      }
+      const email = String(this.state.jn.email || '').trim()
+      const r = await this.__lkCall('POST', '/membership/start', { email })
+      if (!r) return
+      if (r.ok) {
+        const url = r.body?.redirectUrl
+        if (allowedRedirect(url, env.links?.redirectHosts ?? [])) {
+          this.flash('Opening Squarespace’s secure checkout…')
+          navigate(String(url))
+          return
+        }
+        this.setJn({ err: `We couldn’t open the checkout. Text us at ${env.contact.smsDisplay} and we’ll help you finish.` })
+        return
+      }
+      const code = String(r.problem?.code ?? '')
+      if (code === 'IDENTITY_STEP_UP_REQUIRED') {
+        this.__lk!.stepUpAt = null
+        this.__lkStepUp('join-start')
+        return
+      }
+      const field = r.problem?.errors?.find((e) => /email/.test(String(e.path ?? '')))
+      if (r.status === 422 && field) {
+        this.setJn({ step: 2, err: String(field.message || r.problem?.detail || r.problem?.title) })
+        return
+      }
+      this.setJn({ err: this.__lkProblemText(r) })
+    }
+
+    // ---- the view models of the linked blocks (site.link; the design's own keys stay the design's) --------------------------
+    /** The sheet's linked views (state.sheet 'link'): the header lines and the CTA; the blocks read site.link. */
+    __lkSheet(): Record<string, any> {
+      const base = { bWho: false, bSvc: false, bTime: false, bReview: false, bDone: false, hasCta: false, canBack: false, isGuest: false }
+      const v = this.__lkView
+      const lk = this.__lk
+      if (!v) return { ...base, eyebrow: '', title: '', progress: '20%' }
+      if (v.v === 'notice') return { ...base, eyebrow: v.eyebrow, title: v.title, progress: '100%' }
+      if (v.v === 'stepup') {
+        const kind = lk?.kind
+        const who = this.__lkWho()
+        const eyebrow = kind === 'pay' ? 'PAYMENT FOR ' + who : kind === 'pin' ? 'YOUR PIN · ' + who : 'VERIFY · ' + who
+        const back = kind === 'pay' ? () => this.__lkOpenPay() : undefined
+        return { ...base, canBack: !!back, back, eyebrow, title: this.__su?.mode === 'create' ? 'Your PIN' : 'Confirm it’s you', progress: '60%' }
+      }
+      const inv = lk?.invoice
+      const due = money(inv?.balanceCents ?? 0)
+      return {
+        ...base,
+        eyebrow: 'PAYMENT FOR ' + this.__lkWho(),
+        title: 'Review & pay',
+        progress: '40%',
+        hasCta: true,
+        ctaLabel: (this.__lkFresh() ? 'Pay ' : 'Verify & pay ') + due,
+        ctaStyle: CTA_STYLE,
+        cta: () => this.__lkPay(),
+      }
+    }
+
+    __lkVals(): Record<string, any> {
+      const s = this.state
+      const lk = this.__lk
+      const su = this.__su
+      const view = this.__lkView
+      const linkSheet = s.sheet === 'link'
+      const notice = linkSheet && view?.v === 'notice' ? view : null
+      const inv = lk?.invoice
+      const joining = this.__lkJoining()
+      return {
+        on: !!lk,
+        sheetStepUp: !!su && ((linkSheet && view?.v === 'stepup') || (s.sheet === 'book' && s.step === 'verify' && this.__lkCalendar())),
+        joinStepUp: !!su && joining && this.__lkJoinVerify,
+        su: su ? this.__suVals(su) : {},
+        notice: notice
+          ? {
+              show: true,
+              ok: notice.tone === 'ok',
+              text: notice.text,
+              action: notice.action?.label ?? '',
+              actionClick: () => notice.action?.run(),
+              smsHref: notice.sms ? smsUrl(notice.sms) : '',
+              smsLabel: 'Text us for a new link',
+              home: () => this.__lkHome(),
+            }
+          : { show: false },
+        pay:
+          linkSheet && view?.v === 'pay' && inv
+            ? {
+                show: true,
+                title: inv.number ? `Invoice ${inv.number}` : 'Your invoice',
+                sub: inv.title || `${env.contact.addressShort}`,
+                lines: inv.lines.map((l) => ({ label: l.label, value: money(l.amountCents), lc: 'var(--ink2)', vc: 'var(--ink)' })),
+                dueLabel: 'Balance due',
+                due: money(inv.balanceCents),
+                dueSub: inv.totalCents > inv.balanceCents ? `${money(inv.totalCents - inv.balanceCents)} already paid. You’ll pay the rest on Squarespace’s secure checkout.` : 'You’ll pay on Squarespace’s secure checkout.',
+              }
+            : { show: false },
+        joinEmail: joining && !this.__lkJoinVerify && s.jn?.step === 2,
+        joinAs: lk ? whoLabel(lk.client) : '',
+        whoText: lk ? whoText(lk.client) : '',
+      }
+    }
+    // ==== end links (W3f) =====================================================================================================
 
     // ---- transport ----------------------------------------------------------------------------------------------------------
     async __post(endpoint: string, body: unknown, idem: string | null): Promise<Record<string, any> | null> {

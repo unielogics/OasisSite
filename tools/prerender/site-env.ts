@@ -80,6 +80,8 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
     fee: { cents: s.booking.feeCents, text: s.booking.feeText },
     brand: s.name,
     theme: s.theme ?? null,
+    // personal links (DV-LINK, W3f)
+    links: s.links ?? null,
   }
 }
 
