@@ -71,6 +71,37 @@ are redacted) and the pending membership row.
    device change and a reload on a device that says otherwise; the menu's Appearance Light on a dark device is stored
    and kept after a reload; no hydration error in any of them.
 9. Over every page: no console error or page error, no request to another origin, no 5xx.
+10-21. Personal links (`scripts/e2e-links.ts`, fixture mode; skipped on a stack until the backend's link API (W3c) is
+   in it: the stack has no `/public/links` routes and no way to issue a link). The fixture answers the backend's own
+   shapes (backend `docs/api-spec.md` section 28), held to them by `tools/site/fixture-links.test.ts` with the key lists
+   of `src/site/link-contract.testkit.ts`, so these checks exercise the real contract. They run on the launch build (`SITE_BOOKING=sms`; links do not depend on the booking mode), every page with the
+   production Content-Security-Policy (the kit's `SITE_CSP` minus `upgrade-insecure-requests`, the test host is plain
+   http) injected on the document, links issued in the fixture (`api.links.issue`, the URL a text would carry):
+   **10** the token is sent only in the body of `POST /links/exchange` (every browser request recorded: URL, headers,
+   body; the fixture's request log and the site host's paths never carry it; over the whole run, every link);
+   **11** scrubbed: no token in `location`, the DOM, storage, cookies or the title once hydrated, the history entry was
+   replaced (go to `#/visit` and back: the scrubbed `/`), a reload does not reopen the link (memory only);
+   **12** trust window: a trusted number books at once (no `/verify/*` call, booking recorded, the board from
+   `/links/availability` with the session); an untrusted number is asked to confirm before anything is booked, books
+   after the code, and a new link for that number then books without a code;
+   **13** verify: the code request carries no phone, a verify link ends on "You're verified … until <date>", a PIN can be
+   created after it ("1234" refused with the reason);
+   **14** PIN lockout: five wrong PINs show "Too many wrong PINs. Try again in 15 min…", the PIN field goes, the reset
+   stays;
+   **15** membership: `#/join?gold` (token scrubbed), code, e-mail, terms → the plan's Squarespace checkout, a pending
+   membership and a checkout intent with the confirmed e-mail;
+   **16** payment: the review shows the invoice (number, date, items, tax) and the balance, PIN → the invoice's Squarespace link; an invoice URL
+   off the allowlist is not followed ("We couldn't open the payment page", a text-us link);
+   **17** dead links: expired, used, revoked and unknown tokens show their notice and the text-us link;
+   **18** a link preview (a plain GET of the link URL) gets the static page and reaches no API; opening twice uses
+   nothing (2 exchanges, 0 uses); a booking uses it once;
+   **19** no CSP violation on any link page;
+   **20** a second link in the same tab (`location.hash = '#/c/<B>'`) is exchanged and scrubbed and the page then uses
+   its session;
+   **21** links switched off (the fixture's gate, 404): the home page as today (no sheet, no toast, the token scrubbed).
+   Chromium logs each documented 4xx answer of the link API ("Failed to load resource: … 401") as a console line; those
+   are counted and set aside for link pages only, every other console line still fails check 9.
+
 
 ## The theme before the first paint (`pnpm e2e:theme-paint`)
 

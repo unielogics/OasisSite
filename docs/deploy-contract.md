@@ -55,7 +55,10 @@ object-src 'none'`:
 - every `<script>` with executable content is an external file under `/assets/` (`script-src 'self'`); the only
   inline `<script>` elements are data blocks (`type="application/ld+json"`), which the CSP does not execute;
 - `style-src 'unsafe-inline'` is needed for the designs' inline `style=""` attributes (the stylesheet itself is a file);
-- `connect-src 'self'` covers the hours, availability, booking, code and join calls (`/api/v1/public/*`, same origin);
+- `connect-src 'self'` covers the hours, availability, booking, code and join calls and the personal-link calls
+  (`/api/v1/public/*` and `/api/v1/public/links/*`, same origin); the redirects to the Squarespace checkout and payment
+  pages are top-level navigations, which the policy does not restrict (the page follows only https squarespace.com,
+  `site.config.json` `links.redirectHosts`);
 - `img-src data:` is for images the design embeds as data URIs (none in the fixtures);
 - `manifest.json` records the theme script's sha256 (`themeScript.sha256`) in case a stricter hash-based policy is
   ever wanted; it is not needed with `'self'`.
@@ -69,6 +72,9 @@ A `<link rel="preconnect">` to an external font host is kept only if the design'
 - `location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; }`
 - `location /api/v1/public/ { proxy_pass oasis_api; proxy_cache ... 60s for GETs; proxy_set_header Cookie ""; }` (hours,
   availability, catalog, otp, bookings, memberships: the backend kit's `oasis-site.conf.template`)
+- `location /api/v1/public/links/` (personal links, DV-LINK): proxied like the rest of `/api/v1/public/` but **never
+  cached** (bearer sessions, per-client answers) and with its own limit zone; the backend kit owns it (wave W3c). The
+  link token never reaches nginx: it rides in the URL fragment and in one POST body.
 - everything else under `/api`, `/hooks`, `/dev-storage` → 404; dotfiles → 404.
 
 `tools/parity/serve-dist.ts` mimics these rules (clean URLs, 404 page, immutable assets, no-cache HTML, the hours and

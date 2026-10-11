@@ -81,6 +81,17 @@ process at a time on the shared box (`flock /tmp/oasis-heavy.lock`).
     `/api/v1/public/availability` with the same payloads (and `/api/v1/public/catalog` with the configured keys), so
     the refresh after mount changes nothing.
 
+## Personal links (DV-LINK…) and the harness
+
+The linked states (a page opened from a personal link: the linked booking sheet, the step-up card, the linked join
+steps, the payment review, the dead-link notices) exist only when the link API answers, and the design has no such
+states to compare with. They are therefore not harness scenarios: without a link fragment (every run here) their blocks
+are `sc-if`s that render nothing and the `wrap-if` around the sheet's summary column is true, so every existing run
+stays at zero. They are pinned instead by port goldens (`src/site/link-blocks.test.ts`: the patched template rendered
+by the reference interpreter with the bridge's view model, compared with `src/site/__goldens__/link-*.html`), a test
+that the whole page markup is identical with and without the link patch ops when no link is open, a style-token test
+(every declaration of the new blocks occurs in the design's own template) and the e2e (docs/e2e.md checks 10-21).
+
 ## Environment and determinism
 
 Identical to the dashboard: Chromium flags `--disable-dev-shm-usage --force-color-profile=srgb

@@ -83,6 +83,11 @@
       "vip": "vip"
     }
   },
+  "links": {
+    "base": "/api/v1/public/links",
+    "redirectHosts": ["squarespace.com"],
+    "newLinkText": "Hi, my Oasis link isn't working. Can you send me a new one?"
+  },
   "imageSlots": {
     "tag": "image-slot"
   },

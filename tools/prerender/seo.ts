@@ -5,7 +5,7 @@ import path from 'node:path'
 import type { PublicHours } from '../../src/hours/format'
 import { toMinutes } from '../../src/hours/format'
 import type { ThemeConfig } from '../../src/client/theme'
-import type { CatalogConfig, ContactConfig } from '../../src/site/env'
+import type { CatalogConfig, ContactConfig, LinksConfig } from '../../src/site/env'
 
 export interface SiteConfig {
   name: string
@@ -28,6 +28,8 @@ export interface SiteConfig {
   imageSlots?: { tag: string } | null
   /** per page slug: the module wrapped around the logic class */
   bridges?: Record<string, string>
+  /** personal links (DV-LINK): the link API base and the redirect host allowlist */
+  links?: LinksConfig | null
   parity?: { viewports?: { name: string; width: number; height: number }[] }
   /** logical asset path of the logo/icon (/assets/oasis-logo.png) or null */
   icon?: string | null

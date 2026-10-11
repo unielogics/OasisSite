@@ -28,6 +28,7 @@ import { startFixtureApi, type FixtureApi } from '../tools/site/fixture-api'
 import { designCatalog, unseededCatalog, withMemberPrice } from '../tools/site/catalog-fixture'
 import { startSiteProxy, type SiteProxy } from '../tools/site/proxy'
 import { ROOT, CHROMIUM_FLAGS } from '../tools/parity/config'
+import { runLinkChecks } from './e2e-links'
 
 interface Stack {
   name: string
@@ -768,6 +769,10 @@ async function main(): Promise<number> {
     check('sms mode: Join composes an sms: link to the texting number with the plan, name, phone and car', navs2.length === 1 && reSms('JOIN%20VIP%3A').test(navs2[0]!) && /Sam%20Lee/.test(navs2[0]!) && /Audi/.test(navs2[0]!), navs2[0])
     check('sms mode: no API write was attempted', smsProxy.log.filter((l) => l.method === 'POST').length === posts0, JSON.stringify(smsProxy.log.filter((l) => l.method === 'POST')))
     await joinPage.ctx.close()
+    // 10-21. personal links (DV-LINK…, scripts/e2e-links.ts) on the launch build, against the fixture's link API; a
+    // stack gets them once the backend's link API (wave W3c) is in the stack
+    if (api.kind === 'fixture') await runLinkChecks({ browser, proxy: smsProxy, api: api.fixture!, newPage, ready, check, trackers })
+    else log('links: skipped on a stack (the fixture API carries the link routes until the backend link API is in the stack)')
     // 8b. a visitor in another time zone: the page shows the shop's wall clock and hydrates without a mismatch
     // (DEVIATIONS.md DV-CLOCK; React logs a recoverable error and re-renders on the client otherwise)
     const far = await newPage(browser, smsProxy.origin, 'America/Los_Angeles')
