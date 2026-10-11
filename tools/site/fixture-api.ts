@@ -81,6 +81,8 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
   let seq = 100
   // the bookable packages (availability and bookings know these keys whatever the catalog answer is swapped to)
   const services = designCatalog().services
+  // the add-ons the link fixture names in its bookings (same keys as the catalog answer, W3e + W3f)
+  const addons = designCatalog().addons
   // The design's pattern and `today` are computed from LOCAL hours: always in the shop's zone, whatever the process
   // zone is (the prerender shims set TZ to the shop's zone when it is unset, so an in-process fixture must not drift).
   const inShopZone = <T,>(fn: () => T): T => {
