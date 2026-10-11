@@ -20,8 +20,12 @@ export interface CapturedLink {
   token: string
 }
 
-/** `#/<path>/<token>` with an optional trailing slash; a token is URL-safe text of at most 256 characters. */
-const LINK_RE = /^#\/?(c|m|p|pin|v)\/([A-Za-z0-9_~.-]{1,256})\/?$/
+/**
+ * `#/<path>/<token>`: the token is base64url (the API issues 43 characters; at most 256 are taken). Anything after it
+ * that starts with another character (a trailing slash or period, `?utm=…` added by a messaging app or a shortener) is
+ * not part of the token and is ignored; the whole fragment is scrubbed either way.
+ */
+const LINK_RE = /^#\/?(c|m|p|pin|v)\/([A-Za-z0-9_-]{1,256})(?:[^A-Za-z0-9_-].*)?$/
 
 /** The link a fragment carries, or null (an ordinary hash route like #/membership is not a link). */
 export function parseLinkFragment(hash: string | null | undefined): CapturedLink | null {

@@ -24,9 +24,18 @@ describe('parseLinkFragment', () => {
     expect(parseLinkFragment('#/join?gold')).toBeNull()
     expect(parseLinkFragment('#/x/' + TOKEN)).toBeNull()
     expect(parseLinkFragment('#/c/')).toBeNull()
-    expect(parseLinkFragment('#/c/a b')).toBeNull()
+    expect(parseLinkFragment('#/c/ ab')).toBeNull()
+    expect(parseLinkFragment('#/c/%20ab')).toBeNull()
     expect(parseLinkFragment('#/c/' + 'a'.repeat(257))).toBeNull()
     expect(parseLinkFragment('')).toBeNull()
+  })
+
+  it('takes the base64url token and ignores what a messaging app or a shortener adds after it', () => {
+    expect(parseLinkFragment(`#/c/${TOKEN}?utm_source=sms`)).toEqual({ path: 'c', token: TOKEN })
+    expect(parseLinkFragment(`#/m/${TOKEN}&x=1`)).toEqual({ path: 'm', token: TOKEN })
+    expect(parseLinkFragment(`#/p/${TOKEN}.`)).toEqual({ path: 'p', token: TOKEN })
+    expect(parseLinkFragment(`#/v/${TOKEN}/extra`)).toEqual({ path: 'v', token: TOKEN })
+    expect(parseLinkFragment(`#/pin/${TOKEN}%20`)).toEqual({ path: 'pin', token: TOKEN })
   })
 })
 
@@ -54,10 +63,18 @@ describe('installLinkCapture', () => {
   })
 
   it('scrubs a malformed link fragment too, without a link', () => {
-    history.replaceState(null, '', '/#/c/not a token')
+    history.replaceState(null, '', '/#/c/ not-a-token')
     installLinkCapture(window as never)
     expect(location.hash).toBe('')
     expect(takeLink()).toBeNull()
+  })
+
+  it('a link with something added after the token is scrubbed whole and still opens', () => {
+    history.replaceState(null, '', `/#/c/${TOKEN}?utm_source=sms`)
+    installLinkCapture(window as never)
+    expect(location.hash).toBe('')
+    expect(location.href).not.toContain(TOKEN)
+    expect(takeLink()).toEqual({ path: 'c', token: TOKEN })
   })
 
   it('a second link in the same tab: scrubbed before the design reads the hash, handed to the listener', () => {
