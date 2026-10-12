@@ -15,6 +15,10 @@
 //             only with site.config.json pricing "catalog"
 //   DV-PRICE-INTERIM  pricing "interim" (the default): only "from $40" (Signature Hand Wash), "from $129/mo" (Gold) and
 //             the booking fee; every other price reads "Priced by vehicle size — ask us" / "Ask us"
+//   DV-CATALOG2 pricing "live": prices by vehicle size from GET /api/v1/public/catalog/v2 (build snapshot + the refresh
+//             after mount, src/site/catalog2.ts): the sizes as the vehicle chips, "from $X" and per-size tables, the
+//             booking sheet priced for the chosen size, the join flow's tiers and size picker; anything the catalog lacks
+//             keeps the interim words
 //   DV-LINK   personal links (#/c|m|p|pin|v/<token>): the token is scrubbed before hydration and exchanged for a session;
 //             DV-STEPUP (PIN / texted code / create PIN), DV-LINK-JOIN, DV-LINK-PAY, DV-LINK-DEAD: see the "links" section
 import type { PublicHours } from '../hours/format'
@@ -44,6 +48,19 @@ import {
 export { catalogMatch, slugOfName } from './catalog'
 // ---- links (W3f): imports ----
 import { installLinkCapture, onLink, takeLink, type CapturedLink } from '../client/link'
+import {
+  liveCatalog,
+  liveTexts,
+  priceAt,
+  tierPriceAt,
+  tierUniform,
+  websiteReadyV2,
+  type DesignTier,
+  type LiveCatalog,
+  type LiveItem,
+  type LiveTier,
+  type SizePrice,
+} from './catalog2'
 import { allowedRedirect, DEAD_COPY, deadReason, money, PIN_RE, planTier, shopDate, trustDate, validateExchange, validateState, whoLabel, whoText, type Exchanged, type LinkDeadReason, type StepUpPurpose } from './links'
 
 // DV-LINK: the token leaves the address bar while this module is evaluated, before boot() hydrates (src/client/link.ts)
@@ -58,6 +75,8 @@ interface Member {
   washesLeft: number | null
   /** an active membership: no booking fee, member prices (the API decides the fee from the same fact) */
   active: boolean
+  /** DV-CATALOG2: the size the membership is priced at (null: unknown) */
+  planClass: string | null
 }
 
 interface Problem {
@@ -158,8 +177,11 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? (q: string) => window.matchMedia(q) : null
   // texts go to the texting number (DV-CONTACT: contact.smsE164); calls stay on contact.phoneE164
   const smsUrl = (body: string): string => `sms:${env.contact.smsE164}?&body=${encodeURIComponent(body)}`
-  // DV-PRICE-INTERIM: anything but an explicit "catalog" is the interim prices (the old catalog never comes back by mistake)
-  const interim = env.pricing !== 'catalog'
+  // DV-CATALOG2: prices by vehicle size (catalog v2); without a website-ready catalog the page shows the interim prices
+  const liveMode = env.pricing === 'live'
+  // DV-PRICE-INTERIM: anything but an explicit "catalog" or "live" is the interim prices (the old catalog never comes back
+  // by mistake)
+  const interim = env.pricing !== 'catalog' && !liveMode
   // the join flow's plan cards: the template's "/mo" after the price binds each plan's own suffix (t.per, DV-PRICE-INTERIM)
   const tierWith = (t: any, price: string, per: string): any => {
     const { name, price: _price, per: _per, ...rest } = t
@@ -267,6 +289,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       if (typeof super.componentDidUpdate === 'function') super.componentDidUpdate(...args)
       this.__syncPick()
       this.__lkJoinSync() // links (W3f)
+      this.__liveJoinSync() // DV-CATALOG2
       // <html data-oasis-theme> (set by the head script, DV-THEME) follows the page's theme
       if (themeCfg && typeof document !== 'undefined') {
         const t = this.theme()
@@ -390,11 +413,19 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       try {
         const ctl = new AbortController()
         const t = setTimeout(() => ctl.abort(), env.timeouts.api)
-        const res = await fetch(api(env.endpoints.catalog), { signal: ctl.signal, credentials: 'omit', headers: { accept: 'application/json' } })
+        const url = liveMode ? env.endpoints.catalogV2 || '/api/v1/public/catalog/v2' : env.endpoints.catalog
+        const res = await fetch(api(url), { signal: ctl.signal, credentials: 'omit', headers: { accept: 'application/json' } })
         clearTimeout(t)
         if (!res.ok) return
         const c = (await res.json()) as { services?: unknown; addons?: unknown }
-        if (Array.isArray(c.services) && Array.isArray(c.addons)) this.__catalog = { services: c.services as any, addons: c.addons as any }
+        // the booking keys: only items with a key and a name (DV-CATALOG2: v2's, checked)
+        const named = (x: unknown) =>
+          Array.isArray(x)
+            ? x.filter((i: any) => i && typeof i.key === 'string' && typeof i.name === 'string').map((i: any) => ({ key: i.key, name: i.name, durationMin: i.durationMin }))
+            : null
+        const sv = named(c.services)
+        const ad = named(c.addons)
+        if (sv && ad) this.__catalog = { services: sv, addons: ad }
         // DV-CATALOG: the live answer decides the content (a catalog that is not website-ready brings the design's back)
         if (this.__applyCatalog(c)) this.forceUpdate()
       } catch {
@@ -520,6 +551,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       // only over the design's own data model (a logic class without it is left alone)
       if (!Array.isArray(this.WASH) || !Array.isArray(this.DURING) || !Array.isArray(this.VEH) || !this.TINT || typeof this.FEE !== 'number') return false
       if (!this.__design) this.__design = { WASH: this.WASH, DURING: this.DURING, TINT: this.TINT, VEH: this.VEH, FEE: this.FEE }
+      if (liveMode) return this.__applyLive(raw) // DV-CATALOG2
       // DV-PRICE-INTERIM: the catalog's content carries the old price model and is not applied (its keys still are); only
       // its guest booking fee is (a Settings value, what the API charges; else the design's)
       const site = raw && !interim ? websiteCatalog(raw, env.catalog, this.__design).site : null
@@ -571,12 +603,14 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     __catalogTexts(): Record<string, string> {
       if (!this.__design) return {}
+      if (liveMode) return this.__live ? liveTexts(this.__live) : interimTexts(this.FEE)
       if (interim) return interimTexts(this.FEE)
       return catalogTexts(priceFacts(this.__site, this.__design!, (m) => this.g(m)))
     }
 
     homeVM(): Record<string, any> {
       const v = super.homeVM()
+      if (liveMode) return this.__live ? this.__liveHome(v) : this.__interimHome(v)
       if (interim) return this.__interimHome(v)
       const site = this.__site
       if (!site) return v
@@ -639,6 +673,10 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     priceVM(): Record<string, any> {
+      if (liveMode) {
+        const lv = this.__withTintVeh(() => super.priceVM())
+        return this.__live ? this.__livePrice(lv) : this.__interimPrice(lv)
+      }
       const v = super.priceVM()
       if (interim) return this.__interimPrice(v)
       const site = this.__site
@@ -678,6 +716,10 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     pagesVM(): Record<string, any> {
+      if (liveMode) {
+        const lv = this.__withTintVeh(() => super.pagesVM())
+        return this.__live ? this.__livePages(lv) : this.__interimPages(lv)
+      }
       const v = super.pagesVM()
       if (interim) return this.__interimPages(v)
       const site = this.__site
@@ -899,6 +941,417 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
     // ==== end of DV-PRICE-INTERIM ===========================================================================================
 
+    // ==== DV-CATALOG2 (pricing "live": prices by vehicle size, GET /api/v1/public/catalog/v2) =======================================
+    // The catalog v2 (src/site/catalog2.ts) applied over the design's view models. The sizes are the design's VEH (the
+    // booking sheet's vehicle chips); the tint page keeps its own list (the sizes priced for both films), swapped in while
+    // the design's tint views are computed. Price rows read "from $X" unless the item has one price for every size, with a
+    // per-size block when more than one size is priced; the member column is the catalog's memberCents; the booking sheet
+    // is priced for the chosen size (a verified member's included wash shows the size difference paid at the shop); the
+    // join flow lists the design's tiers the catalog sells with a size picker. Whatever the catalog does not price keeps
+    // the interim words (DV-PRICE-INTERIM), never the design's old figures. With designCatalogV2() every value is the
+    // design's (src/site/bridge-live.test.ts).
+    __live: LiveCatalog | null = null
+    /** the join flow's chosen membership size (null: the tier's starting size) */
+    __joinClass: string | null = null
+
+    /** Applies a catalog v2 payload (null: none); answers whether the page's content changed. */
+    __applyLive(raw: unknown): boolean {
+      const d = this.__design!
+      const ready = raw ? websiteReadyV2(raw, env.catalog, d.WASH) : null
+      const live = ready?.cat ? liveCatalog(ready.cat, env.catalog, d) : null
+      // the booking fee is the catalog's (a Settings value) even when the rest is not ready
+      const fee = live ? live.fee : (catalogFee(raw) ?? d.FEE)
+      const changed = JSON.stringify(live) !== JSON.stringify(this.__live) || fee !== this.FEE
+      this.__live = live
+      Object.assign(this, {
+        WASH: live ? live.wash.map(({ id, name, sub, m }) => ({ id, name, sub, m })) : d.WASH,
+        DURING: live?.during ? live.during.map(({ id, name, sub, m, vip }) => ({ id, name, sub, m, ...(vip ? { vip } : {}) })) : d.DURING,
+        TINT: live?.tint ? live.tint.member : d.TINT,
+        VEH: live ? live.sizes : d.VEH,
+        FEE: fee,
+      })
+      this.__fixPicks()
+      return changed
+    }
+
+    /** The tint page's vehicle list: the sizes priced for both films, else the design's. */
+    __tintVehList(): [string, string][] {
+      return this.__live?.tint ? this.__live.tint.veh : (this.__design?.VEH ?? this.VEH)
+    }
+
+    /** Runs a design view model with the tint page's vehicle list as VEH (its rows and chips read VEH and TINT). */
+    __withTintVeh<T>(fn: () => T): T {
+      const veh = this.VEH
+      this.VEH = this.__tintVehList()
+      try {
+        return fn()
+      } finally {
+        this.VEH = veh
+      }
+    }
+
+    /** A pick the new lists no longer carry moves to the list's first (vehicle, tint vehicle, wash) or is dropped (add-on). */
+    __fixPicks(): void {
+      const s = this.state
+      if (!s || !s.bk) return
+      const tv = this.__tintVehList()
+      const inList = (list: [string, string][], k: unknown) => list.some(([v]) => v === k)
+      const fix = (ss: any): Record<string, any> => {
+        const out: Record<string, any> = {}
+        if (ss.tintVeh != null && !inList(tv, ss.tintVeh)) out.tintVeh = tv[0]![0]
+        const b = ss.bk
+        const addons = Array.isArray(b.addons) ? b.addons.filter((id: string) => this.DURING.some((a: any) => a.id === id)) : b.addons
+        const vehicle = inList(this.VEH, b.vehicle) ? b.vehicle : this.VEH[0][0]
+        const svc = this.WASH.some((w: any) => w.id === b.svc) ? b.svc : this.WASH[0].id
+        if ((Array.isArray(b.addons) && addons.length !== b.addons.length) || vehicle !== b.vehicle || svc !== b.svc) out.bk = { ...b, addons, vehicle, svc }
+        return out
+      }
+      const patch = fix(s)
+      if (!Object.keys(patch).length) return
+      // before the host is attached (the constructor) setState is a no-op: the state is set directly
+      if (this.__host) this.setState((ss: any) => fix(ss))
+      else this.state = { ...s, ...patch }
+    }
+
+    /** The Gold savings calculator: the Signature wash's starting price and the fee against Gold's starting price. */
+    __liveHome(v: Record<string, any>): Record<string, any> {
+      const l = this.__live!
+      const sig = l.wash.find((w) => w.id === 'signature') ?? null
+      const gold = l.tiers.gold
+      const out: Record<string, any> = { ...v }
+      if (sig && gold) {
+        const per = sig.g + l.fee
+        const n = this.state.washes
+        const save = n * per - gold.price
+        const k = Math.floor(gold.price / per) + 1
+        Object.assign(out, {
+          calcGuest: this.$(n * per),
+          calcGuestSub: n + ' × ($' + sig.g + ' wash + $' + l.fee + ' fee)',
+          calcSave: save > 0 ? 'Save ' + this.$(save) + '/mo' : 'Pays off at ' + k + ' washes',
+          calcSaveSub: save > 0 ? 'with Gold at ' + n + ' wash' + (n > 1 ? 'es' : '') + ' a month' : k + ' guest washes cost ' + this.$(k * per),
+        })
+      } else Object.assign(out, { calcGuest: '', calcGuestSub: '', calcSave: '', calcSaveSub: '' })
+      const w = sig ?? l.wash[0]
+      if (w && typeof v.nextSub === 'string') out.nextSub = v.nextSub.replace(/Signature Hand Wash takes about 45 min$/, () => `${w.name} takes about ${w.durationMin} min`)
+      return out
+    }
+
+    /** The price groups from the catalog, row for row in the design's formulas; a group it does not price keeps the interim rows. */
+    __livePrice(v: Record<string, any>): Record<string, any> {
+      const l = this.__live!
+      const iv = this.__interimPrice(v)
+      let i = 0
+      const row = (name: string, sub: string, m: number, gp: number, o?: Record<string, any>) => ({
+        name,
+        sub,
+        priced: true,
+        quote: false,
+        pre: '',
+        g: '$' + gp,
+        v: '$' + m,
+        // one price for members and guests (no % off): no saving to state
+        save: m < gp ? 'SAVE $' + (gp - m) : 'SAME PRICE',
+        vSize: '20px',
+        nameSize: '16px',
+        delay: i++ * 60 + 'ms',
+        ...(o || {}),
+      })
+      const incl = (name: string, sub: string, gp: number, o?: Record<string, any>) => row(name, sub, 0, gp, { v: 'Included', vSize: '17px', save: 'SAVE $' + gp, ...(o || {}) })
+      // "from" unless one price for every size; the per-size block when more than one size has a price (priced sizes only)
+      const sized = (it: LiveItem): Record<string, any> => {
+        const o: Record<string, any> = { pre: it.uniform ? '' : 'from' }
+        if (it.bySize.length > 1 && !it.uniform) {
+          o.sizes = it.bySize.map((x) => ({ t: `${x.label} $${x.p.g}${x.p.gMax !== null && x.p.gMax > x.p.g ? '–$' + x.p.gMax : ''}${x.p.m < x.p.g ? ` · members $${x.p.m}` : ''}` }))
+          if (it.bySize.length < l.sizes.length) o.sizesNote = 'Other sizes: priced at the shop'
+        }
+        return o
+      }
+      const wash = l.wash.map((w) => (w.includedIn.length ? incl(w.name, w.sub, w.g, sized(w)) : row(w.name, w.sub, w.m, w.g, sized(w)))).map((r) => ({ ...r, nameSize: '18px' }))
+      const during = l.during
+        ? l.during.map((a) => (a.vip ? incl(a.name, a.vip === 'incl' ? a.sub + ' · included with VIP' : a.sub + ' · ' + a.vip + ' with VIP', a.g, sized(a)) : row(a.name, a.sub, a.m, a.g, sized(a))))
+        : null
+      const t = l.tint
+      const tint = t ? t.veh.map(([k, lab]) => row(lab, 'Carbon or ceramic film · side & rear windows', t.member.carbon![k]![0], t.guest.carbon![k]![0], { pre: 'from' })) : null
+      const tintFull = t
+        ? t.veh.flatMap(([k, lab]) =>
+            Object.keys(DESIGN_FILMS).map((f) => {
+              const r = t.member[f]![k]!
+              const gr = t.guest[f]![k]!
+              const sub = (r[0] < gr[0] ? 'VIP ' + this.$(r[0]) + '–' + this.$(r[1]) + ' · guest ' : '') + this.$(gr[0]) + '–' + this.$(gr[1])
+              return row(lab + ' · ' + t.films[f], sub, r[0], gr[0], { pre: 'from' })
+            }),
+          )
+        : null
+      const detail = l.detail ? l.detail.map((d) => row(d.name, d.sub, d.m, d.g, sized(d))) : null
+      const more = (l.more ?? DESIGN_MORE).map((nm) => ({ name: nm, sub: '', priced: false, nameSize: '15.5px' }))
+      const G: Record<string, any[] | null> = { wash, during, tint, tintFull, detail, more }
+      const KEY: Record<string, string> = {
+        '01|Hand wash': 'wash',
+        '02|Add during your wash': 'during',
+        '03|Window tint': 'tint',
+        '01|Window tint': 'tintFull',
+        '04|Detailing': 'detail',
+        '05|More services': 'more',
+      }
+      // "What VIP is worth a month": the design's items and labels at the catalog's prices, those VIP includes
+      const vip = l.tiers.vip
+      const sig = l.wash.find((w) => w.id === 'signature')
+      const month: [string, number][] = []
+      if (vip && sig && sig.includedIn.some((r) => r.tier === vip.key)) {
+        month.push(['4 Signature washes', 4 * sig.g], ['4 booking fees', 4 * l.fee])
+        const items: [string, string, number][] = [
+          ['wax', 'Hand wax ×4', 4],
+          ['engine', 'Engine bay wash', 1],
+          ['leather', 'Leather conditioning ×2', 2],
+          ['stain', 'Stain removal', 1],
+        ]
+        for (const [id, label, n] of items) {
+          const a = l.during?.find((x) => x.id === id && x.vip)
+          if (a) month.push([label, n * a.g])
+        }
+      }
+      const total = month.reduce((a, x) => a + x[1], 0)
+      const showMonth = !!vip && month.length > 0 && total > vip.price
+      return {
+        ...v,
+        prGroups: (v.prGroups || []).map((gr: any, n: number) => {
+          const k = KEY[gr.n + '|' + gr.title]
+          const rows = k ? G[k] : null
+          return rows ? { ...gr, rows } : (iv.prGroups[n] ?? gr)
+        }),
+        prShowMonth: showMonth ? v.prShowMonth : false,
+        vipMonth: showMonth ? month.map(([label, x]) => ({ label, value: this.$(x) })) : [],
+        vipMonthGuest: showMonth ? this.$(total) : '',
+        vipMonthSave: showMonth ? 'Save ' + this.$(total - vip!.price) + '/mo' : '',
+        faqs: (v.faqs || []).map((f: any) => ({ ...f, a: swapAmount(f.a, this.__design!.FEE, l.fee) })),
+      }
+    }
+
+    /** The comparison's fee row, the wash cards and the tint page's price block. */
+    __livePages(v: Record<string, any>): Record<string, any> {
+      const l = this.__live!
+      const s = this.state
+      const from = this.__design!.FEE
+      const cardWash = ['signature', 'exterior'] // washCards: the design's two cards, in this order
+      const out: Record<string, any> = {
+        ...v,
+        compRows: (v.compRows || []).map((row: any) =>
+          row.f === 'Booking fee' ? { ...row, cells: row.cells.map((c: any) => ('t' in c ? { ...c, t: swapAmount(c.t, from, l.fee) } : c)) } : row,
+        ),
+        washCards: (v.washCards || []).map((c: any, n: number) => {
+          const w = l.wash.find((x) => x.id === cardWash[n])
+          return w ? { ...c, name: w.name, g: (w.uniform ? '' : 'from ') + '$' + w.g } : { ...c, g: INTERIM.priced }
+        }),
+      }
+      const t = l.tint
+      const r = t?.member[s.film]?.[s.tintVeh]
+      const gr = t?.guest[s.film]?.[s.tintVeh]
+      if (r && gr) {
+        const same = r[0] === gr[0] && r[1] === gr[1]
+        Object.assign(out, {
+          tintPriceLabel: same && typeof v.tintPriceLabel === 'string' ? v.tintPriceLabel.replace(/^VIP · /, '') : v.tintPriceLabel,
+          tintVip: this.$(r[0]) + ' – ' + this.$(r[1]),
+          tintGuest: same ? '' : this.$(gr[0]) + ' – ' + this.$(gr[1]),
+          tintSave: same ? '' : 'save ' + this.$(gr[0] - r[0]) + '+',
+        })
+      } else {
+        const iv = this.__interimPages(v)
+        Object.assign(out, { tintPriceLabel: iv.tintPriceLabel, tintVip: iv.tintVip, tintGuest: '', tintSave: '' })
+      }
+      return out
+    }
+
+    /** The live tier of the join page's tier (null: the catalog does not sell it). */
+    __liveTier(): LiveTier | null {
+      const id = this.state.jn?.tier as DesignTier
+      return this.__live?.tiers[id] ?? null
+    }
+
+    /** The membership size of a tier: the size picked, else the tier's starting size. */
+    __joinSize(t: LiveTier): string {
+      return this.__joinClass && t.prices.some((x) => x.class === this.__joinClass) ? this.__joinClass : t.fromClass
+    }
+
+    /** The join flow: the design's tiers the catalog sells, the chosen size's monthly price in the summary, terms and button. */
+    __liveJoin(r: Record<string, any>): Record<string, any> {
+      const l = this.__live!
+      const jv = r.jv
+      if (!jv || this.state.page !== 'join' || !Array.isArray(jv.tiers)) return r
+      const ID: Record<string, DesignTier> = { Gold: 'gold', VIP: 'vip' }
+      const tiers = jv.tiers
+        .filter((c: any) => !!l.tiers[ID[c.name] as DesignTier])
+        .map((c: any) => {
+          const lt = l.tiers[ID[c.name] as DesignTier]!
+          return tierWith({ ...c, perks: lt.perks }, (tierUniform(lt) ? '' : 'from ') + '$' + lt.price, '/mo')
+        })
+      const t = this.__liveTier()
+      if (!t) return { ...r, jv: { ...jv, tiers } } // the page moves to a tier the catalog sells (__liveJoinSync)
+      const id = this.state.jn.tier as DesignTier
+      const cls = this.__joinSize(t)
+      const price = tierPriceAt(t, cls) ?? t.price
+      const design = DESIGN_PLANS[id].price
+      const sigKey = l.wash.find((w) => w.id === 'signature')?.key
+      const washes = t.inclusions.find((x) => x.serviceKey === sigKey)
+      const lines = (jv.lines || []).map((x: any, n: number) =>
+        n === 0 ? { ...x, value: swapAmount(x.value, design, price) } : x.label === 'Washes this month' && washes ? { ...x, value: washes.perCycle ? String(washes.perCycle) : 'Unlimited' } : x,
+      )
+      if (t.prices.length > 1) lines.splice(1, 0, { label: 'Priced for', value: t.prices.find((x) => x.class === cls)?.label ?? cls, col: 'var(--ink)' })
+      return {
+        ...r,
+        jv: {
+          ...jv,
+          tiers,
+          agreeText: swapAmount(jv.agreeText, design, price),
+          lines,
+          due: swapAmount(jv.due, design, price),
+          ctaLabel: swapAmount(jv.ctaLabel, design, price),
+        },
+      }
+    }
+
+    /** The join page's size picker (site.joinSizes): only when the tier is sold at more than one size. */
+    __liveJoinSizes(): Record<string, any> {
+      const t = this.state.page === 'join' && this.state.jn?.step === 0 && !this.__lkJoining() ? this.__liveTier() : null
+      if (!t || t.prices.length < 2) return { show: false }
+      const cls = this.__joinSize(t)
+      const missing = (this.__live?.sizes.length ?? 0) > t.prices.length
+      return {
+        show: true,
+        chips: t.prices.map((x) => ({
+          label: `${x.label} · $${x.price}/mo`,
+          onClick: () => {
+            this.__joinClass = x.class
+            this.forceUpdate()
+          },
+          style: this.chip(x.class === cls),
+        })),
+        note: missing ? 'Other sizes: ask us.' : '',
+      }
+    }
+
+    /** On a join page the catalog's tiers decide: a tier it does not sell moves to one it does. */
+    __liveJoinSync(): void {
+      const l = this.__live
+      if (!liveMode || !l || this.state.page !== 'join' || !this.state.jn || this.__lkJoining()) return
+      if (l.tiers[this.state.jn.tier as DesignTier]) return
+      const first = (['gold', 'vip'] as DesignTier[]).find((k) => l.tiers[k])
+      if (first) this.setJn({ tier: first })
+    }
+
+    /**
+     * The booking sheet priced for the chosen size: a guest's price at the size ("At the shop" for a size the catalog does
+     * not price), a member's inclusions (the size difference of an included wash, paid at the shop, for a verified member
+     * whose plan size is known), the fee lines, what is due and the upsell.
+     */
+    __liveSheet(r: Record<string, any>): Record<string, any> {
+      const l = this.__live!
+      const sh = r.sh
+      const s = this.state
+      if (!sh || s.sheet !== 'book') return r
+      const b = s.bk
+      const isG = b.who === 'guest'
+      const size = String(b.vehicle)
+      const tier = !isG && s.tier ? (l.tiers[s.tier as DesignTier] ?? null) : null
+      const incl = (key: string | undefined) => (key ? tier?.inclusions.find((x) => x.serviceKey === key) : undefined)
+      const washItem = (id: string) => l.wash.find((w) => w.id === id) ?? null
+      const addonItem = (id: string) => l.during?.find((a) => a.id === id) ?? null
+      const at = (it: LiveItem | null): SizePrice | null => (it ? priceAt(it, size) : null)
+      const planClass = this.__member?.member.active ? this.__member.member.planClass : null
+      const SHOP = 'At the shop'
+      const washOf = (w: any): { included: boolean; amount: number | null; diff: number } => {
+        const it = washItem(w.id)
+        const p = at(it)
+        if (isG) return { included: false, amount: p ? p.g : null, diff: 0 }
+        if (it && incl(it.key)) {
+          const plan = planClass ? priceAt(it, planClass) : null
+          return { included: true, amount: 0, diff: p && plan && p.g > plan.g ? p.g - plan.g : 0 }
+        }
+        return { included: false, amount: p ? p.m : null, diff: 0 }
+      }
+      const addonOf = (a: any): { included: boolean; amount: number | null } => {
+        const it = addonItem(a.id)
+        if (!isG && it && incl(it.key)) return { included: true, amount: 0 }
+        const p = at(it)
+        return { included: false, amount: p ? (isG ? p.g : p.m) : null }
+      }
+      const money = (x: number | null) => (x === null ? SHOP : '$' + x)
+      const wash = this.WASH.find((w: any) => w.id === b.svc) || this.WASH[0]
+      const ads = this.DURING.filter((a: any) => b.addons.includes(a.id))
+      const out: Record<string, any> = { ...sh }
+      if (Array.isArray(sh.washes))
+        out.washes = sh.washes.map((o: any, n: number) => {
+          const w = this.WASH[n]
+          if (!w) return o
+          const x = washOf(w)
+          if (isG) return { ...o, price: money(x.amount), note: x.amount === null ? 'by vehicle size' : o.note }
+          if (x.included) {
+            if (x.diff > 0) return { ...o, price: 'Included', note: `+$${x.diff} size difference at the shop` }
+            const n2 = incl(washItem(w.id)?.key)
+            return { ...o, price: '$0', note: n2?.perCycle ? `1 of ${n2.perCycle} this month` : 'included every visit' }
+          }
+          return { ...o, price: money(x.amount), note: x.amount === null ? 'by vehicle size' : 'member price' }
+        })
+      if (Array.isArray(sh.addons))
+        out.addons = sh.addons.map((o: any, n: number) => {
+          const a = this.DURING[n]
+          if (!a) return o
+          const x = addonOf(a)
+          return x.included ? { ...o, price: 'Included', priceCol: 'var(--accentText)' } : { ...o, price: x.amount === null ? SHOP : '+$' + x.amount, priceCol: 'var(--ink3)' }
+        })
+      const w = washOf(wash)
+      if (Array.isArray(sh.lines)) {
+        const lines: any[] = [
+          { ...sh.lines[0], value: isG ? money(w.amount) : w.included ? 'Included' : money(w.amount), vc: isG || !w.included ? 'var(--ink)' : 'var(--accentText)' },
+        ]
+        if (w.diff > 0) lines.push({ label: 'Size difference · at the shop', value: '+$' + w.diff, lc: 'var(--ink2)', vc: 'var(--ink)' })
+        ads.forEach((a: any, k: number) => {
+          const x = addonOf(a)
+          lines.push({ ...sh.lines[k + 1], value: x.included ? 'Included' : money(x.amount), vc: x.included ? 'var(--accentText)' : 'var(--ink)' })
+        })
+        for (const o of sh.lines.slice(1 + ads.length)) lines.push(o.label === 'Booking fee · non-refundable' ? { ...o, value: '$' + l.fee } : o)
+        out.lines = lines
+      }
+      if (Array.isArray(sh.sumLines))
+        out.sumLines = sh.sumLines.map((o: any, n: number) => {
+          if (n === 1 && (b.who === 'guest' || b.who === 'member')) return isG || !w.included ? { ...o, value: money(w.amount), col: '#F2F5F7' } : o
+          if (n >= 2 && n < 2 + ads.length) {
+            const x = addonOf(ads[n - 2])
+            return { ...o, value: x.included ? 'Included' : money(x.amount), col: x.included ? '#7FD6FF' : '#F2F5F7' }
+          }
+          return o.label === 'Booking fee' ? { ...o, value: '$' + l.fee } : o
+        })
+      if (sh.bReview) {
+        const parts = [w.included ? w.diff : w.amount, ...ads.map((a: any) => addonOf(a).amount)]
+        const unknown = parts.some((x) => x === null)
+        const sum = parts.reduce((a: number, x) => a + (x ?? 0), 0)
+        if (sh.isGuest) {
+          out.due = '$' + l.fee
+          if (typeof sh.dueSub === 'string')
+            out.dueSub = sh.dueSub
+              .replace(/^\$\d+(?![0-9])/, () => '$' + l.fee)
+              .replace(/Pay \$[\d,]+ after your wash\.$/, () => (unknown ? 'Pay ' + INTERIM.payRest : 'Pay ' + this.$(sum) + ' after your wash.'))
+        } else out.due = unknown ? SHOP : this.$(sum)
+        if (typeof sh.upsell === 'string') {
+          const vip = l.tiers.vip
+          if (!vip || unknown) out.upsell = INTERIM.upsell
+          else {
+            const vipCost = ads.reduce((acc: number, a: any) => {
+              const it = addonItem(a.id)
+              if (it && vip.inclusions.some((x) => x.serviceKey === it.key)) return acc
+              return acc + (at(it)?.m ?? 0)
+            }, 0)
+            const extras = ['wax', 'engine'].every((id) => {
+              const it = addonItem(id)
+              return !!it && vip.inclusions.some((x) => x.serviceKey === it.key)
+            })
+            out.upsell = 'You’d pay ' + this.$(sum + l.fee) + ' as a guest. As VIP: ' + this.$(vipCost) + (extras ? ', with wax and engine bay included.' : '.')
+          }
+        }
+      }
+      return { ...r, sh: out }
+    }
+    // ==== end of DV-CATALOG2 ================================================================================================
+
     // ---- the view models ------------------------------------------------------------------------------------------------
     renderVals(): Record<string, any> {
       const v = super.renderVals()
@@ -938,6 +1391,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         sheetSummary: this.state.sheet !== 'link',
       }
       v.site.cat = this.__catalogTexts() // DV-CATALOG: the template's static price texts
+      v.site.joinSizes = liveMode && this.__live ? this.__liveJoinSizes() : { show: false } // DV-CATALOG2
       if (themeCfg) {
         // the visitor's own choice (header toggle, menu Dark/Light) is remembered on the device (DV-THEME); the design's
         // handlers set state synchronously, so this.theme() already reads the new theme
@@ -956,7 +1410,13 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     sheetVals(): Record<string, any> {
-      const r = interim ? this.__interimSheet(super.sheetVals()) : this.__catalogSheet(super.sheetVals())
+      const r = liveMode
+        ? this.__live
+          ? this.__liveSheet(super.sheetVals())
+          : this.__interimSheet(super.sheetVals())
+        : interim
+          ? this.__interimSheet(super.sheetVals())
+          : this.__catalogSheet(super.sheetVals())
       const s = this.state
       let sh = r.sh
       // links (W3f): the link sheet (step-up, payment, notices) and the linked booking's own lines
@@ -1002,7 +1462,13 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     joinVM(): Record<string, any> {
-      const r = interim ? this.__interimJoin(super.joinVM()) : withTierPer(this.__catalogJoin(super.joinVM()))
+      const r = liveMode
+        ? this.__live
+          ? this.__liveJoin(super.joinVM())
+          : this.__interimJoin(super.joinVM())
+        : interim
+          ? this.__interimJoin(super.joinVM())
+          : withTierPer(this.__catalogJoin(super.joinVM()))
       const j = this.state.jn
       const jv = r.jv
       if (!jv || this.state.page !== 'join') return r
@@ -1075,7 +1541,13 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const r = await this.__post(env.endpoints.otpVerify, { challengeId: this.__otp.challengeId, code }, null)
       if (!r) return
       const m = (r.member ?? {}) as Partial<Member>
-      const member: Member = { firstName: String(m.firstName ?? ''), tier: m.tier ?? null, washesLeft: m.washesLeft ?? null, active: m.active === true }
+      const member: Member = {
+        firstName: String(m.firstName ?? ''),
+        tier: m.tier === 'gold' || m.tier === 'vip' ? m.tier : null,
+        washesLeft: typeof m.washesLeft === 'number' ? m.washesLeft : null,
+        active: m.active === true,
+        planClass: typeof m.planClass === 'string' && /^[a-z][a-z0-9_]{0,31}$/.test(m.planClass) ? m.planClass : null,
+      }
       this.__member = { token: String(r.memberToken), member }
       if (member.active) {
         this.setState((ss: any) => ({
@@ -1109,12 +1581,15 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       if (addons.missing.length)
         return { error: `${addons.missing.join(', ')} can't be booked online yet. Remove it, or text ${env.contact.smsKeyword} to ${env.contact.smsDisplay}.` }
       const vehL = this.VEH.find((v: any) => v[0] === b.vehicle)?.[1] ?? b.vehicle
+      // DV-CATALOG2: the size chip is the visit's size (vehicleClass), no made-up vehicle; the design's own vehicle types
+      // (interim, catalog) still go as the label the API maps to a size
+      const sized = liveMode && !!this.__live && this.__live.sizes.some(([k]) => k === b.vehicle)
       return {
         body: {
           // only a name the visitor typed: the API stores a verified member's name as given
           name: String(b.name || '').trim(),
           phone: String(b.phone || ''),
-          vehicle: { label: vehL },
+          ...(sized ? { vehicleClass: String(b.vehicle) } : { vehicle: { label: vehL } }),
           serviceKey,
           addonKeys: addons.keys,
           date: isoDate(day.d),
@@ -1195,7 +1670,10 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     __composeJoin(): string {
       const j = this.state.jn
       const cars = j.vehicles.filter((v: any) => v.car.trim()).map((v: any) => v.car.trim() + (v.plate ? ' ' + v.plate.toUpperCase() : ''))
-      return `JOIN ${String(j.tier).toUpperCase()}: ${j.name.trim()} · ${j.phone}${j.email ? ' · ' + j.email : ''}${cars.length ? ' · ' + cars.join('; ') : ''}`
+      // DV-CATALOG2: the membership's size when the catalog sells the tier at more than one
+      const t = liveMode ? this.__liveTier() : null
+      const size = t && t.prices.length > 1 ? ` (${t.prices.find((x) => x.class === this.__joinSize(t))?.label ?? ''})` : ''
+      return `JOIN ${String(j.tier).toUpperCase()}${size}: ${j.name.trim()} · ${j.phone}${j.email ? ' · ' + j.email : ''}${cars.length ? ' · ' + cars.join('; ') : ''}`
     }
 
     async __submitJoin(): Promise<void> {
@@ -1204,8 +1682,11 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         navigate(smsUrl(this.__composeJoin()))
         return
       }
+      const lt = liveMode ? this.__liveTier() : null
       const body = {
         tier: j.tier,
+        // DV-CATALOG2: the size the membership is priced at (the API's cheapest priced size when absent)
+        ...(lt ? { planClass: this.__joinSize(lt) } : {}),
         name: j.name.trim(),
         phone: j.phone,
         email: String(j.email || '').trim(),
@@ -1553,7 +2034,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         addonKeys: x.addonKeys,
         date: x.date,
         startMin: x.startMin,
-        vehicle: x.vehicle,
+        ...(x.vehicleClass ? { vehicleClass: x.vehicleClass } : { vehicle: x.vehicle }),
         ...(lk.client.firstName ? {} : { name: x.name }),
       }
       const sig = JSON.stringify(body)

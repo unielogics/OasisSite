@@ -38,7 +38,8 @@ describe('pricing (DV-PRICE-INTERIM)', () => {
     void _drop
     expect(env(null, noPricing).e.pricing).toBe('interim')
     expect(env('catalog').e.pricing).toBe('catalog')
-    expect(() => env('v2')).toThrow(/pricing .* must be interim or catalog, got v2/)
+    expect(env('live').e.pricing).toBe('live')
+    expect(() => env('v2')).toThrow(/pricing .* must be interim or catalog or live, got v2/)
   })
 
   it('interim bakes only the booking fee of a catalog snapshot (never the old price model), catalog mode bakes a ready one', async () => {
@@ -56,5 +57,21 @@ describe('pricing (DV-PRICE-INTERIM)', () => {
       expect([e.catalogSnapshot, e.catalogSource]).toEqual([null, 'none'])
     }
     expect(env('catalog', site, json).e.catalogSource).toBe('SITE_CATALOG_JSON')
+  })
+
+  it('live (DV-CATALOG2) bakes a website-ready catalog v2 (checked), and nothing but a warning otherwise', async () => {
+    const { designCatalogV2, unseededCatalogV2, designCatalog } = await import('../site/catalog-fixture')
+    const live = env('live', site, JSON.stringify(designCatalogV2()))
+    expect(live.e.catalogSource).toBe('SITE_CATALOG_JSON')
+    expect((live.e.catalogSnapshot as any).version).toBe(2)
+    // the snapshot is the checked payload: no field the site does not read (no ids, no colours, no categories)
+    expect(Object.keys(live.e.catalogSnapshot as any).sort()).toEqual(['addons', 'guestBookingFeeCents', 'guestFeeCollect', 'memberDisplay', 'quotes', 'services', 'tiers', 'vehicleClasses', 'version'])
+    expect(live.e.endpoints.catalogV2).toBe('/api/v1/public/catalog/v2')
+    for (const bad of [JSON.stringify(unseededCatalogV2()), JSON.stringify(designCatalog()), 'not json']) {
+      const r = env('live', site, bad)
+      expect([r.e.catalogSnapshot, r.e.catalogSource]).toEqual([null, 'none'])
+      expect(r.warnings.join('\n')).toMatch(/catalog v2|not a catalog payload/)
+    }
+    expect(env('live').warnings.join('\n')).toMatch(/SITE_CATALOG_JSON is not set/)
   })
 })

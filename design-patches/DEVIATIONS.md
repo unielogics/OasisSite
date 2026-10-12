@@ -154,6 +154,46 @@ of every entry below.
   against the swapped markup; the build and the e2e scan the prerendered page and every view for "$" figures other than
   $40, $129 and the fee.
 
+- **DV-CATALOG2** Prices by vehicle size (owner, 2026-10-12, plan decisions 1-3; backend ADR 0170, api-spec 26.1;
+  design q-design-pricing.md section 9), only with `site.config.json` `"pricing": "live"` (the default stays
+  `"interim"`, DV-PRICE-INTERIM, until the owner has filled the size grid). The content comes from `GET
+  /api/v1/public/catalog/v2`, prerendered from `SITE_CATALOG_JSON` (the v2 body) and applied again from the browser's
+  load after mount (`src/site/catalog2.ts`, the bridge's DV-CATALOG2 section). **Nothing is trusted**: every field is
+  checked, a malformed item, price row, size or tier is dropped, the starting prices are worked out again from the rows
+  that passed. **Website-ready**: at least one size, at least one of the design's washes with a description, a duration
+  and a whole-dollar price, at least one of the design's tiers (Gold, VIP) sold online with whole-dollar prices and
+  perks, a whole-dollar booking fee; anything less shows the interim prices (DV-PRICE-INTERIM), as does every section
+  the catalog does not price (add-ons, tint, detailing, a tier it does not sell): **never the design's old figures**
+  (plan decision 9), which is where this entry departs from design section 9 ("falls back to the design's own content").
+  What changes with a ready catalog:
+  - **Sizes**: the catalog's sizes (`vehicleClasses`) replace the design's three vehicle types as the booking sheet's
+    vehicle chips; the tint page lists the sizes priced for both films (its own list).
+  - **Price rows**: "from $X" (the lowest price over the sizes) unless the item has one price for every size (then the
+    design's "$X"); the AS VIP column is the catalog's member price (`memberCents`; "SAME PRICE" when members pay the
+    price); an item a tier includes reads "Included" (VIP's inclusions give the add-ons their "included with VIP" /
+    "2× / mo with VIP" words). A new **per-size block** under a row's description lists the priced sizes ("Compact car
+    $40 · members $36", "Other sizes: priced at the shop") only when more than one size is priced at different prices;
+    a size without a price is never shown as $0.
+  - **Booking sheet**: priced for the chosen size; a size the item has no price for reads "At the shop" ("by vehicle
+    size"); a member's included wash reads the design's "$0 · 1 of 4 this month" (the tier's own count), and a verified
+    member whose plan size is known sees "Included · +$N size difference at the shop" (no % off on the difference,
+    plan decision 2) with a "Size difference · at the shop" review line; add-ons a member's tier includes read
+    "Included", others the member price at the size; the review's due amounts and the guest upsell follow. The request
+    sends `vehicleClass` (the size key) and no made-up `vehicle.label`.
+  - **Join flow**: the plan cards are the design's tiers the catalog sells ("from $129" when the price depends on the
+    size); a **size picker** (the design's chips, "VEHICLE SIZE", only when the tier is sold at more than one size)
+    sets the monthly price of the summary, the terms and the button; the request sends `planClass`; the sms text names
+    the size.
+  - **Gold savings calculator** and **What VIP is worth**: the design's formulas and labels at the catalog's prices
+    (the Signature wash's starting price, the fee, Gold's and VIP's starting prices, the add-ons VIP includes); a figure
+    the catalog cannot give hides the block.
+  - The template's static price texts (`site.cat`) are the design's words with the catalog's numbers (`liveTexts`),
+    "Guests can book with prices N% higher" from the members' % off (no statement at 0%).
+  Harness: with `tools/site/catalog-fixture.ts` `designCatalogV2()` (the design's own numbers: one price for every
+  size, member = the design's member price, Gold $99 and VIP $169 at one size) every view model value equals the
+  design's (`src/site/bridge-live.test.ts`) and the two new blocks are `sc-if`s that are false; `pnpm parity:all` runs
+  the default interim mode unchanged.
+
 ## Booking and membership
 
 - **DV-BOOK** The booking sheet books for real. Steps who → svc → time → review → done are the design's. On review

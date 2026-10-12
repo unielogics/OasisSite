@@ -32,7 +32,8 @@
       "otp": "/api/v1/public/otp",
       "otpVerify": "/api/v1/public/otp/verify",
       "memberships": "/api/v1/public/memberships",
-      "catalog": "/api/v1/public/catalog"
+      "catalog": "/api/v1/public/catalog",
+      "catalogV2": "/api/v1/public/catalog/v2"
     },
     "feeCents": 2500,
     "feeText": "$25 due at the counter or by the link we text you",
@@ -86,7 +87,8 @@
   },
   "links": {
     "base": "/api/v1/public/links",
-    "redirectHosts": ["squarespace.com"],
+    "redirectHosts": ["squarespace.com", "square.link", "square.site"],
+    "squareSdkHosts": ["web.squarecdn.com", "sandbox.web.squarecdn.com"],
     "newLinkText": "Hi, my Oasis link isn't working. Can you send me a new one?"
   },
   "imageSlots": {

@@ -339,6 +339,20 @@
       "expect": "AS A VIP THIS VISIT IS $0",
       "with": "{{= site.cat.upsellHead }}",
       "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "insert-after",
+      "tpl": 408,
+      "expectTag": "div",
+      "html": "<sc-if value=\"{{ p.sizes }}\"><div style=\"display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;\"><sc-for list=\"{{ p.sizes }}\" as=\"z\"><span style=\"font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.08em;color:var(--ink2);background:var(--inset);padding:3px 8px;border-radius:6px;white-space:nowrap;\">{{ z.t }}</span></sc-for></div><sc-if value=\"{{ p.sizesNote }}\"><div style=\"font-size:12.5px;color:var(--ink3);margin-top:6px;\">{{ p.sizesNote }}</div></sc-if></sc-if>",
+      "dv": "DV-CATALOG2"
+    },
+    {
+      "op": "insert-after",
+      "tpl": 574,
+      "expectTag": "div",
+      "html": "<sc-if value=\"{{ site.joinSizes.show }}\"><div style=\"display:flex;flex-direction:column;gap:10px;margin-top:22px;\"><div style=\"font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.12em;color:var(--ink4);\">VEHICLE SIZE</div><div style=\"display:flex;gap:6px;flex-wrap:wrap;\"><sc-for list=\"{{ site.joinSizes.chips }}\" as=\"o\"><button onClick=\"{{ o.onClick }}\" style=\"{{ o.style }}\">{{ o.label }}</button></sc-for></div><sc-if value=\"{{ site.joinSizes.note }}\"><div style=\"font-size:12.5px;color:var(--ink3);\">{{ site.joinSizes.note }}</div></sc-if></div></sc-if>",
+      "dv": "DV-CATALOG2"
     }
   ]
 }

@@ -369,10 +369,13 @@ export const DESIGN_STATIC_TEXTS: Readonly<Record<string, string>> = {
 // vs guest pairs, SAVE $N, the Gold savings calculator, what VIP is worth, tint savings) are gone. The old live catalog
 // (DV-CATALOG v1) is not applied to prices in this mode: it carries the old model. `pricing: "catalog"` keeps DV-CATALOG.
 
-/** site.config.json `pricing`: "interim" (default) or "catalog" (DV-CATALOG v1, the old member/guest model). */
-export type PricingMode = 'interim' | 'catalog'
+/**
+ * site.config.json `pricing`: "interim" (default), "catalog" (DV-CATALOG v1, the old member/guest model) or "live"
+ * (DV-CATALOG2: prices by vehicle size from GET /public/catalog/v2, src/site/catalog2.ts).
+ */
+export type PricingMode = 'interim' | 'catalog' | 'live'
 
-export const PRICING_MODES: readonly PricingMode[] = ['interim', 'catalog']
+export const PRICING_MODES: readonly PricingMode[] = ['interim', 'catalog', 'live']
 
 /** The interim figures and words (the parity allow-list's DV-PRICE-INTERIM swaps write the same on the original). */
 export const INTERIM = {

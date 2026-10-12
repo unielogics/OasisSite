@@ -187,3 +187,226 @@ export function withMemberPrice<T extends { services: { key: string }[]; addons:
       }
   return out
 }
+
+// ==== catalog v2 (GET /api/v1/public/catalog/v2, backend api-spec 26.1, ADR 0170 wave Q3d; DV-CATALOG2) ===================
+//
+//   designCatalogV2()   the design's own numbers in the v2 shape (design q-design-pricing.md section 9 note): the design's
+//                       three vehicle types as the sizes; every wash, add-on and detail at ONE price for every size (cents =
+//                       the design's guest price, memberCents = its member price), so no "from" and no per-size table; the
+//                       tint packages per size with the design's ranges; Gold and VIP each at one price (the design's $99
+//                       and $169 at sedan) with the design's perks and inclusions that reproduce its "included with VIP"
+//                       marks. A live-mode page built from it must equal the design (src/site/bridge-live.test.ts).
+//   unseededCatalogV2() production before the website-catalog seed: the dashboard's own services, no descriptions, Gold
+//                       priced by pricing-defaults but without perks: not website-ready (the design's content).
+//   seededCatalogV2()   production right after the seeds (plan decision 3): Signature Hand Wash $40 at Compact car only,
+//                       Gold $129 at Compact car only, nothing else priced: ready, every other section on its own fallback.
+//   sizedCatalogV2()    a filled grid: five sizes, prices that differ by size, a member % off, Gold at two sizes.
+
+export const DESIGN_SIZES = [
+  { key: 'sedan', label: 'Sedan / Coupe', sort: 10 },
+  { key: 'suv', label: 'SUV / Crossover', sort: 20 },
+  { key: 'truck', label: 'Truck / Van', sort: 30 },
+]
+export const DEFAULT_SIZES = [
+  { key: 'compact_car', label: 'Compact car', sort: 10 },
+  { key: 'large_car', label: 'Large car', sort: 20 },
+  { key: 'compact_suv', label: 'Compact SUV', sort: 30 },
+  { key: 'large_suv', label: 'Large SUV', sort: 40 },
+  { key: 'truck', label: 'Truck', sort: 50 },
+]
+
+type Incl = { tier: string; mode: 'per_cycle' | 'every_visit'; perCycle: number | null }
+const cell = (cls: string, cents: number, memberCents = cents, maxCents: number | null = null, memberMaxCents: number | null = maxCents) => ({
+  class: cls,
+  cents,
+  maxCents,
+  memberCents,
+  memberMaxCents,
+})
+/** An item at one price for every size of `sizes` (dollars). */
+function v2Item(name: string, category: string, description: string | null, guest: number, member: number, sizes: string[], includedIn: Incl[] = []) {
+  const prices = sizes.map((s) => cell(s, guest * 100, member * 100))
+  return { key: slug(name), name, category, description, prices, fromCents: guest * 100, fromClass: sizes[0] ?? null, memberFromCents: member * 100, includedIn }
+}
+const pkgV2 = (i: ReturnType<typeof v2Item>, durationMin: number, shortName = i.name) => ({ ...i, shortName, durationMin, tintFilm: null as { key: string; label: string; vlt: number[] } | null })
+
+const WASHES_4 = (tiers: string[]): Incl[] => tiers.map((tier) => ({ tier, mode: 'per_cycle' as const, perCycle: 4 }))
+
+export function designCatalogV2(generatedAt = '2026-06-13T14:36:00.000Z') {
+  const sizes = DESIGN_SIZES.map((s) => s.key)
+  const g = (m: number) => withMarkup(m * 100, MARKUP) / 100
+  const add = (name: string, description: string, m: number, incl: Incl[] = []) => v2Item(name, 'addons', description, g(m), m, sizes, incl)
+  const tintPkg = (film: 'carbon' | 'ceramic', name: string, description: string) => {
+    const prices = (['sedan', 'suv', 'truck'] as const).map((v) => {
+      const [lo, hi] = TINT_DOLLARS[film][v]
+      return cell(v, withMarkup(lo * 100, MARKUP), lo * 100, withMarkup(hi * 100, MARKUP), hi * 100)
+    })
+    const low = prices.reduce((a, b) => (b.cents < a.cents ? b : a))
+    return {
+      key: slug(name),
+      name,
+      shortName: name,
+      category: 'tint',
+      description,
+      durationMin: 180,
+      prices,
+      fromCents: low.cents,
+      fromClass: low.class,
+      memberFromCents: Math.min(...prices.map((p) => p.memberCents)),
+      tintFilm: { key: film, label: film === 'carbon' ? 'Carbon' : 'Ceramic', vlt: [5, 20, 35, 50, 70] },
+      includedIn: [] as Incl[],
+    }
+  }
+  return {
+    version: 2 as const,
+    generatedAt,
+    currency: 'USD' as const,
+    guestBookingFeeCents: 2500,
+    guestFeeCollect: 'counter' as const,
+    vehicleClasses: DESIGN_SIZES,
+    categories: designCatalog().categories,
+    // the design's guest prices are its member prices plus 20%: members pay 1/1.2 of them (16.67% off)
+    memberDisplay: { discountBp: 1667 },
+    services: [
+      pkgV2(v2Item('Signature Hand Wash', 'wash', 'Exterior + interior', 54, 45, sizes, WASHES_4(['gold', 'vip'])), 45),
+      pkgV2(v2Item('Exterior Hand Wash', 'wash', 'Foam, hand wash, wheels, hand dry', 38, 32, sizes, WASHES_4(['gold', 'vip'])), 30),
+      tintPkg('carbon', 'Carbon window tint', 'Carbon film: a deep matte look and solid heat control at a lower price · side & rear windows'),
+      tintPkg('ceramic', 'Ceramic window tint', 'Ceramic film: blocks the most heat without looking darker, and won’t interfere with phone or GPS signals · side & rear windows'),
+      pkgV2(v2Item('Interior detail', 'detail', 'Shampoo, steam, leather, glass', g(149), 149, sizes), 150),
+      pkgV2(v2Item('Full detail', 'detail', 'Inside and out, clay bar + sealant', g(249), 249, sizes), 240),
+    ],
+    addons: [
+      add('Hand wax', 'Carnauba, buffed by hand', 39, [{ tier: 'vip', mode: 'every_visit', perCycle: null }]),
+      add('Engine bay wash', 'Degrease and dress', 45, [{ tier: 'vip', mode: 'every_visit', perCycle: null }]),
+      add('Leather conditioning', 'Clean, condition, matte finish', 35, [{ tier: 'vip', mode: 'per_cycle', perCycle: 2 }]),
+      add('Stain removal', 'Seats and carpets, when needed', 59, [{ tier: 'vip', mode: 'per_cycle', perCycle: 1 }]),
+      add('Tire shine & dressing', 'Satin or gloss', 12),
+      add('Rain-repellent glass', 'Windshield and side glass', 25),
+      add('Odor removal', 'Enzyme treatment', 30),
+      add('Pet hair removal', 'Rubber brush and vacuum', 35),
+      add('Interior deep clean', 'Seats, carpets, vents', 60),
+    ],
+    quotes: designCatalog().quotes,
+    tiers: [
+      {
+        key: 'gold',
+        name: 'Gold',
+        colour: '#E8C46A',
+        sort: 10,
+        perks: ['4 hand washes a month, interior included', 'Share across household cars', 'No booking fees', 'Member prices on everything else'],
+        memberDiscountBp: 1667,
+        vipBooking: false,
+        householdCars: null as number | null,
+        prices: [{ class: 'sedan', monthlyCents: 9900 }],
+        fromMonthlyCents: 9900,
+        fromClass: 'sedan',
+        inclusions: [
+          { serviceKey: 'signature-hand-wash', mode: 'per_cycle' as const, perCycle: 4 as number | null, group: 1 },
+          { serviceKey: 'exterior-hand-wash', mode: 'per_cycle' as const, perCycle: 4 as number | null, group: 1 },
+        ],
+      },
+      {
+        key: 'vip',
+        name: 'VIP',
+        colour: '#1FB6FF',
+        sort: 20,
+        perks: ['Everything in Gold', 'Wax every wash + engine bay', 'Leather 2× and stain removal 1× a month', 'Priority booking and same-day guarantee'],
+        memberDiscountBp: 1667,
+        vipBooking: true,
+        householdCars: null as number | null,
+        prices: [{ class: 'sedan', monthlyCents: 16900 }],
+        fromMonthlyCents: 16900,
+        fromClass: 'sedan',
+        inclusions: [
+          { serviceKey: 'signature-hand-wash', mode: 'per_cycle' as const, perCycle: 4 as number | null, group: 1 },
+          { serviceKey: 'exterior-hand-wash', mode: 'per_cycle' as const, perCycle: 4 as number | null, group: 1 },
+          { serviceKey: 'hand-wax', mode: 'every_visit' as const, perCycle: null as number | null, group: 2 },
+          { serviceKey: 'engine-bay-wash', mode: 'every_visit' as const, perCycle: null as number | null, group: 3 },
+          { serviceKey: 'leather-conditioning', mode: 'per_cycle' as const, perCycle: 2 as number | null, group: 4 },
+          { serviceKey: 'stain-removal', mode: 'per_cycle' as const, perCycle: 1 as number | null, group: 5 },
+        ],
+      },
+    ],
+  }
+}
+
+export type CatalogV2Payload = ReturnType<typeof designCatalogV2>
+
+/** Production before the website-catalog seed: the dashboard's own services, no descriptions, Gold without perks. */
+export function unseededCatalogV2(generatedAt = '2026-06-13T14:36:00.000Z') {
+  const internal = (name: string, cents: number, durationMin = 0) => ({
+    key: slug(name),
+    name,
+    category: 'wash',
+    description: null,
+    prices: [cell('compact_car', cents)],
+    fromCents: cents,
+    fromClass: 'compact_car',
+    memberFromCents: cents,
+    includedIn: [] as Incl[],
+    ...(durationMin ? { shortName: name, durationMin, tintFilm: null } : {}),
+  })
+  return {
+    version: 2 as const,
+    generatedAt,
+    currency: 'USD' as const,
+    guestBookingFeeCents: 2500,
+    guestFeeCollect: 'counter' as const,
+    vehicleClasses: DEFAULT_SIZES,
+    categories: [{ key: 'wash', label: 'Wash', colour: '#1FB6FF', sort: 10 }],
+    memberDisplay: { discountBp: 0 },
+    services: [internal('Express Hand Wash', 3500, 30), internal('Premium Hand Wash + Interior', 5500, 60)],
+    addons: [internal('Wax', 2500), internal('Odor removal', 2000)],
+    quotes: [],
+    tiers: [
+      { key: 'gold', name: 'Gold', colour: '#E8C46A', sort: 10, perks: [] as string[], memberDiscountBp: 0, vipBooking: false, householdCars: null, prices: [{ class: 'compact_car', monthlyCents: 12900 }], fromMonthlyCents: 12900, fromClass: 'compact_car', inclusions: [] },
+    ],
+  }
+}
+
+/** Production right after pricing-defaults and website-catalog: only the Signature wash and Gold priced, at Compact car. */
+export function seededCatalogV2(generatedAt = '2026-06-13T14:36:00.000Z') {
+  const d = designCatalogV2(generatedAt)
+  const sig = d.services[0]!
+  return {
+    ...d,
+    vehicleClasses: DEFAULT_SIZES,
+    memberDisplay: { discountBp: 0 },
+    services: [{ ...sig, prices: [cell('compact_car', 4000)], fromCents: 4000, fromClass: 'compact_car', memberFromCents: 4000, includedIn: WASHES_4(['gold']) }],
+    addons: [],
+    quotes: [],
+    tiers: [{ ...d.tiers[0]!, memberDiscountBp: 0, prices: [{ class: 'compact_car', monthlyCents: 12900 }], fromMonthlyCents: 12900, fromClass: 'compact_car', inclusions: [{ serviceKey: 'signature-hand-wash', mode: 'per_cycle' as const, perCycle: 4 as number | null, group: 1 }] }],
+  }
+}
+
+/** A filled grid: five sizes, prices that differ by size, 10% off for members, Gold sold at two sizes, VIP at one. */
+export function sizedCatalogV2(generatedAt = '2026-06-13T14:36:00.000Z') {
+  const d = designCatalogV2(generatedAt)
+  const sizes = DEFAULT_SIZES.map((s) => s.key)
+  const member = (c: number) => Math.floor((c * 9000 + 500_000) / 1_000_000) * 100 // 10% off, half up to whole dollars
+  const byStep = (base: number, step: number, only = sizes) => only.map((s, n) => cell(s, (base + n * step) * 100, member((base + n * step) * 100)))
+  const item = <T extends { prices: unknown[] }>(i: T, prices: ReturnType<typeof cell>[]) => {
+    const low = prices.reduce((a, b) => (b.cents < a.cents ? b : a))
+    return { ...i, prices, fromCents: low.cents, fromClass: low.class, memberFromCents: Math.min(...prices.map((p) => p.memberCents)) }
+  }
+  const tintRows = (lo: number) => sizes.map((s, n) => cell(s, (lo + n * 20) * 100, member((lo + n * 20) * 100), (lo + 60 + n * 20) * 100, member((lo + 60 + n * 20) * 100)))
+  return {
+    ...d,
+    vehicleClasses: DEFAULT_SIZES,
+    memberDisplay: { discountBp: 1000 },
+    services: [
+      item(d.services[0]!, byStep(40, 10)),
+      // Exterior: priced at the two car sizes only (the SUVs and the truck are priced at the shop)
+      item(d.services[1]!, byStep(30, 5, ['compact_car', 'large_car'])),
+      item(d.services[2]!, tintRows(250)),
+      item(d.services[3]!, tintRows(400)),
+      item(d.services[4]!, byStep(150, 25)),
+      item(d.services[5]!, byStep(250, 25)),
+    ],
+    addons: d.addons.map((a) => item(a, sizes.map((s) => cell(s, a.prices[0]!.cents, member(a.prices[0]!.cents))))),
+    tiers: [
+      { ...d.tiers[0]!, memberDiscountBp: 1000, prices: [{ class: 'compact_car', monthlyCents: 12900 }, { class: 'large_suv', monthlyCents: 15900 }], fromMonthlyCents: 12900, fromClass: 'compact_car' },
+      { ...d.tiers[1]!, memberDiscountBp: 1500, prices: [{ class: 'compact_car', monthlyCents: 19900 }], fromMonthlyCents: 19900, fromClass: 'compact_car' },
+    ],
+  }
+}

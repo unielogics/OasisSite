@@ -83,7 +83,7 @@ export interface SiteOptions {
   /** DV-CATALOG: the GET /public/catalog snapshot the build bakes (SITE_CATALOG_JSON); none by default */
   catalog?: unknown
   /** DV-PRICE-INTERIM: the price mode (default: site.config.json's, interim) */
-  pricing?: 'interim' | 'catalog'
+  pricing?: 'interim' | 'catalog' | 'live'
   /** the logic class under the bridge (default: the design's, designComponent()) */
   design?: any
   /** path (without query) -> handler; anything else answers 404 */

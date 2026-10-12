@@ -5,6 +5,7 @@ import type { PublicHours } from '../hours/format'
 import type { Availability } from './availability'
 import type { ThemeConfig } from '../client/theme'
 import type { PricingMode, PublicCatalog } from './catalog'
+import type { CatalogV2 } from './catalog2'
 
 export type BookingMode = 'sms' | 'live'
 
@@ -41,6 +42,8 @@ export interface SiteEnv {
     otpVerify: string
     memberships: string
     catalog: string
+    /** DV-CATALOG2: GET /api/v1/public/catalog/v2 (pricing "live") */
+    catalogV2: string
   }
   timeouts: { hours: number; availability: number; api: number }
   /** ISO instant the page was prerendered at; the client's first render is pinned to it (hydration) */
@@ -58,13 +61,14 @@ export interface SiteEnv {
    * website-ready (src/site/catalog.ts websiteCatalog); null: the design's built-in content until the browser's refresh.
    * Interim pricing (DV-PRICE-INTERIM) keeps only its guest booking fee: { guestBookingFeeCents, services: [], addons: [] }.
    */
-  catalogSnapshot: PublicCatalog | null
+  catalogSnapshot: PublicCatalog | CatalogV2 | null
   catalogSource: 'SITE_CATALOG_JSON' | 'none'
   /**
    * DV-PRICE-INTERIM: site.config.json `pricing` (SITE_PRICING overrides it for a build). "interim" (the default): only
    * "from $40" (Signature Hand Wash), "from $129/mo" (Gold) and the booking fee, every other price "Priced by vehicle
    * size — ask us", and the catalog's content (DV-CATALOG v1, the old member/guest model) is never applied (its keys still
-   * are, for bookings). "catalog": DV-CATALOG as before.
+   * are, for bookings). "catalog": DV-CATALOG as before. "live" (DV-CATALOG2): prices by vehicle size from GET
+   * /api/v1/public/catalog/v2 (the snapshot is then the checked v2 payload, kept only when website-ready).
    */
   pricing: PricingMode
   fee: { cents: number; text: string }
@@ -79,8 +83,14 @@ export interface SiteEnv {
 export interface LinksConfig {
   /** '/api/v1/public/links' */
   base: string
-  /** squarespace.com: a redirect must be https to one of these hosts or a subdomain of one */
+  /** squarespace.com, square.link, square.site: a redirect must be https to one of these hosts or a subdomain of one */
   redirectHosts: string[]
+  /**
+   * DV-LINK-CARD: the hosts Square's Web Payments SDK may be loaded from (the URL itself comes from the link API's
+   * cardSetup.square.sdkUrl at runtime; nothing about Square is baked into the build). A same-origin URL is also accepted
+   * (the e2e's stub; the site's CSP allows 'self' scripts anyway).
+   */
+  squareSdkHosts?: string[]
   /** the body of the "Text us for a new link" sms: link */
   newLinkText: string
 }

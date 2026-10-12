@@ -18,13 +18,13 @@ export interface SiteConfig {
   hours: { endpoint: string; timeoutMs: number; labels?: Record<string, string> }
   availability?: { endpoint: string; timeoutMs: number; days: number }
   booking?: {
-    endpoints: { bookings: string; otp: string; otpVerify: string; memberships: string; catalog: string }
+    endpoints: { bookings: string; otp: string; otpVerify: string; memberships: string; catalog: string; catalogV2?: string }
     feeCents: number
     feeText: string
   }
   contact?: ContactConfig
   catalog?: CatalogConfig
-  /** DV-PRICE-INTERIM: "interim" (default when absent) or "catalog" (src/site/catalog.ts PricingMode) */
+  /** DV-PRICE-INTERIM: "interim" (default when absent), "catalog" (DV-CATALOG v1) or "live" (DV-CATALOG2, catalog v2) (src/site/catalog.ts PricingMode) */
   pricing?: string
   /** a custom element rendered as a static placeholder (src/dc/image-slot.ts) */
   imageSlots?: { tag: string } | null

@@ -8,15 +8,17 @@
 //                                   board shows the hours and "text to check times")
 //   SITE_CATALOG_JSON               GET /api/v1/public/catalog body, inline or a file path (DV-CATALOG): baked in only when
 //                                   it is website-ready (src/site/catalog.ts), else the design's built-in content + a warning
-//   SITE_PRICING=interim|catalog    overrides site.config.json `pricing` (DV-PRICE-INTERIM; default interim): interim never
-//                                   bakes or applies the catalog's content (the old price model), only its booking fee;
-//                                   catalog is DV-CATALOG
+//   SITE_PRICING=interim|catalog|live  overrides site.config.json `pricing` (DV-PRICE-INTERIM; default interim): interim
+//                                   never bakes or applies the catalog's content (the old price model), only its booking fee;
+//                                   catalog is DV-CATALOG (v1); live is DV-CATALOG2: SITE_CATALOG_JSON is then the body of
+//                                   GET /api/v1/public/catalog/v2, baked in only when website-ready (src/site/catalog2.ts)
 //   SITE_BUILD_NOW / PRERENDER_NOW  the build instant (default: now); the parity build pins it to the harness's clock
 import fs from 'node:fs'
 import path from 'node:path'
 import type { PublicHours } from '../../src/hours/format'
 import { validateAvailability, type Availability } from '../../src/site/availability'
 import { catalogFee, configDesign, PRICING_MODES, websiteCatalog, type PricingMode, type PublicCatalog } from '../../src/site/catalog'
+import { websiteReadyV2, type CatalogV2 } from '../../src/site/catalog2'
 import type { SiteEnv } from '../../src/site/env'
 import type { SiteConfig } from './seo'
 
@@ -69,7 +71,7 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
   if (!PRICING_MODES.includes(pricing)) throw new Error(`pricing (site.config.json or SITE_PRICING) must be ${PRICING_MODES.join(' or ')}, got ${pricing}`)
   // DV-CATALOG: the catalog snapshot, kept only when the page would use it (website-ready, pricing "catalog"); interim
   // mode keeps only its guest booking fee (a Settings value, what the API charges), never the old price model
-  let catalogSnapshot: PublicCatalog | null = null
+  let catalogSnapshot: PublicCatalog | CatalogV2 | null = null
   if (pricing === 'interim') {
     if (i.catalogJson) {
       let fee: number | null = null
@@ -83,6 +85,17 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
         `pricing is interim (DV-PRICE-INTERIM): SITE_CATALOG_JSON's prices are not shown; ${fee !== null ? `only its booking fee ($${fee}) is baked` : "it has no whole-dollar booking fee, the page shows the design's"}`,
       )
     }
+  } else if (pricing === 'live') {
+    // DV-CATALOG2: the v2 payload, checked field by field; kept only when website-ready
+    if (i.catalogJson) {
+      try {
+        const ready = websiteReadyV2(readSnapshot(i.catalogJson), s.catalog, Object.entries(s.catalog.services).map(([id, x]) => ({ id, name: x.name })))
+        if (ready.cat) catalogSnapshot = ready.cat
+        else i.warn(`SITE_CATALOG_JSON is not a website-ready catalog v2 (${ready.reason}); the page shows the design's built-in content until the browser loads GET /api/v1/public/catalog/v2`)
+      } catch (e) {
+        i.warn(`SITE_CATALOG_JSON is not a catalog payload (${e instanceof Error ? e.message : String(e)}); the page shows the design's built-in content`)
+      }
+    } else i.warn("SITE_CATALOG_JSON is not set; the page shows the design's built-in content until the browser loads GET /api/v1/public/catalog/v2")
   } else if (i.catalogJson) {
     try {
       const raw = readSnapshot(i.catalogJson)
@@ -104,6 +117,7 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
       otpVerify: s.booking.endpoints.otpVerify,
       memberships: s.booking.endpoints.memberships,
       catalog: s.booking.endpoints.catalog,
+      catalogV2: s.booking.endpoints.catalogV2 ?? '/api/v1/public/catalog/v2',
     },
     timeouts: { hours: s.hours.timeoutMs, availability: s.availability.timeoutMs, api: 12000 },
     buildNow: i.now,
