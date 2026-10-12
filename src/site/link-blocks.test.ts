@@ -21,7 +21,8 @@ import { parseTemplate } from '../../tools/dc-compile/parse'
 import { interpret } from '../../tools/dc-compile/tests/reference'
 import { installLinkCapture, resetLinkCapture } from '../client/link'
 import { configCatalog, makeSite, payload, ROOT, type Handler } from './bridge.testkit'
-import { exchangeAnswer, invoiceAnswer, planAnswer, stepAnswer, type LinkStateOpts } from './link-contract.testkit'
+import { exchangeAnswer, invoiceAnswer, planAnswer, savedCardAnswer, squarePlanAnswer, stepAnswer, type LinkStateOpts } from './link-contract.testkit'
+import { sizedCatalogV2 } from '../../tools/site/catalog-fixture'
 
 const LINK_DVS = ['DV-LINK', 'DV-STEPUP', 'DV-LINK-JOIN', 'DV-LINK-PAY', 'DV-LINK-DEAD', 'DV-LINK-CARD']
 const GOLDENS = path.join(ROOT, 'src/site/__goldens__')
@@ -185,6 +186,71 @@ describe('port goldens of the linked states', () => {
     await t.settle()
     expect(t.c.state.jn.step).toBe(2)
     golden('link-join-email', region(render(TREE, t.vals()), JOIN))
+  })
+})
+
+describe('port goldens of the wave Q3 states (DV-LINK-CARD, DV-LINK-JOIN with Square, DV-LINK-PAY deposit and #/paid)', () => {
+  const code = async (t: Awaited<ReturnType<typeof linked>>) => {
+    lv(t.c).su.sendCode()
+    await t.settle()
+    lv(t.c).su.setValue({ target: { value: '123456' } })
+    lv(t.c).su.submit()
+    await t.settle()
+  }
+  const step = { [`${BASE}/verify/code`]: () => ok({ challengeId: 'c9', expiresInSec: 600, purpose: 'verify', to: '51' }, 202) }
+
+  it('card page: the saved cards, the card form and the consent box (unchecked, then checked); saved cards off', async () => {
+    const st = { kind: 'card', cardSetup: true, cards: [savedCardAnswer(), savedCardAnswer({ id: '0f0e0d0c-0b0a-4908-8706-050403020100', last4: '4242', purposes: ['membership_billing'] })] }
+    const t = await linked('k', { [`${BASE}/exchange`]: () => ok(ex(st)), ...step, [`${BASE}/verify/code/confirm`]: () => ok(stepAnswer({ ...st, by: 'code' })) })
+    await code(t)
+    golden('link-card', region(render(TREE, t.vals()), SHEET))
+    lv(t.c).card.toggle()
+    golden('link-card-agreed', region(render(TREE, t.vals()), SHEET))
+    resetLinkCapture()
+    const off = await linked('k', { [`${BASE}/exchange`]: () => ok(ex({ kind: 'card', cards: [] })), ...step, [`${BASE}/verify/code/confirm`]: () => ok(stepAnswer({ kind: 'card', cards: [], by: 'code' })) })
+    await code(off)
+    golden('link-card-off', region(render(TREE, off.vals()), SHEET))
+  })
+
+  it('membership billed by Square: the size picker, then the card step with the consent', async () => {
+    const st = { kind: 'membership', plan: squarePlanAnswer('gold'), cardSetup: true }
+    const t = await linked('m', { [`${BASE}/exchange`]: () => ok(ex(st)), ...step, [`${BASE}/verify/code/confirm`]: () => ok(stepAnswer({ ...st, by: 'code', cards: [] })) })
+    t.c.setState({ page: 'join', jn: t.c.freshJn('gold') })
+    golden('link-join-square-plan', region(render(TREE, t.vals()), JOIN))
+    t.c.joinVM().jv.next()
+    await code(t)
+    t.c.setJn({ email: 'jo@gmail.com' })
+    t.c.joinVM().jv.next()
+    expect(t.c.state.jn.step).toBe(3)
+    golden('link-join-square-card', region(render(TREE, t.vals()), JOIN))
+  })
+
+  it('a link booking whose deposit is taken by link: the done step\'s deposit button; #/paid', async () => {
+    const t = await linked('c', {
+      [`${BASE}/exchange`]: () => ok(ex({ verified: true })),
+      [`${BASE}/bookings`]: () => ok({ bookingRef: 'OAS-00042', status: 'booked', deposit: { dueCents: 2500, how: 'link' }, confirmationBy: 'sms' }, 201),
+    })
+    t.c.setBk({ day: 0, slot: 540, ack: true })
+    t.c.setState({ step: 'review' })
+    t.c.sheetVals().sh.cta()
+    await t.settle()
+    expect(t.c.state.step).toBe('done')
+    golden('link-book-done-deposit', region(render(TREE, t.vals()), SHEET))
+    resetLinkCapture()
+    history.replaceState(null, '', '/#/paid')
+    const p = makeSite({ booking: 'sms', availability: board, routes: { '/api/v1/public/catalog': () => ok({ ...configCatalog(), plans: [] }) } })
+    p.c.__paidMount()
+    golden('link-paid', region(render(TREE, p.vals()), SHEET))
+  })
+})
+
+describe('port goldens of the catalog v2 blocks (DV-CATALOG2: per-size prices, the join size picker)', () => {
+  it('a filled grid: the price rows with their per-size block, the join page\'s size picker', () => {
+    const t = makeSite({ booking: 'sms', pricing: 'live', availability: board, catalog: sizedCatalogV2() })
+    t.c.setState({ page: 'wash' })
+    golden('catalog2-wash-rows', region(render(TREE, t.vals()), '#pricing'))
+    t.c.setState({ page: 'join', jn: t.c.freshJn('gold') })
+    golden('catalog2-join-sizes', region(render(TREE, t.vals()), JOIN))
   })
 })
 

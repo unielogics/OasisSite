@@ -1,0 +1,102 @@
+<div style="position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column;overflow-y:auto;animation:oaIn .3s cubic-bezier(.2,.8,.2,1)">
+  <div style="position:sticky;top:0;z-index:5;flex:none;background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line2)">
+    <div style="height:76px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 14px">
+      <div></div>
+      <img src="/assets/oasis-logo.png" alt="Oasis Auto Spa" style="height:64px;width:auto">
+      <div style="display:flex;justify-content:flex-end">
+        <button aria-label="Close" style="width:46px;height:46px;border-radius:14px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div style="height:3px;background:var(--line2)">
+      <div style="height:100%;width:60%;background:#1FB6FF;box-shadow:0 0 12px rgba(31,182,255,.8);transition:width .5s cubic-bezier(.2,.8,.2,1)"></div>
+    </div>
+  </div>
+  <div style="flex:1;max-width:1080px;width:100%;margin:0 auto;padding:30px 20px 150px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:30px;align-items:start">
+    <div style="min-width:0;display:flex;flex-direction:column;gap:14px">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:800;letter-spacing:.16em;color:var(--accentText)">
+          <span class="sc-interp">
+            SAVED CARDS · MARIA ••51
+          </span>
+        </div>
+        <h1 style="margin:12px 0 8px;font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:900;font-size:clamp(32px,8.5vw,64px);line-height:.92;letter-spacing:-.025em;text-transform:uppercase;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent">
+          <span class="sc-interp">
+            Your cards
+          </span>
+        </h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:var(--inset)">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:16px">
+            <span class="sc-interp">
+              Visa ••1111
+            </span>
+          </div>
+          <div style="font-size:13px;color:var(--ink3);margin-top:3px">
+            <span class="sc-interp">
+              Expires 12/30 · For a no-show fee and a balance you owe
+            </span>
+          </div>
+        </div>
+        <button style="font-size:13px;font-weight:700;color:var(--ink3)">
+          Remove
+        </button>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:var(--inset)">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:16px">
+            <span class="sc-interp">
+              Visa ••4242
+            </span>
+          </div>
+          <div style="font-size:13px;color:var(--ink3);margin-top:3px">
+            <span class="sc-interp">
+              Expires 12/30 · For your membership’s monthly payment
+            </span>
+          </div>
+        </div>
+        <button style="font-size:13px;font-weight:700;color:var(--ink3)">
+          Remove
+        </button>
+      </div>
+      <div style="padding:18px;border-radius:20px;background:var(--card);border:1.5px solid var(--cyanBrd)">
+        <div style="font-weight:800;font-size:17px">
+          Add a card
+        </div>
+        <div style="font-size:13.5px;color:var(--ink3);margin-top:3px">
+          <span class="sc-interp">
+            Square keeps your card details. Oasis never sees the card number.
+          </span>
+        </div>
+        <div id="oasis-card-form" style="margin-top:14px"></div>
+        <button style="display:flex;gap:12px;align-items:flex-start;text-align:left;padding:8px 2px">
+          <span style="flex:none;width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#1FB6FF;border:none;margin-top:1px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+              <path d="M5 12.5l4.5 4.5L19 7" stroke="#00131D" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </span>
+          <span style="font-size:13.5px;line-height:1.45;color:var(--ink2)">
+            <span class="sc-interp">
+              Save this card with Square so Oasis Auto Spa can charge it for: a no-show fee, a late-cancel fee and a balance you owe. Charges are made only after the shop confirms them, except your membership’s monthly payment. You can remove the card any time from your link or by asking us.
+            </span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div style="position:fixed;left:0;right:0;bottom:0;z-index:6;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line2)">
+    <div style="max-width:1080px;margin:0 auto;display:flex;justify-content:flex-end">
+      <div style="flex:1;max-width:460px">
+        <button style="width:100%;height:58px;border-radius:17px;font-weight:800;font-size:16.5px;background:#1FB6FF;color:#00131D;box-shadow:0 10px 30px rgba(31,182,255,.3)">
+          <span class="sc-interp">
+            Save card
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
