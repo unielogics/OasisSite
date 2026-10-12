@@ -203,6 +203,60 @@ async function ensureSundayClosed(stack: Stack): Promise<string> {
   throw new Error(`no seeded user could set Sunday closed through the Settings API (${reasons.join('; ')})`)
 }
 
+/**
+ * Prices by size (backend ADR 0170, wave Q1a): the `website-catalog` seed no longer writes prices, and the public catalog
+ * leaves out an item without any price, so a stack seeded `design,demo,website-catalog` has none of the website's add-ons
+ * to book. The stack's grid gets the design's guest prices at Compact car for every website item without a price, through
+ * the staff API exactly as the owner fills it in Settings (`PUT /catalog/prices` with each row's version), as a seeded
+ * user with `set.services`. Returns what was done.
+ */
+async function ensurePrices(stack: Stack): Promise<string> {
+  const reasons: string[] = []
+  const slugOf = (x: string) => x.toLowerCase().replace(/&/g, ' and ').replace(/\+/g, ' plus ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  const design = designCatalog()
+  const want = [...design.services, ...design.addons].map((i) => {
+    const tint = 'tintFilm' in i && i.tintFilm ? design.tint.prices.find((p) => p.film === i.tintFilm && p.vehicle === 'sedan') : null
+    return { slug: slugOf(i.name), cents: tint ? tint.guestMinCents : i.guestPriceCents, maxCents: tint ? tint.guestMaxCents : null }
+  })
+  for (const first of ['amara', 'rafael']) {
+    const r = await fetch(`${stack.apiUrl}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: stack.webUrl },
+      body: JSON.stringify({ email: `${first}@oasisautospa.com`, password: stack.devPassword }),
+    })
+    if (!r.ok) {
+      reasons.push(`${first}: login ${r.status}`)
+      continue
+    }
+    const cookie = r.headers.getSetCookie?.().map((c) => c.split(';')[0]).join('; ') ?? ''
+    const csrf = String(((await r.json()) as { csrfToken?: string }).csrfToken ?? '')
+    const cat = await getJson(`${stack.apiUrl}/api/v1/catalog`, { headers: { cookie } })
+    if (cat.status !== 200 || !Array.isArray(cat.body?.prices)) {
+      reasons.push(`${first}: GET /catalog ${cat.status}`)
+      continue
+    }
+    const services = [...(cat.body.packages ?? []), ...(cat.body.addons ?? [])] as { id: string; name: string; publicName: string | null; active: boolean }[]
+    const prices = cat.body.prices as { serviceId: string; version: number; cells: { class: string; cents: number }[] }[]
+    const rows: { serviceId: string; version: number; cells: { class: string; cents: number; maxCents?: number | null }[] }[] = []
+    for (const w of want) {
+      const svc = services.find((x) => x.active && (slugOf(x.publicName || x.name) === w.slug || slugOf(x.name) === w.slug))
+      const row = svc ? prices.find((x) => x.serviceId === svc.id) : undefined
+      if (!svc || !row || row.cells.length) continue
+      rows.push({ serviceId: svc.id, version: row.version, cells: [{ class: 'compact_car', cents: w.cents, ...(w.maxCents ? { maxCents: w.maxCents } : {}) }] })
+    }
+    if (!rows.length) return 'every website item already has a price in the stack\'s grid'
+    const put = await getJson(`${stack.apiUrl}/api/v1/catalog/prices`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie, origin: stack.webUrl, 'x-csrf-token': csrf },
+      body: JSON.stringify({ rows }),
+    })
+    if (put.status === 200) return `${rows.length} website item(s) priced at Compact car through PUT /catalog/prices as ${first}`
+    if (put.status !== 403) throw new Error(`PUT /catalog/prices as ${first}: ${put.status} ${JSON.stringify(put.body).slice(0, 300)}`)
+    reasons.push(`${first}: PUT /catalog/prices 403`)
+  }
+  throw new Error(`no seeded user could price the website items through the staff API (${reasons.join('; ')})`)
+}
+
 async function snapshotText(stack: Stack, cookie: string): Promise<string> {
   const r = await fetch(`${stack.apiUrl}/api/v1/ops/snapshot?window=week`, { headers: { cookie } })
   assert(r.ok, `ops/snapshot ${r.status}`)
@@ -360,6 +414,8 @@ async function main(): Promise<number> {
 
   // 0. the stack's Settings follow the owner's decision (Sunday closed) before the hours are snapshotted
   if (api.kind === 'stack') log(`settings: ${await ensureSundayClosed(api.stack!)}`)
+  // ... and the website's items have prices in the stack's size grid (ADR 0170: the website-catalog seed sets none)
+  if (api.kind === 'stack') log(`prices: ${await ensurePrices(api.stack!)}`)
 
   // 1. the two builds: live (the API's hours and availability baked in) and sms (the launch default)
   const hours = await getJson(`${api.origin}/api/v1/public/hours`)

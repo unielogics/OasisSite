@@ -430,7 +430,9 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
      * listed as missing) and is never replaced by a look-alike; a booking that needs one is refused (text us instead).
      */
     __serviceKey(): string | null {
-      const svc = this.state.bk?.svc || 'signature'
+      const want = this.state.bk?.svc || 'signature'
+      // the wash the sheet shows (DV-CATALOG2: a design wash the catalog does not price is not listed: the sheet's first)
+      const svc = this.WASH.some((w: any) => w.id === want) ? want : (this.WASH[0]?.id ?? want)
       const cfg = env.catalog.services[svc]
       const cat = this.__catalog
       if (!cat) return null

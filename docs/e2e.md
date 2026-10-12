@@ -44,7 +44,10 @@ cd ~/oasis/dashboard && pnpm live:down --name site --drop
 ```
 
 The backend checkout must carry the public booking API (backend main at or after `50ffac4`) and, for the link checks,
-the personal-link API (W3c; main `0992512` has it). `website-catalog` seeds the website's services and prices as the
+the personal-link API (W3c; main `0992512` has it). Another backend checkout: `E2E_BACKEND=<path>` (wave Q3:
+`E2E_BACKEND=$HOME/oasis/wt/q3-int bash scripts/e2e-stack.sh` after `oasis-remote ~/oasis/wt/q3-int -- true`; the link
+contract checks then hold the page to the wave Q3 answers: cards, cardSetup, the plan's billing and prices, the sizes; the
+link checks 22-26 run on the fixture only, the stack runs `PAYMENT_PROCESSOR=squarespace`). `website-catalog` seeds the website's services and prices as the
 catalog (backend ADR 0160 plan A): without it the stack's catalog has none of the site's washes and the site refuses to
 book any of them ("… can't be booked online yet"). `PUBLIC_WRITES_ENABLED=true` opens the website's public POSTs (codes,
 bookings, joins; 404 while off, as in production until online booking opens). `SMS_ALLOWLIST` lets the stack text the e2e numbers (outside
@@ -55,7 +58,10 @@ launch build's host, 3302, where the link checks run) make the API accept the si
 stack answers them (else it says it skipped them) and needs the same `PIN_PEPPER` in its environment (it sets PINs for
 its clients with the backend's hasher). The script reads `~/oasis/dashboard/.live-stack/site.json` (API URL, schema,
 dev password, backend path, API log), first sets **Sunday closed** through `PUT /api/v1/settings/hours` as a seeded user with
-`set.hours` when the design seed left it open (the owner's decision; production Settings are set by the owner), signs
+`set.hours` when the design seed left it open (the owner's decision; production Settings are set by the owner), gives every
+website item without a price the design's guest price at Compact car through `PUT /api/v1/catalog/prices` as a seeded user
+with `set.services` (a backend at wave Q1a or later: the `website-catalog` seed sets no price any more and the public
+catalog leaves an unpriced item out, ADR 0170), signs
 in as a seeded manager through `POST /api/v1/auth/login` to read `GET /api/v1/ops/snapshot`, and reads the stack's
 database through `psql` (the backend's `DATABASE_URL`, the stack's schema) for what the API does not expose: the
 one-time code (the `sms_outbox` row while it is unredacted; otherwise the code is recovered from the challenge's

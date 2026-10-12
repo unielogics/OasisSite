@@ -93,9 +93,11 @@ export async function createStackLinks(o: StackLinkOptions): Promise<StackLinks>
   let off: { proc: ChildProcess; proxy: SiteProxy } | null = null
 
   function psql(sql: string): string {
-    return execFileSync('psql', [o.dbUrl, '-Atq', '-v', 'ON_ERROR_STOP=1', '-c', sql.replace(/\bT\./g, `${o.schema}.`)], {
+    // the statement goes on stdin: the whole-schema scan of a wave Q3 backend (many tables) is too long for an argument (E2BIG)
+    return execFileSync('psql', [o.dbUrl, '-Atq', '-v', 'ON_ERROR_STOP=1', '-f', '-'], {
+      input: sql.replace(/\bT\./g, `${o.schema}.`),
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
       maxBuffer: 64 * 1024 * 1024,
     }).trim()
   }
@@ -185,7 +187,9 @@ export async function createStackLinks(o: StackLinkOptions): Promise<StackLinks>
     else await db.insertInto('customer_pins').values({ customer_id: customerId, ...row }).execute()
   }
 
-  const planKeyOf = (tier: 'gold' | 'vip'): string => tiers.tierSpec(tier).planKey
+  // a backend before ADR 0170 maps the website's tiers to its own plan keys (tierSpec: gold -> premium); since wave Q1a the
+  // tiers ARE the plans, keyed gold and vip (planByKey still resolves the old keys)
+  const planKeyOf = (tier: 'gold' | 'vip'): string => (typeof tiers.tierSpec === 'function' ? tiers.tierSpec(tier).planKey : tier)
 
   async function issue(i: IssueLinkInput, siteOrigin: string): Promise<{ token: string; url: string }> {
     const customerId = await customerOf(i.phone, i.firstName)

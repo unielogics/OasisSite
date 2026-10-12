@@ -342,7 +342,8 @@ export function listWords(words: readonly string[]): string {
 /** The consent text for these purposes: the API's wording with `{purposes}` filled in its own order. */
 export function consentText(setup: CardSetup, purposes: readonly CardPurpose[]): string {
   const words = setup.consent.purposes.filter((p) => purposes.includes(p.key)).map((p) => p.words)
-  return setup.consent.text.replace('{purposes}', listWords(words))
+  // a replacer function: the words are the API's text, never a replacement pattern ("$&")
+  return setup.consent.text.replace('{purposes}', () => listWords(words))
 }
 
 /** "Visa ••4242" for a saved card (Square's brand names: VISA, MASTERCARD, AMERICAN_EXPRESS, ...). */
