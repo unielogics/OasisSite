@@ -432,7 +432,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     __serviceKey(): string | null {
       const want = this.state.bk?.svc || 'signature'
       // the wash the sheet shows (DV-CATALOG2: a design wash the catalog does not price is not listed: the sheet's first)
-      const svc = this.WASH.some((w: any) => w.id === want) ? want : (this.WASH[0]?.id ?? want)
+      const list: any[] = Array.isArray(this.WASH) ? this.WASH : []
+      const svc = !list.length || list.some((w: any) => w.id === want) ? want : list[0].id
       const cfg = env.catalog.services[svc]
       const cat = this.__catalog
       if (!cat) return null
