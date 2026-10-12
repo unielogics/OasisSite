@@ -4,7 +4,7 @@
 import type { PublicHours } from '../hours/format'
 import type { Availability } from './availability'
 import type { ThemeConfig } from '../client/theme'
-import type { PublicCatalog } from './catalog'
+import type { PricingMode, PublicCatalog } from './catalog'
 
 export type BookingMode = 'sms' | 'live'
 
@@ -59,6 +59,13 @@ export interface SiteEnv {
    */
   catalogSnapshot: PublicCatalog | null
   catalogSource: 'SITE_CATALOG_JSON' | 'none'
+  /**
+   * DV-PRICE-INTERIM: site.config.json `pricing` (SITE_PRICING overrides it for a build). "interim" (the default): only
+   * "from $40" (Signature Hand Wash), "from $129/mo" (Gold) and the booking fee, every other price "Priced by vehicle
+   * size — ask us", and the catalog's content (DV-CATALOG v1, the old member/guest model) is never applied (its keys still
+   * are, for bookings). "catalog": DV-CATALOG as before.
+   */
+  pricing: PricingMode
   fee: { cents: number; text: string }
   brand: string
   /** site.config.json theme: the bridge follows the device setting and stores the visitor's choice (DV-THEME) */

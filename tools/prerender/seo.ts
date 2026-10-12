@@ -24,6 +24,8 @@ export interface SiteConfig {
   }
   contact?: ContactConfig
   catalog?: CatalogConfig
+  /** DV-PRICE-INTERIM: "interim" (default when absent) or "catalog" (src/site/catalog.ts PricingMode) */
+  pricing?: string
   /** a custom element rendered as a static placeholder (src/dc/image-slot.ts) */
   imageSlots?: { tag: string } | null
   /** per page slug: the module wrapped around the logic class */

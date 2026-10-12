@@ -11,7 +11,10 @@
 //   DV-HASH   the home view is prerendered; #/… views render after mount
 //   DV-THEME  the theme follows the device (prefers-color-scheme) live until the visitor picks one, which is remembered
 //   DV-CATALOG services, add-ons, tint, detailing, quote-only items, plan prices/perks and the guest fee from GET
-//             /api/v1/public/catalog (build snapshot + the refresh after mount) when it is website-ready (src/site/catalog.ts)
+//             /api/v1/public/catalog (build snapshot + the refresh after mount) when it is website-ready (src/site/catalog.ts);
+//             only with site.config.json pricing "catalog"
+//   DV-PRICE-INTERIM  pricing "interim" (the default): only "from $40" (Signature Hand Wash), "from $129/mo" (Gold) and
+//             the booking fee; every other price reads "Priced by vehicle size — ask us" / "Ask us"
 //   DV-LINK   personal links (#/c|m|p|pin|v/<token>): the token is scrubbed before hydration and exchanged for a session;
 //             DV-STEPUP (PIN / texted code / create PIN), DV-LINK-JOIN, DV-LINK-PAY, DV-LINK-DEAD: see the "links" section
 import type { PublicHours } from '../hours/format'
@@ -28,6 +31,8 @@ import {
   DESIGN_MORE,
   DESIGN_PLANS,
   designContentOf,
+  INTERIM,
+  interimTexts,
   priceFacts,
   swapAmount,
   websiteCatalog,
@@ -152,6 +157,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? (q: string) => window.matchMedia(q) : null
   // texts go to the texting number (DV-CONTACT: contact.smsE164); calls stay on contact.phoneE164
   const smsUrl = (body: string): string => `sms:${env.contact.smsE164}?&body=${encodeURIComponent(body)}`
+  // DV-PRICE-INTERIM: anything but an explicit "catalog" is the interim prices (the old catalog never comes back by mistake)
+  const interim = env.pricing !== 'catalog'
 
   class SiteComponent extends Base {
     __mounted = false
@@ -502,7 +509,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       // only over the design's own data model (a logic class without it is left alone)
       if (!Array.isArray(this.WASH) || !Array.isArray(this.DURING) || !Array.isArray(this.VEH) || !this.TINT || typeof this.FEE !== 'number') return false
       if (!this.__design) this.__design = { WASH: this.WASH, DURING: this.DURING, TINT: this.TINT, VEH: this.VEH, FEE: this.FEE }
-      const site = raw ? websiteCatalog(raw, env.catalog, this.__design).site : null
+      // DV-PRICE-INTERIM: the catalog's content carries the old price model and is not applied (its keys still are)
+      const site = raw && !interim ? websiteCatalog(raw, env.catalog, this.__design).site : null
       const changed = JSON.stringify(site) !== JSON.stringify(this.__site)
       this.__site = site
       Object.assign(this, designContentOf(site, this.__design))
@@ -550,11 +558,13 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     __catalogTexts(): Record<string, string> {
       if (!this.__design) return {}
+      if (interim) return interimTexts(this.__design.FEE)
       return catalogTexts(priceFacts(this.__site, this.__design!, (m) => this.g(m)))
     }
 
     homeVM(): Record<string, any> {
       const v = super.homeVM()
+      if (interim) return this.__interimHome(v)
       const site = this.__site
       if (!site) return v
       // the Gold calculator: n guest Signature washes with their fees against the Gold price
@@ -617,6 +627,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     priceVM(): Record<string, any> {
       const v = super.priceVM()
+      if (interim) return this.__interimPrice(v)
       const site = this.__site
       if (!site) return v
       const G = this.__priceRows(site)
@@ -655,6 +666,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     pagesVM(): Record<string, any> {
       const v = super.pagesVM()
+      if (interim) return this.__interimPages(v)
       const site = this.__site
       if (!site) return v
       const s = this.state
@@ -763,6 +775,105 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
     // ==== end of DV-CATALOG =================================================================================================
 
+    // ==== DV-PRICE-INTERIM (owner, 2026-10-12) ==============================================================================
+    // Prices depend on the vehicle size; until the per-size catalog (public catalog v2) is on the site, the page shows only
+    // the Signature Hand Wash "from $40", membership "from $129/mo" (Gold) and the booking fee. Each method below takes the
+    // design's view model and writes the interim words over its prices, field for field and key order kept; the parity
+    // allow-list's DV-PRICE-INTERIM swaps give the original design the same values (src/site/bridge-interim.test.ts holds
+    // the two together over every price state).
+
+    /** The Gold savings calculator: the box is hidden (site.cat.calcDisplay) and its numbers are gone. */
+    __interimHome(v: Record<string, any>): Record<string, any> {
+      return { ...v, calcGuest: '', calcGuestSub: '', calcSave: '', calcSaveSub: '' }
+    }
+
+    /** The price lists: "Ask us" for every price but the Signature wash; "what VIP is worth" is not shown. */
+    __interimPrice(v: Record<string, any>): Record<string, any> {
+      const row = (r: any, group: string): any => {
+        if (!r || r.priced !== true) return r
+        const incl = r.v === 'Included'
+        const out = { ...r, pre: '', g: INTERIM.ask, v: incl ? 'Included' : INTERIM.ask, save: incl ? INTERIM.withVip : INTERIM.byVehicle }
+        if (group === '01|Hand wash' && r.name === 'Signature Hand Wash') Object.assign(out, { pre: 'from', g: INTERIM.washFromAmount })
+        if (group === '01|Window tint') out.sub = INTERIM.priced
+        return out
+      }
+      return {
+        ...v,
+        prGroups: (v.prGroups || []).map((gr: any) => ({ ...gr, rows: (gr.rows || []).map((r: any) => row(r, gr.n + '|' + gr.title)) })),
+        prShowMonth: false,
+        vipMonth: [],
+        vipMonthGuest: '',
+        vipMonthSave: '',
+        faqs: (v.faqs || []).map((f: any) => (typeof f.a === 'string' ? { ...f, a: f.a.replace('to hold a time, on top of guest pricing.', 'to hold a time.') } : f)),
+      }
+    }
+
+    /** The membership comparison's fee row, the wash cards and the tint page's price block. */
+    __interimPages(v: Record<string, any>): Record<string, any> {
+      const cardPrice = [INTERIM.washFrom, INTERIM.priced] // washCards: the Signature wash, then the Exterior wash
+      return {
+        ...v,
+        compRows: (v.compRows || []).map((row: any) =>
+          row.f === 'Booking fee' ? { ...row, cells: row.cells.map((c: any) => (c.t === '$0' ? { ...c, t: INTERIM.none } : c)) } : row,
+        ),
+        washCards: (v.washCards || []).map((c: any, i: number) => (cardPrice[i] ? { ...c, g: cardPrice[i] } : c)),
+        tintPriceLabel: typeof v.tintPriceLabel === 'string' ? v.tintPriceLabel.replace(/^VIP · /, '') : v.tintPriceLabel,
+        tintVip: INTERIM.ask,
+        tintGuest: '',
+        tintSave: '',
+      }
+    }
+
+    /** The join flow: Gold "from $129/mo", VIP "Ask us"; the terms and the button carry no amount. */
+    __interimJoin(r: Record<string, any>): Record<string, any> {
+      const jv = r.jv
+      if (!jv || this.state.page !== 'join' || !Array.isArray(jv.tiers)) return r
+      const label: Record<string, { label: string; mo: string }> = {
+        Gold: { label: INTERIM.goldFrom, mo: INTERIM.goldFromMo },
+        VIP: { label: INTERIM.ask, mo: INTERIM.ask },
+      }
+      const tier = label[jv.tierName] ?? label.VIP!
+      return {
+        ...r,
+        jv: {
+          ...jv,
+          tiers: jv.tiers.map((t: any) => (label[t.name] ? { ...t, price: label[t.name]!.label } : t)),
+          agreeText: typeof jv.agreeText === 'string' ? jv.agreeText.replace(/^I agree to be billed \$[\d,]+ a month for /, 'I agree to be billed monthly for ') : jv.agreeText,
+          lines: (jv.lines || []).map((l: any, i: number) => (i === 0 ? { ...l, value: tier.mo } : l.label === 'Booking fees' ? { ...l, value: INTERIM.none } : l)),
+          due: tier.label,
+          ctaLabel: typeof jv.ctaLabel === 'string' ? jv.ctaLabel.replace(/ · \$[\d,]+\/mo$/, '') : jv.ctaLabel,
+        },
+      }
+    }
+
+    /** The booking sheet: the Signature wash "from $40", every other price "Ask us"; the fee stays. */
+    __interimSheet(r: Record<string, any>): Record<string, any> {
+      const sh = r.sh
+      const s = this.state
+      if (!sh || s.sheet !== 'book') return r
+      const b = s.bk
+      const isG = b.who === 'guest'
+      const washOf = (w: any): string => (w && w.id === 'signature' ? INTERIM.washFrom : INTERIM.ask)
+      const wash = this.WASH.find((w: any) => w.id === b.svc) || this.WASH[0]
+      const nAds = this.DURING.filter((a: any) => b.addons.includes(a.id)).length
+      const addon = (l: any) => (l && l.value !== 'Included' ? { ...l, value: INTERIM.ask } : l)
+      const out: Record<string, any> = { ...sh }
+      if (Array.isArray(sh.washes))
+        out.washes = sh.washes.map((o: any, i: number) => (isG ? { ...o, price: washOf(this.WASH[i]), note: INTERIM.washNote } : { ...o, price: 'Included' }))
+      if (Array.isArray(sh.addons)) out.addons = sh.addons.map((o: any) => (o.price !== 'Included' ? { ...o, price: INTERIM.ask } : o))
+      if (Array.isArray(sh.lines))
+        out.lines = sh.lines.map((l: any, i: number) => (i === 0 ? (isG ? { ...l, value: washOf(wash) } : l) : i <= nAds ? addon(l) : l))
+      if (Array.isArray(sh.sumLines))
+        out.sumLines = sh.sumLines.map((l: any, i: number) => (i === 1 ? (b.who === 'guest' ? { ...l, value: washOf(wash) } : l) : i >= 2 && i < 2 + nAds ? addon(l) : l))
+      if (sh.bReview) {
+        if (!sh.isGuest) out.due = INTERIM.memberDue
+        else if (typeof sh.dueSub === 'string') out.dueSub = sh.dueSub.replace(/Pay \$[\d,]+ after your wash\.$/, () => 'Pay ' + INTERIM.payRest)
+        out.upsell = INTERIM.upsell
+      }
+      return { ...r, sh: out }
+    }
+    // ==== end of DV-PRICE-INTERIM ===========================================================================================
+
     // ---- the view models ------------------------------------------------------------------------------------------------
     renderVals(): Record<string, any> {
       const v = super.renderVals()
@@ -820,7 +931,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     sheetVals(): Record<string, any> {
-      const r = this.__catalogSheet(super.sheetVals())
+      const r = interim ? this.__interimSheet(super.sheetVals()) : this.__catalogSheet(super.sheetVals())
       const s = this.state
       let sh = r.sh
       // links (W3f): the link sheet (step-up, payment, notices) and the linked booking's own lines
@@ -866,7 +977,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     joinVM(): Record<string, any> {
-      const r = this.__catalogJoin(super.joinVM())
+      const r = interim ? this.__interimJoin(super.joinVM()) : this.__catalogJoin(super.joinVM())
       const j = this.state.jn
       const jv = r.jv
       if (!jv || this.state.page !== 'join') return r

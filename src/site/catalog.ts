@@ -337,6 +337,109 @@ export function catalogTexts(f: PriceFacts): Record<string, string> {
     included: `This wash is included. Gold $${f.gold} or VIP $${f.vip} a month.`,
     guestFee: `Guest prices · $${f.fee} non-refundable booking fee`,
     ack: `I understand the $${f.fee} booking fee is non-refundable, including if I cancel or don't show.`,
+    // DV-PRICE-INTERIM: the design's own texts here (bound so the interim mode can change them)
+    ...DESIGN_STATIC_TEXTS,
+  }
+}
+
+/**
+ * The template's static texts the interim prices change (DV-PRICE-INTERIM ops in design-patches/index.patch.json), as
+ * the design writes them: what a catalog-mode page shows.
+ */
+export const DESIGN_STATIC_TEXTS: Readonly<Record<string, string>> = {
+  /** the membership section's Gold savings calculator box (a style declaration, appended to the box's style) */
+  calcDisplay: 'block',
+  goldPer: '/ month',
+  vipPer: '/ month',
+  cardGuest: 'Guest ',
+  tintLead: 'Guest ',
+  tintSep: ' · ',
+  priceIntro: "Everyone sees guest pricing. Here's what the same visit costs as a VIP member.",
+  memberFee: '$0',
+  vipFirst: 'VIP members book first and pay $0 for their washes. Guests can book any open time.',
+  tierPer: '/mo',
+  barPer: '/mo',
+  upsellHead: 'AS A VIP THIS VISIT IS $0',
+}
+
+// ==== DV-PRICE-INTERIM (owner, 2026-10-12, plan decision 9) ===============================================================
+// Prices depend on the vehicle size, and the per-size catalog comes later (public catalog v2). Until the site switches to
+// it, site.config.json `pricing: "interim"` (the default) shows ONLY these figures: the Signature Hand Wash "from $40",
+// membership (Gold) "from $129/mo" and the booking fee; every other price reads "Priced by vehicle size — ask us" (or
+// "Ask us" where the design's slot only fits a price), and the old model's statements (guest prices 20% higher, member
+// vs guest pairs, SAVE $N, the Gold savings calculator, what VIP is worth, tint savings) are gone. The old live catalog
+// (DV-CATALOG v1) is not applied to prices in this mode: it carries the old model. `pricing: "catalog"` keeps DV-CATALOG.
+
+/** site.config.json `pricing`: "interim" (default) or "catalog" (DV-CATALOG v1, the old member/guest model). */
+export type PricingMode = 'interim' | 'catalog'
+
+export const PRICING_MODES: readonly PricingMode[] = ['interim', 'catalog']
+
+/** The interim figures and words (the parity allow-list's DV-PRICE-INTERIM swaps write the same on the original). */
+export const INTERIM = {
+  /** the Signature Hand Wash's starting price */
+  washFrom: 'from $40',
+  washFromAmount: '$40',
+  /** membership (Gold) starts at */
+  goldFrom: 'from $129',
+  goldAmount: '$129',
+  goldFromMo: 'from $129/mo',
+  /** the design's slot only fits a price */
+  ask: 'Ask us',
+  /** the full wording */
+  priced: 'Priced by vehicle size — ask us',
+  /** a price row's member badge (the row reads "Ask us") */
+  byVehicle: 'PRICED BY SIZE',
+  /** an included row's member badge */
+  withVip: 'WITH VIP',
+  /** the booking sheet's guest note under a wash price */
+  washNote: 'by vehicle size',
+  /** what a member owes at pickup (a larger car pays the size difference at the shop) */
+  memberDue: 'Ask us',
+  none: 'None',
+  /** the guest review step's fee sub-line ends with this instead of an amount */
+  payRest: 'the rest after your wash.',
+  upsell: 'No booking fee, with wax and engine bay included.',
+} as const
+
+/** The figures interim mode may show: the two starting prices and the booking fee. */
+export const interimFigures = (fee: number): string[] => [INTERIM.washFromAmount, INTERIM.goldAmount, `$${fee}`]
+
+/** The template's static price texts in interim mode (`site.cat`; the allow-list swaps give the original the same). */
+export function interimTexts(fee: number): Record<string, string> {
+  return {
+    fromGold: INTERIM.goldFrom,
+    gold: INTERIM.goldAmount,
+    vip: INTERIM.ask,
+    markupLine: 'Guests can book with a ',
+    feeTerms: `$${fee} non-refundable booking fee`,
+    goldMo: INTERIM.goldFromMo,
+    vipMo: INTERIM.ask,
+    fee: `$${fee}`,
+    saveFee: 'MEMBERS',
+    // inside the "VIP month" block, which interim mode does not show (the original's swap empties it too)
+    vipTotal: '',
+    tintFrom: `Carbon and ceramic film. ${INTERIM.priced}.`,
+    joinVip: 'Join VIP',
+    barVip: `VIP · ${INTERIM.ask}`,
+    // the design's own format ("Gold from $99"); a longer line ends in an ellipsis on a phone
+    barGold: `Priority times · Gold ${INTERIM.goldFrom}`,
+    included: `This wash is included. Gold ${INTERIM.goldFrom} a month.`,
+    guestFee: `Priced by vehicle size · $${fee} non-refundable booking fee`,
+    ack: `I understand the $${fee} booking fee is non-refundable, including if I cancel or don't show.`,
+    calcDisplay: 'none',
+    goldPer: '/ month and up',
+    // empty: "Ask us" fills the 56px slot on a phone (with a sub-line it breaks over two lines)
+    vipPer: '',
+    cardGuest: '',
+    tintLead: 'Priced by vehicle size',
+    tintSep: '',
+    priceIntro: `${INTERIM.priced}, and we'll reply with a quote.`,
+    memberFee: INTERIM.none,
+    vipFirst: 'VIP members book first. Guests can book any open time.',
+    tierPer: '',
+    barPer: '',
+    upsellHead: 'AS A VIP MEMBER',
   }
 }
 

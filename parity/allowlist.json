@@ -183,6 +183,667 @@
       "expect": {
         "min": 0
       }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-calc-hide",
+      "page": "index",
+      "kind": "attr",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the Gold savings calculator box is hidden (the port appends display:{{ site.cat.calcDisplay }} to its style).",
+      "swap": {
+        "find": "margin-top:28px;padding:20px;border-radius:24px;background:var(--card);border:1px solid var(--line);",
+        "replace": "margin-top:28px;padding:20px;border-radius:24px;background:var(--card);border:1px solid var(--line);display:none;",
+        "count": 1,
+        "attr": "style",
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-hero-from",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the hero button reads membership from $129.",
+      "swap": {
+        "find": ">from $99</span>",
+        "replace": ">from $129</span>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-calc-gold",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the hidden calculator's Gold figure is the starting price.",
+      "swap": {
+        "find": ">$99</div>",
+        "replace": ">$129</div>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-gold-card",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the Gold card reads $129 / month and up.",
+      "swap": {
+        "find": "line-height:1;\">$99</span><span style=\"color:var(--ink3);font-weight:600;\">/ month</span>",
+        "replace": "line-height:1;\">$129</span><span style=\"color:var(--ink3);font-weight:600;\">/ month and up</span>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-vip-card",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the VIP card has no figure.",
+      "swap": {
+        "find": "line-height:1;\">$169</span><span style=\"color:#8C97A1;font-weight:600;\">/ month</span>",
+        "replace": "line-height:1;\">Ask us</span><span style=\"color:#8C97A1;font-weight:600;\"></span>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-markup-line",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): guests are not 20% higher any more.",
+      "swap": {
+        "find": "Guests can book with prices 20% higher and a <b",
+        "replace": "Guests can book with a <b",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-comp-gold",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the comparison header reads Gold from $129/mo.",
+      "swap": {
+        "find": ">$99/mo</div>",
+        "replace": ">from $129/mo</div>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-comp-vip",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the comparison header has no VIP figure.",
+      "swap": {
+        "find": ">$169/mo</div>",
+        "replace": ">Ask us</div>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-card-guest",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the wash cards show the price without a guest label.",
+      "swap": {
+        "find": "<span style=\"font-size:14px;color:var(--ink3);\">Guest <b",
+        "replace": "<span style=\"font-size:14px;color:var(--ink3);\"><b",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-tint-guest",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the tint price block has no guest price and no saving.",
+      "swap": {
+        "find": "\">Guest <span style=\"text-decoration:line-through;\">{{ tintGuest }}</span> · <b",
+        "replace": "\">Priced by vehicle size<span style=\"text-decoration:line-through;\">{{ tintGuest }}</span><b",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-price-intro",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the pricing intro no longer compares guest and VIP prices.",
+      "swap": {
+        "find": ">Everyone sees guest pricing. Here's what the same visit costs as a VIP member.</p>",
+        "replace": ">Priced by vehicle size — ask us, and we'll reply with a quote.</p>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-fee-member",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the members' booking fee reads None.",
+      "swap": {
+        "find": ">$0</div>",
+        "replace": ">None</div>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-fee-save",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): no SAVE $N badge.",
+      "swap": {
+        "find": ">SAVE $25</div>",
+        "replace": ">MEMBERS</div>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-tint-from",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the tint card has no figure.",
+      "swap": {
+        "find": ">Carbon and ceramic film. VIP from $229, guest from $275.</div>",
+        "replace": ">Carbon and ceramic film. Priced by vehicle size — ask us.</div>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-vip-first",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): no $0 statement.",
+      "swap": {
+        "find": ">VIP members book first and pay $0 for their washes. Guests can book any open time.</p>",
+        "replace": ">VIP members book first. Guests can book any open time.</p>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-join-vip",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the Join VIP button has no figure.",
+      "swap": {
+        "find": ">Join VIP · $169/mo</button>",
+        "replace": ">Join VIP</button>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-tier-per",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join flow's plan prices carry their own /mo.",
+      "swap": {
+        "find": "<span style=\"font-size:12px;color:var(--ink3);font-weight:700;\">/mo</span>",
+        "replace": "<span style=\"font-size:12px;color:var(--ink3);font-weight:700;\"></span>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-bar-vip",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the sticky bar has no VIP figure.",
+      "swap": {
+        "find": ">VIP · $169<span style=\"font-size:12px;color:#8C97A1;font-weight:700;\">/mo</span>",
+        "replace": ">VIP · Ask us<span style=\"font-size:12px;color:#8C97A1;font-weight:700;\"></span>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-bar-gold",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the sticky bar reads Gold from $129.",
+      "swap": {
+        "find": ">Priority times · Gold from $99</div>",
+        "replace": ">Priority times · Gold from $129</div>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-sheet-included",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the booking sheet names the membership starting price only.",
+      "swap": {
+        "find": ">This wash is included. Gold $99 or VIP $169 a month.</span>",
+        "replace": ">This wash is included. Gold from $129 a month.</span>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-sheet-guest",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): no guest price model on the booking sheet.",
+      "swap": {
+        "find": ">Guest prices · $25 non-refundable booking fee</span>",
+        "replace": ">Priced by vehicle size · $25 non-refundable booking fee</span>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-upsell-head",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): no $0 statement on the review step.",
+      "swap": {
+        "find": ">AS A VIP THIS VISIT IS $0</div>",
+        "replace": ">AS A VIP MEMBER</div>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-month-total",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the VIP figure of the \"VIP month\" block, which interim mode does not show (site.cat.vipTotal is empty).",
+      "swap": {
+        "find": "</span> · VIP $169</div>",
+        "replace": "</span></div>",
+        "count": 1,
+        "target": "template"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-calc-guest",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the Gold savings calculator has no numbers.",
+      "swap": {
+        "find": "calcGuest:this.$(guestCost), calcGuestSub: n + ' × ($' + this.g(45) + ' wash + $25 fee)',",
+        "replace": "calcGuest:'', calcGuestSub:'',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-calc-save",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the Gold savings calculator has no numbers.",
+      "swap": {
+        "find": "calcSave: save > 0 ? 'Save ' + this.$(save) + '/mo' : 'Pays off at 2 washes', calcSaveSub: save > 0 ? 'with Gold at ' + n + ' wash' + (n > 1 ? 'es' : '') + ' a month' : '2 guest washes cost $158',",
+        "replace": "calcSave:'', calcSaveSub:'',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-rows",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): every price row reads Ask us, no member/guest pair and no SAVE $N.",
+      "swap": {
+        "find": "pre:'', g:'$' + gp, v:'$' + m, save:'SAVE $' + (gp - m),",
+        "replace": "pre:'', g:'Ask us', v:'Ask us', save:'PRICED BY SIZE',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-rows-incl",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): an included row keeps Included, no SAVE $N.",
+      "swap": {
+        "find": "{ v:'Included', vSize:'17px', save:'SAVE $' + gp }",
+        "replace": "{ v:'Included', vSize:'17px', save:'WITH VIP' }",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-rows-signature",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the Signature Hand Wash reads from $40.",
+      "swap": {
+        "find": "incl('Signature Hand Wash', 'Exterior + interior · about 45 min', this.g(45))",
+        "replace": "({ ...incl('Signature Hand Wash', 'Exterior + interior · about 45 min', this.g(45)), pre:'from', g:'$40' })",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-rows-tint-from",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the tint rows read Ask us without from.",
+      "swap": {
+        "find": "{ pre:'from' }",
+        "replace": "{}",
+        "count": 2,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-rows-tint-sub",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the tint page rows have no ranges.",
+      "swap": {
+        "find": "'VIP ' + this.$(r[0]) + '–' + this.$(r[1]) + ' · guest ' + this.$(this.g(r[0])) + '–' + this.$(this.g(r[1]))",
+        "replace": "'Priced by vehicle size — ask us'",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-month-home",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): what VIP is worth a month is not shown.",
+      "swap": {
+        "find": "['wash','during','tint','detail','more'],true]",
+        "replace": "['wash','during','tint','detail','more'],false]",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-month-wash",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): what VIP is worth a month is not shown.",
+      "swap": {
+        "find": "['wash','during'],true]",
+        "replace": "['wash','during'],false]",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-month-values",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): what VIP is worth a month has no numbers.",
+      "swap": {
+        "find": "vipMonth: vm.map(([label, v]) => ({ label, value:this.$(v) })), vipMonthGuest:this.$(vmTotal), vipMonthSave:'Save ' + this.$(vmTotal - 169) + '/mo',",
+        "replace": "vipMonth: [], vipMonthGuest:'', vipMonthSave:'',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-faq-fee",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the fee answer no longer mentions guest pricing.",
+      "swap": {
+        "find": "to hold a time, on top of guest pricing.",
+        "replace": "to hold a time.",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-comp-fee",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the members' booking fee reads None.",
+      "swap": {
+        "find": "['Booking fee','$25','$0','$0']",
+        "replace": "['Booking fee','$25','None','None']",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-card-signature",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the Signature wash card reads from $40.",
+      "swap": {
+        "find": "g:'$' + this.g(45)",
+        "replace": "g:'from $40'",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-card-exterior",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the Exterior wash card has no figure.",
+      "swap": {
+        "find": "g:'$' + this.g(32)",
+        "replace": "g:'Priced by vehicle size — ask us'",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-tint-label",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the tint price block is not a VIP price.",
+      "swap": {
+        "find": "tintPriceLabel:'VIP · ' + s.film.toUpperCase()",
+        "replace": "tintPriceLabel:s.film.toUpperCase()",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-tint-calc",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the tint calculator has no figure and no saving.",
+      "swap": {
+        "find": "tintVip:this.$(rng[0]) + ' – ' + this.$(rng[1]), tintGuest:this.$(gr[0]) + ' – ' + this.$(gr[1]), tintSave:'save ' + this.$(gr[0] - rng[0]) + '+',",
+        "replace": "tintVip:'Ask us', tintGuest:'', tintSave:'',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-join-gold",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join flow: Gold from $129.",
+      "swap": {
+        "find": "gold:{ name:'Gold', price:99,",
+        "replace": "gold:{ name:'Gold', price:99, label:'from $129', mo:'from $129/mo',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-join-vip-plan",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join flow: VIP has no figure.",
+      "swap": {
+        "find": "vip:{ name:'VIP', price:169,",
+        "replace": "vip:{ name:'VIP', price:169, label:'Ask us', mo:'Ask us',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-join-tiers",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join flow's plan cards.",
+      "swap": {
+        "find": "price:'$' + v.price,",
+        "replace": "price:v.label,",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-join-agree",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the terms carry no amount.",
+      "swap": {
+        "find": "agreeText:'I agree to be billed $' + t.price + ' a month for ' + t.name + ' until I cancel.",
+        "replace": "agreeText:'I agree to be billed monthly for ' + t.name + ' until I cancel.",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-join-line",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join summary's plan line.",
+      "swap": {
+        "find": "value:'$' + t.price + '/mo', col:'var(--ink)' }",
+        "replace": "value:t.mo, col:'var(--ink)' }",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-join-fees",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the members' booking fee reads None.",
+      "swap": {
+        "find": "{ label:'Booking fees', value:'$0',",
+        "replace": "{ label:'Booking fees', value:'None',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-join-due",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join summary's amount due.",
+      "swap": {
+        "find": "due:'$' + t.price,",
+        "replace": "due:t.label,",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-join-cta",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join button carries no amount.",
+      "swap": {
+        "find": "ctaLabel: st === 3 ? 'Start ' + t.name + ' · $' + t.price + '/mo' : 'Continue',",
+        "replace": "ctaLabel: st === 3 ? 'Start ' + t.name : 'Continue',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-sheet-washes",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the booking sheet's washes.",
+      "swap": {
+        "find": "price: isG ? '$' + this.g(w.m) : '$0', note: isG ? 'guest price' : '1 of 4 this month'",
+        "replace": "price: isG ? (w.id === 'signature' ? 'from $40' : 'Ask us') : 'Included', note: isG ? 'by vehicle size' : '1 of 4 this month'",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-sheet-addons",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the booking sheet's add-ons.",
+      "swap": {
+        "find": "price: pr === 0 ? 'Included' : '+$' + pr,",
+        "replace": "price: pr === 0 ? 'Included' : 'Ask us',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-sheet-addon-lines",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the review and summary add-on lines.",
+      "swap": {
+        "find": "value: pr === 0 ? 'Included' : '$' + pr,",
+        "replace": "value: pr === 0 ? 'Included' : 'Ask us',",
+        "count": 2,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-sheet-wash-line",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the review step's wash line.",
+      "swap": {
+        "find": "{ label:wash.name, value: isG ? '$' + washPrice : 'Included',",
+        "replace": "{ label:wash.name, value: isG ? (wash.id === 'signature' ? 'from $40' : 'Ask us') : 'Included',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-sheet-due",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): what a member owes at pickup (a larger car pays the size difference).",
+      "swap": {
+        "find": "due: isG ? '$25' : this.$(atShop),",
+        "replace": "due: isG ? '$25' : 'Ask us',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-sheet-due-sub",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the fee line names no visit total.",
+      "swap": {
+        "find": "'Booking fee. Pay ' + this.$(atShop) + ' after your wash.'",
+        "replace": "'Booking fee. Pay ' + 'the rest after your wash.'",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-sheet-upsell",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the VIP upsell has no amounts.",
+      "swap": {
+        "find": "upsell:'You\\u2019d pay ' + this.$(atShop + 25) + ' as a guest. As VIP: ' + this.$(vipCost) + ', with wax and engine bay included.',",
+        "replace": "upsell:'No booking fee, with wax and engine bay included.',",
+        "count": 1,
+        "target": "logic"
+      }
+    },
+    {
+      "id": "DV-PRICE-INTERIM-sheet-sum-wash",
+      "page": "index",
+      "kind": "text",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the booking summary's wash line.",
+      "swap": {
+        "find": "value: b.who === 'guest' ? '$' + washPrice :",
+        "replace": "value: b.who === 'guest' ? (wash.id === 'signature' ? 'from $40' : 'Ask us') :",
+        "count": 1,
+        "target": "logic"
+      }
     }
   ]
 }

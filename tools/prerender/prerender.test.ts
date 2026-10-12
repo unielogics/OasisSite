@@ -409,12 +409,39 @@ describe('build on the configured page (design/pages.json: the raw Oasis Site v2
   })
 })
 
-describe('DV-CATALOG: the catalog snapshot (SITE_CATALOG_JSON)', { timeout: 300_000 }, () => {
+describe('DV-PRICE-INTERIM: the prerendered page shows only the starting prices and the fee (the default)', { timeout: 300_000 }, () => {
+  it('no "$" figure but $40, $129 and $25; a ready catalog snapshot is not baked and changes nothing', async () => {
+    const { designCatalog, withMemberPrice } = await import('../site/catalog-fixture')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-dist-i-'))
+    const build = async (catalogJson: string | null) => {
+      const r = await buildSite({ root, variant: 'prod', outDir: dir, htmlOnly: true, hoursJson: null, availabilityJson: null, catalogJson, booking: 'sms', now: '2026-06-13T10:36:00-04:00', log: () => {} })
+      return { r, index: fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), manifest: JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')) }
+    }
+    const plain = await build(null)
+    expect(plain.r.pricing).toBe('interim')
+    expect(plain.manifest.pricing).toBe('interim')
+    const figures = new Set(plain.index.match(/\$\s?\d[\d,]*(?:\.\d+)?/g) ?? [])
+    expect([...figures].sort()).toEqual(['$129', '$25', '$40'])
+    expect(plain.index).toContain('from $129')
+    expect(plain.index).toContain('Priced by vehicle size — ask us')
+    for (const gone of ['20% higher', 'SAVE $', 'VIP $169', '$99', 'Save $', 'PRICED AS A GUEST'])
+      expect(plain.index, gone).not.toContain(gone)
+    const cat = withMemberPrice(designCatalog(), 'signature-hand-wash', 50)
+    cat.plans[0]!.priceCents = 10900
+    const snap = await build(JSON.stringify(cat))
+    expect(snap.r.catalogSource).toBe('none')
+    expect(snap.r.warnings.some((w) => w.includes('pricing is interim'))).toBe(true)
+    expect(snap.index).toBe(plain.index)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+})
+
+describe('DV-CATALOG: the catalog snapshot (SITE_CATALOG_JSON, pricing "catalog")', { timeout: 300_000 }, () => {
   it('the design catalog prerenders the design byte for byte; a changed price is baked in; an unseeded one is not used', async () => {
     const { designCatalog, unseededCatalog, withMemberPrice } = await import('../site/catalog-fixture')
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-dist-c-'))
     const build = async (catalogJson: string | null) => {
-      const r = await buildSite({ root, variant: 'prod', outDir: dir, htmlOnly: true, hoursJson: null, availabilityJson: null, catalogJson, booking: 'sms', now: '2026-06-13T10:36:00-04:00', log: () => {} })
+      const r = await buildSite({ root, variant: 'prod', outDir: dir, htmlOnly: true, hoursJson: null, availabilityJson: null, catalogJson, booking: 'sms', pricing: 'catalog', now: '2026-06-13T10:36:00-04:00', log: () => {} })
       return { r, index: fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), manifest: JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')) }
     }
     const none = await build(null)

@@ -7,7 +7,8 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildBundle } from './serve-original'
 import { copyMapSwaps } from './copy-swaps'
-import { DESIGN_DIR, PAGES, ROOT } from './config'
+import { ALLOWLIST_FILE, DESIGN_DIR, PAGES, ROOT } from './config'
+import { loadAllowlist, swapsFor } from './allowlist'
 
 const contact = (
   JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'utf8')) as {
@@ -46,5 +47,25 @@ describe('contact numbers on the swapped original (DV-CONTACT)', () => {
       expect(count(html, contact.smsDisplay)).toBe(5)
       expect(count(html, contact.phoneDisplay)).toBe(1)
     }
+  })
+})
+
+describe('the interim prices on the swapped original (DV-PRICE-INTERIM, parity/allowlist.json)', () => {
+  const page = PAGES.find((p) => p.slug === 'index')!
+  const swaps = [...swapsFor(loadAllowlist(ALLOWLIST_FILE), 'index'), ...copyMapSwaps(ROOT, 'index')]
+  // buildBundle throws when a swap does not match its exact count
+  const { html, results } = buildBundle('index', path.join(DESIGN_DIR, page.file), swaps)
+  const markup = html.slice(0, html.indexOf('</x-dc>'))
+
+  it('every swap matches the real design document exactly', () => {
+    const interim = results.filter((r) => r.id.startsWith('DV-PRICE-INTERIM-'))
+    expect(interim.length).toBe(55)
+    for (const r of interim) expect(r.found, r.id).toBe(r.expected)
+  })
+
+  it('the original\'s markup keeps no old figure and no old price statement', () => {
+    for (const gone of ['$99', '$169', '$229', '$275', 'SAVE $', '20% higher', 'pay $0', 'IS $0', '>$0<'])
+      expect(markup, gone).not.toContain(gone)
+    expect(new Set(markup.match(/\$\d[\d,]*/g) ?? [])).toEqual(new Set(['$129', '$25']))
   })
 })

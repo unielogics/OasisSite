@@ -8,12 +8,14 @@
 //                                   board shows the hours and "text to check times")
 //   SITE_CATALOG_JSON               GET /api/v1/public/catalog body, inline or a file path (DV-CATALOG): baked in only when
 //                                   it is website-ready (src/site/catalog.ts), else the design's built-in content + a warning
+//   SITE_PRICING=interim|catalog    overrides site.config.json `pricing` (DV-PRICE-INTERIM; default interim): interim never
+//                                   bakes or applies the catalog's content (the old price model), catalog is DV-CATALOG
 //   SITE_BUILD_NOW / PRERENDER_NOW  the build instant (default: now); the parity build pins it to the harness's clock
 import fs from 'node:fs'
 import path from 'node:path'
 import type { PublicHours } from '../../src/hours/format'
 import { validateAvailability, type Availability } from '../../src/site/availability'
-import { configDesign, websiteCatalog, type PublicCatalog } from '../../src/site/catalog'
+import { configDesign, PRICING_MODES, websiteCatalog, type PricingMode, type PublicCatalog } from '../../src/site/catalog'
 import type { SiteEnv } from '../../src/site/env'
 import type { SiteConfig } from './seo'
 
@@ -35,6 +37,8 @@ export interface SiteEnvInput {
   availabilityJson?: string | null
   catalogJson?: string | null
   booking?: string | null
+  /** SITE_PRICING (undefined/null/empty: site.config.json `pricing`, else interim) */
+  pricing?: string | null
   apiOrigin?: string | null
   now: string
   warn: (s: string) => void
@@ -59,9 +63,14 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
   for (const k of ['phoneE164', 'phoneDisplay', 'smsE164', 'smsDisplay'] as const)
     if (typeof s.contact[k] !== 'string' || !s.contact[k])
       throw new Error(`site.config.json contact.${k} is required (calls use phone*, texts use sms*)`)
-  // DV-CATALOG: the catalog snapshot, kept only when the page would use it (website-ready)
+  // DV-PRICE-INTERIM: the price mode (an unknown value fails the build rather than guessing)
+  const pricing = (i.pricing || s.pricing || 'interim') as PricingMode
+  if (!PRICING_MODES.includes(pricing)) throw new Error(`pricing (site.config.json or SITE_PRICING) must be ${PRICING_MODES.join(' or ')}, got ${pricing}`)
+  // DV-CATALOG: the catalog snapshot, kept only when the page would use it (website-ready, pricing "catalog")
   let catalogSnapshot: PublicCatalog | null = null
-  if (i.catalogJson) {
+  if (pricing === 'interim') {
+    if (i.catalogJson) i.warn('pricing is interim (DV-PRICE-INTERIM): SITE_CATALOG_JSON is not baked and the catalog\'s prices are not shown')
+  } else if (i.catalogJson) {
     try {
       const raw = readSnapshot(i.catalogJson)
       const ready = websiteCatalog(raw, s.catalog, configDesign(s.catalog))
@@ -95,6 +104,7 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
     catalog: s.catalog,
     catalogSnapshot,
     catalogSource: catalogSnapshot ? 'SITE_CATALOG_JSON' : 'none',
+    pricing,
     fee: { cents: s.booking.feeCents, text: s.booking.feeText },
     brand: s.name,
     theme: s.theme ?? null,

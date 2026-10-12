@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// DV-CATALOG against the REAL design logic (bridge.testkit.ts): the website's services, add-ons, tint table, detailing,
+// DV-CATALOG (pricing "catalog") against the REAL design logic (bridge.testkit.ts): the website's services, add-ons, tint table, detailing,
 // quote-only items, plan prices/perks and guest fee come from GET /api/v1/public/catalog (build snapshot + the refresh
 // after mount) when the catalog is website-ready, and the page is exactly the design's otherwise.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { serializeVals } from '../dc/serialize'
 import { designCatalog, unseededCatalog, withMemberPrice } from '../../tools/site/catalog-fixture'
-import { makeSite, payload, type Handler } from './bridge.testkit'
+import { makeSite as makeAnySite, payload, type Handler, type SiteOptions } from './bridge.testkit'
+
+// DV-CATALOG is the "catalog" price mode (site.config.json pricing; the default interim prices never apply the catalog's
+// content: src/site/bridge-interim.test.ts)
+const makeSite = (o: SiteOptions = {}) => makeAnySite({ pricing: 'catalog', ...o })
 
 beforeAll(() => {
   process.env.TZ = 'America/New_York'

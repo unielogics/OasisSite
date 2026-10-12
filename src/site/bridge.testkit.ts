@@ -22,11 +22,46 @@ let designCache: any = null
 /** The design's Component class, as the compiled logic module defines it (no bridge). */
 export function designComponent(): any {
   if (designCache) return designCache
-  const cfg = loadPatchConfig(ROOT, 'index')
-  const src = applyCopy(fs.readFileSync(path.join(ROOT, 'design/extracted/index/logic.original.js'), 'utf8'), cfg.copyEntries, 'logic')
-  // the compiler emits the same text as an ES module with React/DCLogic/StreamableLogic in scope (no eval in the build)
-  designCache = new Function('React', 'DCLogic', 'StreamableLogic', `${src}\nreturn Component`)(React, DCLogic, DCLogic)
+  designCache = componentOf(fs.readFileSync(path.join(ROOT, 'design/extracted/index/logic.original.js'), 'utf8'))
   return designCache
+}
+
+/** A logic source with the copy-map's logic entries, as the compiler emits it (an ES module there; no eval in the build). */
+function componentOf(logic: string): any {
+  const cfg = loadPatchConfig(ROOT, 'index')
+  const src = applyCopy(logic, cfg.copyEntries, 'logic')
+  return new Function('React', 'DCLogic', 'StreamableLogic', `${src}\nreturn Component`)(React, DCLogic, DCLogic)
+}
+
+/** The parity allow-list's pre-render swaps of the index page (parity/allowlist.json), as the harness applies them. */
+export function originalSwaps(prefix = ''): { id: string; kind: string; find: string; replace: string; count: number; attr?: string; target?: string }[] {
+  const list = (JSON.parse(fs.readFileSync(path.join(ROOT, 'parity/allowlist.json'), 'utf8')) as { entries: any[] }).entries
+  return list
+    .filter((e) => e.swap && (e.page === 'index' || e.page === '*') && String(e.id).startsWith(prefix))
+    .map((e) => ({ id: e.id, kind: e.kind, ...e.swap }))
+}
+
+/** Applies text swaps of one target to a source, each exactly `count` times (the harness's rule). */
+export function applySwaps(text: string, swaps: ReturnType<typeof originalSwaps>, target: 'template' | 'logic'): string {
+  for (const w of swaps) {
+    if (w.kind !== 'text' || (w.target ?? 'any') !== target) continue
+    const n = text.split(w.find).length - 1
+    if (n !== w.count) throw new Error(`${w.id}: expected ${w.count} occurrence(s), found ${n}`)
+    text = text.split(w.find).join(w.replace)
+  }
+  return text
+}
+
+let swappedCache: any = null
+/**
+ * The ORIGINAL design's Component class as the parity harness renders it: the allow-list's logic swaps (DV-PRICE-INTERIM:
+ * the owner's interim prices) first, then the copy map's logic entries (harness order).
+ */
+export function swappedDesignComponent(): any {
+  if (swappedCache) return swappedCache
+  const raw = fs.readFileSync(path.join(ROOT, 'design/extracted/index/logic.original.js'), 'utf8')
+  swappedCache = componentOf(applySwaps(raw, originalSwaps(), 'logic'))
+  return swappedCache
 }
 
 export const FALLBACK_HOURS = validatePublicHours(JSON.parse(fs.readFileSync(path.join(ROOT, 'src/data/hours.fallback.json'), 'utf8')))
@@ -47,6 +82,10 @@ export interface SiteOptions {
   hours?: PublicHours | null
   /** DV-CATALOG: the GET /public/catalog snapshot the build bakes (SITE_CATALOG_JSON); none by default */
   catalog?: unknown
+  /** DV-PRICE-INTERIM: the price mode (default: site.config.json's, interim) */
+  pricing?: 'interim' | 'catalog'
+  /** the logic class under the bridge (default: the design's, designComponent()) */
+  design?: any
   /** path (without query) -> handler; anything else answers 404 */
   routes?: Record<string, Handler>
 }
@@ -85,6 +124,7 @@ export function makeSite(o: SiteOptions = {}): SiteUnderTest {
     availabilityJson: o.availability ? JSON.stringify(o.availability) : null,
     catalogJson: o.catalog === undefined ? null : JSON.stringify(o.catalog),
     booking: o.booking ?? 'sms',
+    pricing: o.pricing ?? null,
     apiOrigin: '',
     now: new Date().toISOString(),
     warn: () => {},
@@ -105,7 +145,7 @@ export function makeSite(o: SiteOptions = {}): SiteUnderTest {
       headers: { 'content-type': 'application/json', ...(r.headers ?? {}) },
     })
   }
-  const Site = bridge(designComponent(), env)
+  const Site = bridge(o.design ?? designComponent(), env)
   const c = new Site({ theme: 'dark', beads: true, stickyBar: true })
   sites.push(c)
   let updating = false

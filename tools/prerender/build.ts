@@ -2,7 +2,7 @@
 // docs/deploy-contract.md. Usage: tsx tools/prerender/build.ts [--variant=prod|parity] [--out dist] [--html-only]
 //   [--pages design/pages.json] [--now <iso instant>]
 // Environment: SITE_URL, SITE_HOURS_JSON, SITE_AVAILABILITY_JSON, SITE_CATALOG_JSON, SITE_BOOKING (sms|live), SITE_API_ORIGIN,
-// SITE_BUILD_NOW / PRERENDER_NOW (tools/prerender/site-env.ts).
+// SITE_PRICING (interim|catalog), SITE_BUILD_NOW / PRERENDER_NOW (tools/prerender/site-env.ts).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -33,6 +33,8 @@ export interface BuildOptions {
   availabilityJson?: string | null
   /** DV-CATALOG: the GET /api/v1/public/catalog snapshot (undefined: SITE_CATALOG_JSON) */
   catalogJson?: string | null
+  /** DV-PRICE-INTERIM: interim | catalog (undefined: SITE_PRICING, else site.config.json `pricing`) */
+  pricing?: string | null
   booking?: string | null
   apiOrigin?: string | null
   now?: string | null
@@ -58,6 +60,7 @@ export interface BuildResult {
   hoursSource: 'SITE_HOURS_JSON' | 'fallback'
   availabilitySource: SiteEnv['availabilitySource']
   catalogSource: SiteEnv['catalogSource']
+  pricing: SiteEnv['pricing']
   booking: SiteEnv['booking']
   buildNow: string
   themeScript: { file: string; sha256: string } | null
@@ -155,13 +158,14 @@ export async function buildSite(o: BuildOptions): Promise<BuildResult> {
       availabilityJson: o.availabilityJson === undefined ? process.env.SITE_AVAILABILITY_JSON : o.availabilityJson,
       catalogJson: o.catalogJson === undefined ? process.env.SITE_CATALOG_JSON : o.catalogJson,
       booking: o.booking === undefined ? process.env.SITE_BOOKING : o.booking,
+      pricing: o.pricing === undefined ? process.env.SITE_PRICING : o.pricing,
       apiOrigin: o.apiOrigin === undefined ? process.env.SITE_API_ORIGIN : o.apiOrigin,
       now,
       warn,
     })
     writeSiteEnv(generatedDir, env)
     log(
-      `site env: booking=${env.booking} api=${env.apiOrigin || '(same origin)'} hours=${env.hoursSource} availability=${env.availabilitySource} catalog=${env.catalogSource} now=${env.buildNow}`,
+      `site env: booking=${env.booking} api=${env.apiOrigin || '(same origin)'} hours=${env.hoursSource} availability=${env.availabilitySource} catalog=${env.catalogSource} pricing=${env.pricing} now=${env.buildNow}`,
     )
   }
 
@@ -405,6 +409,7 @@ export async function buildSite(o: BuildOptions): Promise<BuildResult> {
     hoursSource,
     availabilitySource: env?.availabilitySource ?? 'none',
     catalogSource: env?.catalogSource ?? 'none',
+    pricing: env?.pricing ?? 'interim',
     booking: env?.booking ?? 'sms',
     placeholders,
     pages,
@@ -432,6 +437,7 @@ export async function buildSite(o: BuildOptions): Promise<BuildResult> {
     hoursSource,
     availabilitySource: env?.availabilitySource ?? 'none',
     catalogSource: env?.catalogSource ?? 'none',
+    pricing: env?.pricing ?? 'interim',
     booking: env?.booking ?? 'sms',
     buildNow: now,
     themeScript,
@@ -472,7 +478,7 @@ async function main(argv: string[]): Promise<number> {
   }
   const r = await buildSite({ root, variant, outDir, htmlOnly, pagesFile, now })
   console.log(
-    `build OK (${r.variant}): ${r.pages.length} page(s), booking ${r.booking}, hours from ${r.hoursSource}, availability ${r.availabilitySource}, catalog ${r.catalogSource}, ${r.placeholders.length} placeholder asset(s), ${r.warnings.length} warning(s)`,
+    `build OK (${r.variant}): ${r.pages.length} page(s), booking ${r.booking}, hours from ${r.hoursSource}, availability ${r.availabilitySource}, catalog ${r.catalogSource}, pricing ${r.pricing}, ${r.placeholders.length} placeholder asset(s), ${r.warnings.length} warning(s)`,
   )
   return 0
 }

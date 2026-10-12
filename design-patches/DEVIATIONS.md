@@ -49,7 +49,8 @@ of every entry below.
   201-598-6304 everywhere; the harness applies the same entries to the original as text swaps. E-mail and address
   values equal the design's. The placeholder phone "(201) 555-0123" of the member sign-in field becomes "Mobile number"
   (the design's own wording for the join flow). The text keyword "WASH" stays as designed.
-- **DV-CATALOG** The services, add-ons, tint table, detailing, quote-only items, plan prices and perks and the guest
+- **DV-CATALOG** (only with `site.config.json` `"pricing": "catalog"`; the default interim prices, DV-PRICE-INTERIM,
+  never apply the catalog's content) The services, add-ons, tint table, detailing, quote-only items, plan prices and perks and the guest
   booking fee come from the dashboard's Settings through `GET /api/v1/public/catalog` (backend ADR 0160 W2a, owner
   decision: Settings is the one catalog), prerendered from `SITE_CATALOG_JSON` (the build snapshot, like the hours) and
   applied again from the browser's catalog load after mount (`src/site/catalog.ts`, the bridge's catalog section).
@@ -80,6 +81,75 @@ of every entry below.
   type, as a dropped add-on leaves the picks.
   Harness: no swap; `pnpm build:parity` bakes and `serve-dist` answers the design's content in the backend's shape
   (`tools/site/catalog-fixture.ts` `designCatalog()`), so the catalog-driven page must equal the original at zero diff.
+
+- **DV-PRICE-INTERIM** Interim website prices (owner, 2026-10-12, plan decision 9): prices depend on the vehicle size,
+  a single wash starts at **$40** and membership at **$129/month**; the real per-size catalog (public catalog v2) comes
+  later. Until the site switches to it, `site.config.json` `"pricing": "interim"` (the default; `SITE_PRICING` overrides
+  it for a build) shows ONLY the Signature Hand Wash "from $40", Gold "from $129" and the $25 booking fee; every other
+  price reads "Priced by vehicle size — ask us", or "Ask us" where the design's slot only fits a price, in the design's
+  own typography and components. Every statement of the old price model goes (guests' "prices 20% higher", member vs
+  guest pairs, "SAVE $N", the Gold savings calculator, "A VIP month, priced as a guest", the tint savings, the $0
+  statements); no new figure and no new perk. Unchanged: the $25 booking fee wording, the perks bullets, hours, the
+  booking and join flows, links, theme. In interim mode the live catalog (DV-CATALOG v1, the old member/guest model) is
+  never applied to the page's content (neither the build snapshot nor the browser's load; its keys still name the
+  booked wash and add-ons); `"pricing": "catalog"` brings DV-CATALOG back unchanged. The port writes the interim words
+  in the bridge (`src/site/index.bridge.ts` DV-PRICE-INTERIM section over the design's view models, `site.cat` from
+  `src/site/catalog.ts` `interimTexts` for the template's texts: the 18 DV-CATALOG ops plus 12 new ops, one of them a
+  `set-attr` that appends `display:{{ site.cat.calcDisplay }}` to the calculator box).
+  Surfaces (route / element: before → after):
+  - home hero / "Become a member" button: "from $99" → "from $129".
+  - home 01 Membership / the Gold savings calculator ("How often do you wash?", "AS A GUEST $216 · 4 × ($54 wash + $25
+    fee)", "GOLD MEMBER $99", "Save $117/mo"): shown → hidden (`display:none`; its numbers emptied, the hidden Gold
+    figure reads $129).
+  - home 01 / Gold card: "$99 / month" → "$129 / month and up" (the 56px slot cannot hold "from $129" next to "/ month"
+    on a phone).
+  - home 01 / VIP card: "$169 / month" → "Ask us" (the "/ month" line is empty: with any sub-line "Ask us" breaks over
+    two lines on a phone).
+  - home 01 / guest line: "Guests can book with prices 20% higher and a $25 non-refundable booking fee." → "Guests can
+    book with a $25 non-refundable booking fee."
+  - home, #/wash, #/tint, #/detailing / pricing intro: "Everyone sees guest pricing. Here's what the same visit costs as a
+    VIP member." → "Priced by vehicle size — ask us, and we'll reply with a quote."
+  - pricing / booking fee row: "$25 GUEST | $0 SAVE $25" → "$25 GUEST | None MEMBERS".
+  - pricing / price rows (wash, add-ons, tint, detailing; GUEST and AS VIP columns, the flip): "$54 / $54 GUEST /
+    Included SAVE $54", "$47 / $39 SAVE $8", "from $275 …" → Signature Hand Wash "from $40 / $40 GUEST / Included WITH
+    VIP"; every other row "Ask us / Ask us GUEST / Ask us PRICED BY SIZE" (an item the design includes with VIP keeps
+    "Included" with "WITH VIP"); the tint page rows' "VIP $229–$279 · guest $275–$335" → "Priced by vehicle size — ask
+    us"; "More services" unchanged.
+  - home, #/wash / "A VIP MONTH, PRICED AS A GUEST" (what VIP is worth, "Guest total $458 · VIP $169", "Save $289/mo"):
+    shown → not shown (`prShowMonth` false, its numbers emptied).
+  - FAQ / the guest fee answer: "…to hold a time, on top of guest pricing. Members never pay it." → "…to hold a time.
+    Members never pay it."
+  - #/membership / comparison header: "Gold $99/mo", "VIP $169/mo" → "from $129/mo", "Ask us"; row "Booking fee $25 /
+    $0 / $0" → "$25 / None / None".
+  - #/wash / wash cards: "Guest $54", "Guest $38" → "from $40", "Priced by vehicle size — ask us".
+  - #/tint / tint card on the home page: "Carbon and ceramic film. VIP from $229, guest from $275." → "Carbon and
+    ceramic film. Priced by vehicle size — ask us."
+  - #/tint / tint calculator price block: "VIP · CERAMIC · SEDAN / COUPE / $379 – $449 / Guest ~~$455 – $539~~ · save
+    $76+" → "CERAMIC · SEDAN / COUPE / Ask us / Priced by vehicle size".
+  - home / VIP section: "VIP members book first and pay $0 for their washes. …", "Join VIP · $169/mo" → "VIP members
+    book first. Guests can book any open time.", "Join VIP".
+  - sticky bar: "VIP · $169/mo", "Priority times · Gold from $99" → "VIP · Ask us", "Priority times · Gold from
+    $129" (the design's format; "/mo" would end in an ellipsis on a phone).
+  - #/join / plan cards: "$99/mo", "$169/mo" → "from $129", "Ask us"; summary "Gold membership $99/mo", "Booking fees
+    $0", "Due at checkout $99" → "from $129/mo" (VIP "Ask us"), "None", "from $129" (VIP "Ask us"); terms "I agree to be
+    billed $99 a month for Gold until I cancel. …" → "I agree to be billed monthly for Gold until I cancel. …"; button
+    "Start Gold · $99/mo" → "Start Gold".
+  - booking sheet / who step: "This wash is included. Gold $99 or VIP $169 a month.", "Guest prices · $25 non-refundable
+    booking fee" → "This wash is included. Gold from $129 a month.", "Priced by vehicle size · $25 non-refundable booking
+    fee".
+  - booking sheet / wash step: guest "$54 guest price", "$38 guest price", add-ons "+$47" → "from $40 by vehicle size",
+    "Ask us by vehicle size", "Ask us"; member "$0" → "Included" (add-ons the member pays: "Ask us").
+  - booking sheet / review and summary: wash "$54", add-ons "$47", "Pay $101 after your wash.", member "Due at pickup
+    $35", "AS A VIP THIS VISIT IS $0 · You'd pay $126 as a guest. As VIP: $0, with wax and engine bay included." →
+    "from $40" (Exterior "Ask us"), "Ask us", "Pay the rest after your wash.", "Ask us", "AS A VIP MEMBER · No booking
+    fee, with wax and engine bay included."; the $25 fee lines unchanged.
+  - head (seo.json description, JSON-LD): no price figure before or after (`priceRange` "$$" is not a figure).
+  Harness: the ORIGINAL gets the same words as pre-render swaps (`parity/allowlist.json` `DV-PRICE-INTERIM-*`, 23 on the
+  markup, 32 on the logic; original only, because the port's switch is the bridge's, not a copy-map change), so the port
+  must match it at zero diff. `src/site/bridge-interim.test.ts` renders the design with those swaps under the bridge in
+  catalog mode against the interim bridge over every price state, value for value, and checks every `site.cat` text
+  against the swapped markup; the build and the e2e scan the prerendered page and every view for "$" figures other than
+  $40, $129 and the fee.
 
 ## Booking and membership
 

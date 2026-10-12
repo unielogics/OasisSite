@@ -239,6 +239,106 @@
       "expectTag": "sc-if",
       "html": "<sc-if value=\"{{ site.link.joinEmail }}\"><div style=\"display:flex;flex-direction:column;gap:10px;margin-top:24px;\"><div style=\"display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:var(--inset);font-size:14px;color:var(--ink2);\">Joining as<span style=\"font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--ink);\">{{ site.link.joinAs }}</span></div><input value=\"{{ jv.email }}\" onInput=\"{{ jv.setEmail }}\" inputmode=\"email\" autocomplete=\"email\" placeholder=\"Email (for receipts)\" style=\"height:56px;padding:0 16px;border-radius:15px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;\"></div></sc-if>",
       "dv": "DV-LINK-JOIN"
+    },
+    {
+      "op": "set-attr",
+      "tpl": 73,
+      "expectTag": "div",
+      "name": "style",
+      "expect": "margin-top:28px;padding:20px;border-radius:24px;background:var(--card);border:1px solid var(--line);",
+      "value": "margin-top:28px;padding:20px;border-radius:24px;background:var(--card);border:1px solid var(--line);display:{{ site.cat.calcDisplay }};",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 98,
+      "expectTag": "span",
+      "expect": "/ month",
+      "with": "{{= site.cat.goldPer }}",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 113,
+      "expectTag": "span",
+      "expect": "/ month",
+      "with": "{{= site.cat.vipPer }}",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 255,
+      "expectTag": "span",
+      "expect": "Guest ",
+      "child": 0,
+      "with": "{{= site.cat.cardGuest }}",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 304,
+      "expectTag": "div",
+      "expect": "Guest ",
+      "child": 0,
+      "with": "{{= site.cat.tintLead }}",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 304,
+      "expectTag": "div",
+      "expect": " · ",
+      "child": 2,
+      "with": "{{= site.cat.tintSep }}",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 383,
+      "expectTag": "p",
+      "expect": "Everyone sees guest pricing. Here's what the same visit costs as a VIP member.",
+      "with": "{{= site.cat.priceIntro }}",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 392,
+      "expectTag": "div",
+      "expect": "$0",
+      "with": "{{= site.cat.memberFee }}",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 523,
+      "expectTag": "p",
+      "expect": "VIP members book first and pay $0 for their washes. Guests can book any open time.",
+      "with": "{{= site.cat.vipFirst }}",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 581,
+      "expectTag": "span",
+      "expect": "/mo",
+      "with": "{{= site.cat.tierPer }}",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 651,
+      "expectTag": "span",
+      "expect": "/mo",
+      "with": "{{= site.cat.barPer }}",
+      "dv": "DV-PRICE-INTERIM"
+    },
+    {
+      "op": "replace-text",
+      "tpl": 759,
+      "expectTag": "div",
+      "expect": "AS A VIP THIS VISIT IS $0",
+      "with": "{{= site.cat.upsellHead }}",
+      "dv": "DV-PRICE-INTERIM"
     }
   ]
 }
