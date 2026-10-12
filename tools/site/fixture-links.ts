@@ -129,17 +129,36 @@ const POLICY: Record<FixtureLinkKind, { ttl: number; uses: number; exchanges: nu
 }
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-/** The identity core's PIN blocklist, in short: repeats, runs, years 1940-2015, a few common ones, the number's end. */
+/**
+ * The identity core's PIN blocklist and its words (backend src/modules/identity/pin.ts pinProblem, copied: the page shows the
+ * API's `detail` as it comes, and the live e2e holds the two to the same text): 4 to 6 digits; not one digit over and over,
+ * not a run (wrapping 9 to 0, either way), not a common PIN (the backend's list), not a year from 1940 to 2015, not the end
+ * of the client's own number.
+ */
+const COMMON_PINS = new Set(
+  (
+    '1234 1111 0000 1212 7777 1004 2000 4444 2222 6969 9999 3333 5555 6666 1122 1313 8888 4321 2001 1010 ' +
+    '2580 0852 1123 1231 1984 1986 2468 1357 0123 1239 1000 1020 2121 4545 5150 1515 1414 2020 2525 3636 ' +
+    '0007 0101 0911 1001 1101 1200 1221 1225 1269 1324 1342 1369 1478 1590 1597 1701 1776 1818 1919 1999 ' +
+    '2002 2011 2112 2211 2323 2345 2424 2512 2727 3000 3131 3232 3434 3456 3535 3690 4040 4200 4242 4567 ' +
+    '5252 5678 6262 6789 7007 7070 7272 7410 7531 7676 7890 8008 8520 8642 9090 9191 9696 9876 0258 0369 ' +
+    '1029 1210 0420 0069 1066 1945 0001 0007 2580 1470'
+  ).split(' '),
+)
+const isRun = (pin: string): boolean => {
+  const d = [...pin].map(Number)
+  const step = (d[1]! - d[0]! + 10) % 10
+  if (step !== 1 && step !== 9) return false
+  return d.every((x, i) => i === 0 || (x - d[i - 1]! + 10) % 10 === step)
+}
 export function pinRejected(pin: string, phone: string): string | null {
   if (!/^\d{4,6}$/.test(pin)) return 'Use 4 to 6 digits.'
-  if (/^(\d)\1+$/.test(pin)) return 'Don’t repeat one digit. Choose another PIN.'
-  const up = '01234567890'
-  const down = '09876543210'
-  if (up.includes(pin) || down.includes(pin)) return 'Don’t use a run like 1234. Choose another PIN.'
+  if (/^(\d)\1+$/.test(pin)) return 'Don’t use one digit over and over.'
+  if (isRun(pin)) return 'Don’t use digits in a row like 1234.'
+  if (COMMON_PINS.has(pin)) return 'That PIN is too common. Choose another.'
   if (pin.length === 4 && Number(pin) >= 1940 && Number(pin) <= 2015) return 'Don’t use a year. Choose another PIN.'
-  if (['1212', '6969', '1004', '2580', '0852', '1122', '7777', '5683'].includes(pin)) return 'That PIN is too common. Choose another.'
   const digits = phone.replace(/\D/g, '')
-  if (digits.endsWith(pin)) return 'Don’t use the end of your phone number. Choose another PIN.'
+  if (digits.length >= pin.length && digits.endsWith(pin)) return 'Don’t use the end of your phone number.'
   return null
 }
 
@@ -385,18 +404,14 @@ export function createLinkFixture(d: LinkFixtureDeps) {
       }
       const given = String(body.pin ?? '')
       if (!pin || given !== pin.pin) {
+        // as verifySessionPin (backend src/modules/identity/pin-service.ts): the wrong PIN counts against the PIN (locked
+        // 15 min at 5, 1 h at 8, disabled at 11) and against the page; the answer is the page's (its fifth wrong entry ends
+        // it), the lock shows on the next try (a new page of the link: "Too many wrong PINs. Try again in 15 min")
         s.failures++
         if (pin) {
           pin.fails++
-          if (pin.fails === 5 || pin.fails === 8) {
-            pin.lockedUntil = t + (pin.fails === 5 ? 15 : 60) * MIN
-            const minutes = pin.fails === 5 ? 15 : 60
-            return problem(res, 429, 'IDENTITY_PIN_LOCKED', 'PIN locked for now', { detail: `Too many wrong PINs. Try again in ${minutes} min, or reset your PIN with a texted code.` }, { 'retry-after': String(minutes * 60) }), true
-          }
-          if (pin.fails >= 11) {
-            pin.disabled = true
-            return problem(res, 423, 'IDENTITY_PIN_DISABLED', 'PIN locked', { detail: 'Your PIN is locked after too many wrong tries. Reset it with a texted code.' }), true
-          }
+          if (pin.fails === 5 || pin.fails === 8) pin.lockedUntil = t + (pin.fails === 5 ? 15 : 60) * MIN
+          if (pin.fails >= 11) pin.disabled = true
         }
         if (s.failures >= 5) return problem(res, 429, 'IDENTITY_SESSION_LOCKED', 'Too many tries', { detail: 'Too many tries. Open the link from our text again later.' }), true
         const left = 5 - s.failures

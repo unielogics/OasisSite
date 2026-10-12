@@ -330,7 +330,7 @@ describe('DV-STEPUP: PIN, lockout, create PIN', () => {
       [`${BASE}/verify/code/confirm`]: () => ok(stepped({ kind: 'verify', by: 'code', canSetPin: true })),
       [`${BASE}/pin`]: (call) =>
         call.body.pin === '1234'
-          ? prob(422, 'IDENTITY_PIN_REJECTED', 'Choose another PIN', { detail: 'Don’t use a run like 1234. Choose another PIN.' })
+          ? prob(422, 'IDENTITY_PIN_REJECTED', 'Choose another PIN', { detail: 'Don’t use digits in a row like 1234.' })
           : ok(stepped({ kind: 'verify', by: 'code', pin: 'set' })),
     })
     await t.settle()
@@ -348,7 +348,7 @@ describe('DV-STEPUP: PIN, lockout, create PIN', () => {
     lv(c).su.setValue({ target: { value: '1234' } })
     lv(c).su.submit()
     await t.settle()
-    expect(lv(c).su.err).toBe('Don’t use a run like 1234. Choose another PIN.')
+    expect(lv(c).su.err).toBe('Don’t use digits in a row like 1234.')
     lv(c).su.setValue({ target: { value: '4826' } })
     lv(c).su.submit()
     await t.settle()

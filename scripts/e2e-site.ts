@@ -2,8 +2,10 @@
 //
 //   pnpm e2e:site --api fixture                       the in-process fixture API (tools/site/fixture-api.ts)
 //   pnpm e2e:site --stack site [--dashboard ~/oasis/dashboard]   a live stack started with the dashboard's
-//                                                     `pnpm live:up --name site --backend <wt> --profile design,demo`
-//   options: --port 3301 (the site's host), --skip-build (reuse dist-e2e-live / dist-e2e-sms / dist-e2e-catalog), --headed
+//                                                     `pnpm live:up --name site --backend <wt> --profile design,demo,website-catalog`
+//                                                     (scripts/e2e-stack.sh does it all: up, the e2e, down)
+//   options: --port 3301 (the site's host), --skip-build (reuse dist-e2e-live / dist-e2e-sms / dist-e2e-catalog), --headed,
+//            --only links (the personal-link checks 10-21 and the hygiene checks only)
 //
 // Builds the site twice (SITE_BOOKING=live with the stack's hours and availability baked in, and the launch default
 // SITE_BOOKING=sms), serves each through tools/site/proxy.ts (nginx's same-origin /api/v1/public/* mapping) and checks:
@@ -13,7 +15,9 @@
 // simulator delivers the text instantly and delivered one-time codes are redacted); a join creates a pending
 // membership; the honeypot creates nothing; the catalog's prices show (DV-CATALOG: a changed price in the fixture's catalog
 // appears after the page's catalog load, an unseeded catalog leaves the design's content); no page error, no 5xx, no
-// external request; and in sms mode every Book/Join action produces an sms: link with the composed body.
+// external request; in sms mode every Book/Join action produces an sms: link with the composed body; and the personal
+// links (scripts/e2e-links.ts) against the fixture's link API or, on a stack started with PUBLIC_LINKS_ENABLED=true, the
+// real one (tools/site/stack-links.ts).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import '../tools/parity/env'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -29,6 +33,8 @@ import { designCatalog, unseededCatalog, withMemberPrice } from '../tools/site/c
 import { startSiteProxy, type SiteProxy } from '../tools/site/proxy'
 import { ROOT, CHROMIUM_FLAGS } from '../tools/parity/config'
 import { runLinkChecks } from './e2e-links'
+import { fixtureLinkDriver } from '../tools/site/link-driver'
+import { createStackLinks, stackLinksEnabled } from '../tools/site/stack-links'
 
 interface Stack {
   name: string
@@ -37,6 +43,7 @@ interface Stack {
   devPassword: string
   schema: string
   backend: string
+  apiLog: string
 }
 
 interface Api {
@@ -326,10 +333,12 @@ async function main(): Promise<number> {
       port: { type: 'string', default: '3301' },
       'skip-build': { type: 'boolean', default: false },
       headed: { type: 'boolean', default: false },
+      only: { type: 'string' },
     },
     strict: true,
   })
   const port = Number(values.port)
+  assert(values.only === undefined || values.only === 'links', '--only takes links (the personal-link checks 10-21 and the hygiene checks)')
   let api: Api
   if (values.stack) {
     const file = path.join(values.dashboard!, '.live-stack', `${values.stack}.json`)
@@ -389,6 +398,68 @@ async function main(): Promise<number> {
   let bookedRef = ''
   let bookedDate = ''
   let bookedStart = -1
+  // 10-21. personal links (DV-LINK…, scripts/e2e-links.ts) on the launch build: against the fixture's link API, or the
+  // stack's real one (links issued with the backend's issueClientLink, tools/site/stack-links.ts) when the stack runs
+  // with PUBLIC_LINKS_ENABLED=true and this process has its PIN_PEPPER
+  async function linkChecks(smsProxy: SiteProxy): Promise<void> {
+    if (api.kind === 'fixture') {
+      await runLinkChecks({ browser, proxy: smsProxy, links: fixtureLinkDriver(api.fixture!.links, smsProxy.origin), newPage, ready, check, trackers })
+      return
+    }
+    const stack = api.stack!
+    if (!(await stackLinksEnabled(stack.apiUrl))) {
+      log('links: skipped (the stack answers 404 on /public/links: start it with PUBLIC_LINKS_ENABLED=true and a PIN_PEPPER, docs/e2e.md)')
+      return
+    }
+    const pinPepper = process.env.PIN_PEPPER ?? ''
+    assert(pinPepper, 'the stack has links on: export the PIN_PEPPER it was started with (docs/e2e.md)')
+    const links = await createStackLinks({
+      backend: stack.backend,
+      schema: stack.schema,
+      dbUrl: readEnvFile(path.join(stack.backend, '.env')).DATABASE_URL ?? '',
+      apiUrl: stack.apiUrl,
+      apiLog: stack.apiLog,
+      pinPepper,
+      startProxy: (apiOrigin, at) => startSiteProxy({ dir: smsDir, apiOrigin, port: at }),
+      offPort: port + 6,
+      log,
+    })
+    try {
+      await runLinkChecks({ browser, proxy: smsProxy, links, newPage, ready, check, trackers })
+    } finally {
+      await links.close()
+    }
+  }
+
+  // 9. hygiene over every page, and the report
+  function finish(): number {
+    const errors = trackers.flatMap((t) => t.errors)
+    const blocked = trackers.flatMap((t) => t.blocked)
+    const fives = trackers.flatMap((t) => t.fiveHundreds)
+    check('no console error or page error on any page', errors.length === 0, errors.slice(0, 3).join(' | '))
+    check('no external request', blocked.length === 0, blocked.slice(0, 3).join(' | '))
+    check('no 5xx', fives.length === 0, fives.slice(0, 3).join(' | '))
+
+    const summary = { api: api.kind, stack: api.stack?.name ?? null, only: values.only ?? null, bookingRef: bookedRef, results, ok: failures === 0 }
+    fs.mkdirSync(path.join(ROOT, 'parity-reports'), { recursive: true })
+    fs.writeFileSync(path.join(ROOT, 'parity-reports', 'e2e-site.json'), JSON.stringify(summary, null, 2) + '\n')
+    log(`\ne2e-site ${failures ? 'FAILED' : 'PASSED'}: ${results.length - failures}/${results.length} checks (api ${api.kind}${values.only ? `, only ${values.only}` : ''})`)
+    return failures ? 1 : 0
+  }
+
+  if (values.only === 'links') {
+    await proxy.close()
+    const smsProxy = await startSiteProxy({ dir: smsDir, apiOrigin: api.origin, port: port + 1 })
+    try {
+      await linkChecks(smsProxy)
+    } finally {
+      await smsProxy.close()
+      await browser.close()
+      await api.fixture?.close()
+    }
+    return finish()
+  }
+
   try {
     // 2. hours and availability render the API's data
     {
@@ -441,7 +512,8 @@ async function main(): Promise<number> {
         await page.waitForSelector('#dc-root :text("You\'re booked")', { timeout: 20_000 })
       } catch {
         const last = t.responses[t.responses.length - 1]
-        throw new Error(`guest booking: the done step never appeared; last API answer ${last?.status ?? '(none)'} ${last?.body.slice(0, 300) ?? ''}`)
+        const shown = (await page.locator('#dc-root').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(-500)
+        throw new Error(`guest booking: the done step never appeared; last API answer ${last?.status ?? '(none)'} ${last?.body.slice(0, 300) ?? ''}; the page ends with: ${shown}`)
       }
       const done = await page.locator('#dc-root').innerText()
       const ref = /Ref (OAS-\d+)/.exec(done)?.[1] ?? ''
@@ -769,10 +841,7 @@ async function main(): Promise<number> {
     check('sms mode: Join composes an sms: link to the texting number with the plan, name, phone and car', navs2.length === 1 && reSms('JOIN%20VIP%3A').test(navs2[0]!) && /Sam%20Lee/.test(navs2[0]!) && /Audi/.test(navs2[0]!), navs2[0])
     check('sms mode: no API write was attempted', smsProxy.log.filter((l) => l.method === 'POST').length === posts0, JSON.stringify(smsProxy.log.filter((l) => l.method === 'POST')))
     await joinPage.ctx.close()
-    // 10-21. personal links (DV-LINK…, scripts/e2e-links.ts) on the launch build, against the fixture's link API; a
-    // stack gets them once the backend's link API (wave W3c) is in the stack
-    if (api.kind === 'fixture') await runLinkChecks({ browser, proxy: smsProxy, api: api.fixture!, newPage, ready, check, trackers })
-    else log('links: skipped on a stack (the fixture API carries the link routes until the backend link API is in the stack)')
+    await linkChecks(smsProxy)
     // 8b. a visitor in another time zone: the page shows the shop's wall clock and hydrates without a mismatch
     // (DEVIATIONS.md DV-CLOCK; React logs a recoverable error and re-renders on the client otherwise)
     const far = await newPage(browser, smsProxy.origin, 'America/Los_Angeles')
@@ -903,19 +972,7 @@ async function main(): Promise<number> {
     await api.fixture?.close()
   }
 
-  // 9. hygiene over every page
-  const errors = trackers.flatMap((t) => t.errors)
-  const blocked = trackers.flatMap((t) => t.blocked)
-  const fives = trackers.flatMap((t) => t.fiveHundreds)
-  check('no console error or page error on any page', errors.length === 0, errors.slice(0, 3).join(' | '))
-  check('no external request', blocked.length === 0, blocked.slice(0, 3).join(' | '))
-  check('no 5xx', fives.length === 0, fives.slice(0, 3).join(' | '))
-
-  const summary = { api: api.kind, stack: api.stack?.name ?? null, bookingRef: bookedRef, results, ok: failures === 0 }
-  fs.mkdirSync(path.join(ROOT, 'parity-reports'), { recursive: true })
-  fs.writeFileSync(path.join(ROOT, 'parity-reports', 'e2e-site.json'), JSON.stringify(summary, null, 2) + '\n')
-  log(`\ne2e-site ${failures ? 'FAILED' : 'PASSED'}: ${results.length - failures}/${results.length} checks (api ${api.kind})`)
-  return failures ? 1 : 0
+  return finish()
 }
 
 main().then(

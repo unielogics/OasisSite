@@ -1,13 +1,18 @@
 // e2e: personal links (DEVIATIONS.md DV-LINK, DV-STEPUP, DV-LINK-JOIN, DV-LINK-PAY, DV-LINK-DEAD; backend design
-// docs/design/ai-assistant-and-phone-identity.md section 7, checks 10-19), run by scripts/e2e-site.ts against the
-// fixture API's link routes (tools/site/fixture-links.ts) on the launch build (SITE_BOOKING=sms: links work in either
-// booking mode). Every page here is served with the production Content-Security-Policy of the site (the deploy kit's
-// install.sh SITE_CSP, minus upgrade-insecure-requests, which would send the plain-http test host's assets to https),
-// and every request the browser makes is recorded (URL, headers, body) to prove where the token travels.
+// docs/design/ai-assistant-and-phone-identity.md section 7, checks 10-21), run by scripts/e2e-site.ts on the launch build
+// (SITE_BOOKING=sms: links work in either booking mode) against a link API through a LinkDriver (tools/site/link-driver.ts):
+// the fixture's link routes (tools/site/fixture-links.ts) or a live stack's real backend (tools/site/stack-links.ts: links
+// issued with the backend's issueClientLink and texted through its queue, codes read from the stack's outbox). Every page
+// here is served with the production Content-Security-Policy of the site (the deploy kit's install.sh SITE_CSP, minus
+// upgrade-insecure-requests, which would send the plain-http test host's assets to https), every request the browser
+// makes is recorded (URL, headers, body) to prove where the token travels, and every 2xx answer of the link API is held
+// to the contract the page is written to (src/site/link-contract.testkit.ts).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Browser, BrowserContext, Page, Request } from '@playwright/test'
-import type { FixtureApi } from '../tools/site/fixture-api'
+import type { LinkDriver, IssueLinkInput } from '../tools/site/link-driver'
 import type { SiteProxy } from '../tools/site/proxy'
+import { money, shopDate } from '../src/site/links'
+import { BOOKING_RESULT_KEYS, CODE_REQUESTED_KEYS, keyProblems, linkStateProblems, MEMBERSHIP_RESULT_KEYS, PAY_RESULT_KEYS } from '../src/site/link-contract.testkit'
 
 /** install.sh SITE_CSP (backend deploy kit) without upgrade-insecure-requests (the e2e host is plain http). */
 export const SITE_CSP =
@@ -23,9 +28,9 @@ export interface LinkTracker {
 
 export interface LinkDeps {
   browser: Browser
-  /** the site's host (the proxy in front of dist and the fixture API) */
+  /** the site's host (the proxy in front of dist and the link API) */
   proxy: SiteProxy
-  api: FixtureApi
+  links: LinkDriver
   newPage: (browser: Browser, origin: string) => Promise<{ ctx: BrowserContext; page: Page; t: LinkTracker }>
   ready: (page: Page) => Promise<void>
   check: (name: string, ok: boolean, note?: string) => void
@@ -40,36 +45,47 @@ interface Seen {
 }
 
 const SMS_E164 = '+18623885827'
+const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const STATUS_TEXT: Record<number, string> = { 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict', 410: 'Gone', 422: 'Unprocessable Entity', 423: 'Locked', 429: 'Too Many Requests' }
 const CHECKOUT = 'https://oasis-auto-spa.squarespace.com/checkout/subscribe?plan=gold'
 const PAY_URL = 'https://oasis-auto-spa.squarespace.com/pay/inv-20611'
-// the API's shapes (backend docs/api-spec.md 28.2): an invoice number is the dashboard's invoice_no, a plan has its tier
+// the API's shapes (backend docs/api-spec.md 28.2): an invoice number is the dashboard's invoice_no, a plan has its tier.
+// The fixture serves this invoice; a stack books a real visit for the client and serves that visit's invoice.
 const INVOICE = { number: 20611, date: '2026-10-09', items: [{ name: 'Signature Hand Wash', priceCents: 5000 }], taxCents: 400 }
 
 export async function runLinkChecks(d: LinkDeps): Promise<void> {
-  const { browser, proxy, api, check } = d
+  const { browser, proxy, links: L, check } = d
   const origin = proxy.origin
-  const L = api.links
   const seenAll: Seen[] = []
   const cspAll: string[] = []
   const expectedAll: string[] = []
   const tokens: string[] = []
-  const issue = (i: Parameters<typeof L.issue>[0]) => {
-    const r = L.issue(i, origin)
+  /** when the pages asked for an exchange (a live API's per-minute limit) */
+  const exchangeTimes: number[] = []
+  /** every 2xx answer of the link API over the run, to hold it to the contract (src/site/link-contract.testkit.ts) */
+  const replies: { route: string; body: Record<string, unknown> }[] = []
+  /** the link API's answers over the run (method, path, status; the problem of a 4xx/5xx), for a failure's message */
+  const trail: string[] = []
+  const issue = async (i: IssueLinkInput) => {
+    const r = await L.issue(i, origin)
     tokens.push(r.token)
     return r
   }
 
   /** A page that records every request, carries the production CSP, and reports CSP violations. */
-  async function open(): Promise<{ ctx: BrowserContext; page: Page; t: LinkTracker; seen: Seen[]; exchanges: string[]; close: () => Promise<void> }> {
-    const { ctx, page, t } = await d.newPage(browser, origin)
+  async function open(at = origin): Promise<{ ctx: BrowserContext; page: Page; t: LinkTracker; seen: Seen[]; exchanges: string[]; answers: any[]; statuses: { url: string; status: number }[]; close: () => Promise<void> }> {
+    const { ctx, page, t } = await d.newPage(browser, at)
     d.trackers.push(t)
     const seen: Seen[] = []
     const exchanges: string[] = []
+    /** every exchange answer without its session (what the API showed the page) and every link API status */
+    const answers: any[] = []
+    const statuses: { url: string; status: number }[] = []
     // the link API's documented 4xx answers (a dead link, a wrong PIN, links switched off) are logged by Chromium as
     // "Failed to load resource: … status of 4xx": expected here, every other console line still counts
     const expected: number[] = []
     page.on('response', (r) => {
+      if (r.url().includes('/api/v1/public/links/')) statuses.push({ url: r.url(), status: r.status() })
       if (r.url().includes('/api/v1/public/links/') && r.status() >= 400 && r.status() < 500) expected.push(r.status())
     })
     const close = async () => {
@@ -80,22 +96,33 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
       await ctx.close()
     }
     page.on('request', (r: Request) => {
+      if (r.url().endsWith('/api/v1/public/links/exchange')) exchangeTimes.push(Date.now())
       const s = { method: r.method(), url: r.url(), headers: r.headers(), body: r.postData() ?? '' }
       seen.push(s)
       seenAll.push(s)
     })
     page.on('response', async (r) => {
-      if (r.url().endsWith('/links/exchange') && r.status() === 200) {
-        try {
-          exchanges.push(String(((await r.json()) as { session?: string }).session ?? ''))
-        } catch {
-          /* gone */
+      const m = /\/api\/v1\/public\/links(\/[^?]*)/.exec(r.url())
+      if (m && r.status() >= 400) {
+        const problem = await r.text().catch(() => '')
+        trail.push(`${r.request().method()} ${m[1]} ${r.status()} ${problem.slice(0, 240)}`)
+      } else if (m) trail.push(`${r.request().method()} ${m[1]} ${r.status()}`)
+      if (!m || r.status() < 200 || r.status() >= 300) return
+      try {
+        const body = (await r.json()) as Record<string, unknown>
+        replies.push({ route: `${r.request().method()} ${m[1]!.replace(/\/appointments\/[^/]+\//, '/appointments/:ref/')}`, body })
+        if (m[1] === '/exchange') {
+          const { session, ...rest } = body
+          exchanges.push(String(session ?? ''))
+          answers.push(rest)
         }
+      } catch {
+        /* gone, or not JSON */
       }
     })
     await page.route('**/*', async (route) => {
       const req = route.request()
-      if (req.resourceType() === 'document' && new URL(req.url()).origin === origin) {
+      if (req.resourceType() === 'document' && new URL(req.url()).origin === at) {
         const resp = await route.fetch()
         return route.fulfill({ response: resp, headers: { ...resp.headers(), 'content-security-policy': SITE_CSP } })
       }
@@ -105,9 +132,12 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
       ;(window as any).__csp = []
       document.addEventListener('securitypolicyviolation', (e) => (window as any).__csp.push(`${e.violatedDirective} ${e.blockedURI}`))
     })
-    return { ctx, page, t, seen, exchanges, close }
+    return { ctx, page, t, seen, exchanges, answers, statuses, close }
   }
   const go = async (page: Page, url: string) => {
+    // a live API allows so many exchanges a minute from one address: the run opens links faster than any person
+    if (L.exchangesPerMinute && /#\/(c|m|p|pin|v)\//.test(url))
+      while (exchangeTimes.filter((x) => Date.now() - x < 61_000).length >= L.exchangesPerMinute - 5) await new Promise((r) => setTimeout(r, 1000))
     await page.goto(url, { waitUntil: 'load' })
     await d.ready(page)
   }
@@ -117,12 +147,19 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
   }
   const btn = (page: Page, re: RegExp) => page.locator('#dc-root button').filter({ hasText: re })
   const text = (page: Page, s: string) => page.locator('#dc-root').getByText(s, { exact: false })
-  const waitText = (page: Page, s: string, timeout = 15_000) => text(page, s).first().waitFor({ state: 'visible', timeout })
-  const navs = (page: Page): Promise<string[]> => page.evaluate(() => (window as any).__oasisNavigations ?? [])
-  const lastCode = () => {
-    const s = L.snapshot()
-    return s.codes[s.codes.length - 1]?.code ?? ''
+  const waitText = async (page: Page, s: string, timeout = 15_000) => {
+    try {
+      await text(page, s).first().waitFor({ state: 'visible', timeout })
+    } catch (e) {
+      const shown = (await page.locator('#dc-root').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(-400)
+      throw new Error(`"${s}" never showed; the page ends with: ${shown}\nlast link API answers:\n  ${trail.slice(-6).join('\n  ')}\n${e instanceof Error ? e.message.split('\n')[0] : e}`)
+    }
   }
+  /** waits for the page's exchange answer to be read (the response listener reads its body asynchronously) */
+  const answered = async (answers: unknown[]) => {
+    for (let i = 0; i < 100 && answers.length === 0; i++) await new Promise((r) => setTimeout(r, 100))
+  }
+  const navs = (page: Page): Promise<string[]> => page.evaluate(() => (window as any).__oasisNavigations ?? [])
   /** The sheet's way to a time: "Choose a time" -> the first open slot -> "Review · …". */
   const pickTime = async (page: Page) => {
     await btn(page, /^\s*Choose a time/).click()
@@ -133,16 +170,16 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
     await btn(page, /^\s*Review · /).click()
     await page.waitForTimeout(250)
   }
-  const enterCode = async (page: Page) => {
+  const enterCode = async (page: Page, phone: string) => {
     await btn(page, /^\s*Text me a code\s*$/).click()
     await page.locator('#dc-root input[placeholder="6-digit code"]').waitFor({ timeout: 15_000 })
-    await page.locator('#dc-root input[placeholder="6-digit code"]').fill(lastCode())
+    await page.locator('#dc-root input[placeholder="6-digit code"]').fill(await L.lastCode(phone))
     await btn(page, /^\s*Verify\s*$/).click()
   }
 
   // 10 + 11. the token: scrubbed before hydration, only ever in the exchange body; 12a. a trusted number books at once
   {
-    const A = issue({ kind: 'calendar', phone: '+12015550161', firstName: 'Maria', tier: 'gold', trusted: true })
+    const A = await issue({ kind: 'calendar', phone: '+12015550161', firstName: 'Maria', tier: 'gold', trusted: true })
     const { page, seen, close } = await open()
     // the address bar right after the parser is done, before the bundle hydrates (deferred module script)
     await page.addInitScript(() => {
@@ -172,16 +209,20 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
     const withToken = seen.filter((s) => s.url.includes(A.token) || JSON.stringify(s.headers).includes(A.token) || s.body.includes(A.token))
     const onlyExchange = withToken.every((s) => s.method === 'POST' && s.url.endsWith('/api/v1/public/links/exchange') && !s.url.includes(A.token) && !JSON.stringify(s.headers).includes(A.token) && JSON.parse(s.body).token === A.token)
     check('links 10: the token is sent only in the exchange POST body (no URL, header, Referer or other body)', withToken.length >= 1 && onlyExchange, withToken.map((s) => `${s.method} ${s.url.replace(A.token, '<token>')}`).join(' | '))
-    const logged = L.state.log.filter((l) => l.path.includes(A.token) || JSON.stringify(l.headers).includes(A.token) || (l.body.includes(A.token) && !l.path.endsWith('/exchange')))
+    const logged = await L.tokenSightings([A.token])
     const proxied = proxy.log.filter((l) => l.path.includes(A.token))
-    check('links 10: the API and the site host never saw the token outside the exchange body (request log, paths)', logged.length === 0 && proxied.length === 0, `${logged.length} api, ${proxied.length} host`)
+    check(
+      `links 10: the API and the site host never saw the token outside the exchange body (${L.name === 'stack' ? 'server log, every row of the schema' : 'request log'}, host paths)`,
+      logged.length === 0 && proxied.length === 0,
+      `${logged.join('; ') || '0 api'}, ${proxied.length} host`,
+    )
     // the trusted member books in the sheet without any step-up
     await go(page, `${origin}/`) // a reload: the link is gone from memory too
     const opened = await text(page, 'BOOKING FOR').count()
     check('links 11: a reload does not reopen the link (the token lived in memory only)', opened === 0)
     await close()
 
-    const B = issue({ kind: 'calendar', phone: '+12015550161', firstName: 'Maria', tier: 'gold', trusted: true })
+    const B = await issue({ kind: 'calendar', phone: '+12015550161', firstName: 'Maria', tier: 'gold', trusted: true })
     const p2 = await open()
     await go(p2.page, `${origin}/#/c/${B.token}`)
     await waitText(p2.page, 'BOOKING FOR MARIA ••61')
@@ -190,8 +231,9 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
     await waitText(p2.page, 'You\'re booked')
     const done = await p2.page.locator('#dc-root').innerText()
     const steps = p2.seen.filter((s) => /\/links\/verify\//.test(s.url))
-    const booked = L.snapshot().bookings.find((b) => b.phone === '+12015550161')
-    check('links 12: a trusted number (verified in the last 30 days) books without a PIN or code', steps.length === 0 && !!booked && /Ref OAS-\d+/.test(done), `${steps.length} step-up calls, booking ${booked?.bookingRef}`)
+    const booked = await L.bookings('+12015550161')
+    const ref = /Ref (OAS-[0-9A-Z-]+)/.exec(done)?.[1]
+    check('links 12: a trusted number (verified in the last 30 days) books without a PIN or code', steps.length === 0 && booked === 1 && !!ref, `${steps.length} step-up calls, ${booked} booking(s), ${ref}`)
     const av = p2.seen.filter((s) => s.url.includes('/api/v1/public/links/availability'))
     check('links 12: the sheet shows the client\'s own board (link availability with the session, never the public one)', av.length > 0 && av.every((s) => /^Bearer \S+$/.test(s.headers.authorization ?? '')), `${av.length} calls`)
     await csp(p2.page)
@@ -201,7 +243,7 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
   // 12b + 13. not trusted: Book asks for a texted code, then books; the number is trusted afterwards
   {
     const phone = '+12015550162'
-    const A = issue({ kind: 'calendar', phone, firstName: 'Jose', tier: null })
+    const A = await issue({ kind: 'calendar', phone, firstName: 'Jose', tier: null })
     const { page, seen, close } = await open()
     await go(page, `${origin}/#/c/${A.token}`)
     await waitText(page, 'BOOKING FOR JOSE ••62')
@@ -209,16 +251,17 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
     await btn(page, /^\s*I understand the \$25 booking fee/).click()
     await btn(page, /^\s*Book\s*$/).last().click()
     await waitText(page, 'Text me a code')
-    const before = L.snapshot().bookings.filter((b) => b.phone === phone).length
+    const before = await L.bookings(phone)
     check('links 12: a number without trust is asked to confirm before the booking (no booking yet)', before === 0)
-    await enterCode(page)
+    await enterCode(page, phone)
     await waitText(page, 'You\'re booked')
-    const after = L.snapshot()
     const codeReq = seen.find((s) => s.url.endsWith('/links/verify/code'))
-    check('links 13: the texted code went to the link\'s number (the request carries no phone), then the booking went through', !!codeReq && !/phone/.test(codeReq.body) && after.bookings.some((b) => b.phone === phone) && !!after.trust[phone], codeReq?.body)
+    const afterBooked = await L.bookings(phone)
+    const afterTrusted = await L.trusted(phone)
+    check('links 13: the texted code went to the link\'s number (the request carries no phone), then the booking went through', !!codeReq && !/phone/.test(codeReq.body) && afterBooked === 1 && afterTrusted, `${codeReq?.body} ${afterBooked} booking(s), trusted ${afterTrusted}`)
     await csp(page)
     await close()
-    const B = issue({ kind: 'calendar', phone, firstName: 'Jose', tier: null })
+    const B = await issue({ kind: 'calendar', phone, firstName: 'Jose', tier: null })
     const p2 = await open()
     await go(p2.page, `${origin}/#/c/${B.token}`)
     await waitText(p2.page, 'BOOKING FOR JOSE ••62')
@@ -234,30 +277,32 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
   // 13. a verify link: code -> "You're verified" -> an optional PIN
   {
     const phone = '+12015550163'
-    const V = issue({ kind: 'verify', phone, firstName: 'Ana' })
+    const V = await issue({ kind: 'verify', phone, firstName: 'Ana' })
     const { page, close } = await open()
     await go(page, `${origin}/#/v/${V.token}`)
     await waitText(page, 'Confirm it’s you')
-    await enterCode(page)
+    await enterCode(page, phone)
     await waitText(page, 'You’re verified')
     const note = await page.locator('#dc-root').innerText()
     check('links 13: a verify link ends on "You\'re verified" with the trust date', /verified until [A-Z][a-z]{2} \d{1,2}/.test(note), note.split('\n').find((x) => x.includes('verified')))
     await btn(page, /Create a PIN for next time/).click()
     await page.locator('#dc-root input[placeholder="New PIN"]').fill('1234')
     await btn(page, /^\s*Save\s*$/).click()
-    await waitText(page, 'Don’t use a run like 1234')
+    await waitText(page, 'Don’t use digits in a row like 1234.')
     await page.locator('#dc-root input[placeholder="New PIN"]').fill('4826')
     await btn(page, /^\s*Save\s*$/).click()
     await waitText(page, 'Your PIN is set')
-    check('links 13: a PIN can be created after the code (an easy one is refused with the reason)', L.pinOf(phone) === '4826')
+    check('links 13: a PIN can be created after the code (an easy one is refused with the reason)', await L.pinIs(phone, '4826'))
     await csp(page)
     await close()
   }
 
-  // 14. the PIN lockout text
+  // 14. the PIN lockout: the fifth wrong PIN of a page ends that page (the API's IDENTITY_SESSION_LOCKED: "Too many tries")
+  // and locks the PIN for 15 minutes; the link opened again shows the lockout (even the right PIN is refused), the PIN
+  // field goes and the reset by code stays
   {
     const phone = '+12015550164'
-    const V = issue({ kind: 'verify', phone, firstName: 'Lena', pin: '7391' })
+    const V = await issue({ kind: 'verify', phone, firstName: 'Lena', pin: '7391' })
     const { page, close } = await open()
     await go(page, `${origin}/#/v/${V.token}`)
     await page.locator('#dc-root input[placeholder="PIN"]').waitFor({ timeout: 15_000 })
@@ -266,25 +311,35 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
       await btn(page, /^\s*Verify\s*$/).click()
       await page.waitForTimeout(300)
     }
-    await waitText(page, 'Too many wrong PINs. Try again in 15 min')
-    const fields = await page.locator('#dc-root input[placeholder="PIN"]').count()
-    const reset = await btn(page, /Forgot your PIN\? Text me a code/).count()
-    check('links 14: five wrong PINs show the lockout text, the PIN field goes and the reset by code stays', fields === 0 && reset === 1, `fields ${fields}, reset ${reset}`)
+    await waitText(page, 'Too many wrong tries on this page')
+    const sms = await page.locator('#dc-root a[href^="sms:"]').filter({ hasText: 'Text us for a new link' }).getAttribute('href').catch(() => null)
+    check('links 14: the fifth wrong PIN of a page ends it ("Too many tries", a text-us link)', String(sms).startsWith(`sms:${SMS_E164}?&body=`), String(sms))
     await csp(page)
     await close()
+    const again = await open()
+    await go(again.page, `${origin}/#/v/${V.token}`)
+    await again.page.locator('#dc-root input[placeholder="PIN"]').waitFor({ timeout: 15_000 })
+    await again.page.locator('#dc-root input[placeholder="PIN"]').fill('7391')
+    await btn(again.page, /^\s*Verify\s*$/).click()
+    await waitText(again.page, 'Too many wrong PINs. Try again in 15 min')
+    const fields = await again.page.locator('#dc-root input[placeholder="PIN"]').count()
+    const reset = await btn(again.page, /Forgot your PIN\? Text me a code/).count()
+    check('links 14: five wrong PINs lock the PIN: the link opened again shows the lockout text (even for the right PIN), the PIN field goes and the reset by code stays', fields === 0 && reset === 1, `fields ${fields}, reset ${reset}`)
+    await csp(again.page)
+    await again.close()
   }
 
   // 15. membership: plan -> verify -> e-mail -> terms -> the Squarespace checkout; a pending membership + checkout intent
   {
     const phone = '+12015550165'
-    const M = issue({ kind: 'membership', phone, firstName: 'Sam', plan: { tier: 'gold', planKey: 'gold', name: 'Gold', monthlyPriceCents: 9900, perks: ['Unlimited washes'], checkoutUrl: CHECKOUT } })
+    const M = await issue({ kind: 'membership', phone, firstName: 'Sam', plan: { tier: 'gold', planKey: L.planKey('gold'), name: 'Gold', monthlyPriceCents: 9900, perks: ['Unlimited washes'], checkoutUrl: CHECKOUT } })
     const { page, close } = await open()
     await go(page, `${origin}/#/m/${M.token}`)
     await waitText(page, 'STEP 1 OF 4')
     const hash = await page.evaluate(() => location.hash)
     await btn(page, /^\s*Continue\s*$/).click()
     await waitText(page, 'CONFIRM IT’S YOU')
-    await enterCode(page)
+    await enterCode(page, phone)
     await waitText(page, 'Joining as')
     await page.locator('#dc-root input[placeholder="Email (for receipts)"]').fill('sam@example.com')
     await btn(page, /^\s*Continue\s*$/).click()
@@ -292,12 +347,10 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
     await btn(page, /^\s*Continue to checkout/).click()
     await page.waitForTimeout(800)
     const n = await navs(page)
-    const s = L.snapshot()
-    const pending = s.memberships.find((m) => m.phone === phone)
-    const intent = s.checkouts.find((c) => c.phone === phone)
+    const m = await L.membership(phone)
     check('links 15: the membership link opens the join steps for its plan (the token scrubbed: #/join?gold)', hash === '#/join?gold', hash)
     check('links 15: after a fresh code and the e-mail, the page goes to the plan\'s Squarespace checkout', n.length === 1 && n[0] === CHECKOUT, n.join(' | '))
-    check('links 15: a pending membership and a checkout intent with the confirmed e-mail exist', pending?.state === 'pending' && intent?.expectedEmail === 'sam@example.com' && intent?.planKey === 'gold', JSON.stringify(intent))
+    check('links 15: a pending membership and a checkout intent with the confirmed e-mail exist', m?.state === 'pending' && m.expectedEmail === 'sam@example.com' && m.planKey === L.planKey('gold'), JSON.stringify(m))
     await csp(page)
     await close()
   }
@@ -305,46 +358,72 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
   // 16. payment: review -> PIN -> the invoice's Squarespace link; a URL off the allowlist is not followed
   {
     const phone = '+12015550166'
-    const P = issue({ kind: 'pay', phone, firstName: 'Ravi', pin: '7391', invoice: { ...INVOICE, url: PAY_URL } })
-    const { page, close } = await open()
+    const P = await issue({ kind: 'pay', phone, firstName: 'Ravi', pin: '7391', invoice: { ...INVOICE, url: PAY_URL } })
+    const { page, answers, close } = await open()
     await go(page, `${origin}/#/p/${P.token}`)
-    await waitText(page, 'Invoice #20611')
+    await answered(answers)
+    // what the API answered for this invoice (the fixture's INVOICE, or the stack's real invoice of the visit booked for Ravi)
+    const inv = answers[0]?.invoice as { number: number; date: string; items: { name: string }[]; taxCents: number; balanceCents: number } | undefined
+    await waitText(page, `Invoice #${inv?.number ?? '?'}`)
     const review = await page.locator('#dc-root').innerText()
-    await btn(page, /^\s*Verify & pay \$54/).click()
+    const due = money(inv?.balanceCents ?? 0)
+    const reviewOk =
+      !!inv &&
+      /PAYMENT FOR RAVI ••66/.test(review) &&
+      review.includes(shopDate(inv.date)) &&
+      inv.items.length > 0 &&
+      inv.items.every((x) => review.includes(x.name)) &&
+      (inv.taxCents === 0 || /Tax/.test(review)) &&
+      /Balance due/.test(review) &&
+      review.includes(due) &&
+      inv.balanceCents > 0
+    await btn(page, new RegExp(`^\\s*Verify & pay ${esc(due)}`)).click()
     await page.locator('#dc-root input[placeholder="PIN"]').fill('7391')
     await btn(page, /^\s*Verify\s*$/).click()
     await page.waitForTimeout(800)
     const n = await navs(page)
-    check('links 16: the payment review shows the invoice, its lines and the balance', /PAYMENT FOR RAVI ••66/.test(review) && /Fri, Oct 9/.test(review) && /Signature Hand Wash/.test(review) && /Tax/.test(review) && /Balance due/.test(review) && /\$54/.test(review), review.replace(/\s+/g, ' ').slice(0, 400))
+    check(`links 16: the payment review shows the invoice the API answered (#${inv?.number}, ${inv ? shopDate(inv.date) : ''}, ${inv?.items.map((x) => x.name).join(', ')}), its tax and the balance ${due}`, reviewOk, review.slice(Math.max(0, review.indexOf('PAYMENT FOR'))).replace(/\s+/g, ' ').slice(0, 300))
     check('links 16: after a fresh PIN the page goes to the invoice\'s Squarespace payment link', n.length === 1 && n[0] === PAY_URL, n.join(' | '))
     await csp(page)
     await close()
 
-    const Q = issue({ kind: 'pay', phone: '+12015550167', firstName: 'Ravi', pin: '7391', invoice: { ...INVOICE, url: 'https://pay.evil.example/inv-20611' } })
+    const phone2 = '+12015550167'
+    const Q = await issue({ kind: 'pay', phone: phone2, firstName: 'Ravi', pin: '7391', invoice: { ...INVOICE, url: 'https://pay.evil.example/inv-20611' } })
     const p2 = await open()
     await go(p2.page, `${origin}/#/p/${Q.token}`)
-    await waitText(p2.page, 'Invoice #20611')
-    await btn(p2.page, /^\s*Verify & pay \$54/).click()
+    await answered(p2.answers)
+    const inv2 = p2.answers[0]?.invoice as { number: number; balanceCents: number } | undefined
+    await waitText(p2.page, `Invoice #${inv2?.number ?? '?'}`)
+    await btn(p2.page, new RegExp(`^\\s*Verify & pay ${esc(money(inv2?.balanceCents ?? 0))}`)).click()
     await p2.page.locator('#dc-root input[placeholder="PIN"]').fill('7391')
     await btn(p2.page, /^\s*Verify\s*$/).click()
-    await waitText(p2.page, 'We couldn’t open the payment page')
-    const n2 = await navs(p2.page)
-    const sms = await p2.page.locator('#dc-root a[href^="sms:"]').filter({ hasText: 'Text us for a new link' }).getAttribute('href')
-    check('links 16: a payment URL off the allowlist (not squarespace.com) is not followed', n2.length === 0 && String(sms).startsWith(`sms:${SMS_E164}?&body=`), `${n2.join(' | ')} ${sms}`)
+    if (L.serverChecksPayHost) {
+      // the real API never hands out a URL off PAYMENT_LINK_HOSTS: {status: link_pending}, and the managers are asked to text one
+      await waitText(p2.page, 'We’ll text you a link')
+      const n2 = await navs(p2.page)
+      const asked = await L.payLinkRequested(phone2)
+      check('links 16: a payment URL off the allowlist (not squarespace.com) is not followed (the API answers link_pending, the page says a link will be texted, the managers are asked)', n2.length === 0 && asked, `${n2.join(' | ')} managers asked: ${asked}`)
+    } else {
+      await waitText(p2.page, 'We couldn’t open the payment page')
+      const n2 = await navs(p2.page)
+      const sms = await p2.page.locator('#dc-root a[href^="sms:"]').filter({ hasText: 'Text us for a new link' }).getAttribute('href')
+      check('links 16: a payment URL off the allowlist (not squarespace.com) is not followed', n2.length === 0 && String(sms).startsWith(`sms:${SMS_E164}?&body=`), `${n2.join(' | ')} ${sms}`)
+    }
     await csp(p2.page)
     await p2.close()
   }
 
   // 17. dead links
   {
-    const cases: [string, Parameters<typeof L.issue>[0] | null, string][] = [
+    // (revoked: a newer link of the same kind to the same number replaced it, the way the shop's next text does)
+    const cases: [string, IssueLinkInput | null, string][] = [
       ['expired', { kind: 'calendar', phone: '+12015550170', expired: true }, 'This link expired'],
       ['used', { kind: 'verify', phone: '+12015550171', used: true }, 'This link was used'],
-      ['revoked', { kind: 'pay', phone: '+12015550172', revoked: true, invoice: { ...INVOICE, url: PAY_URL } }, 'This link was replaced'],
+      ['revoked', { kind: 'calendar', phone: '+12015550172', revoked: true }, 'This link was replaced'],
       ['unknown', null, 'This link doesn’t work'],
     ]
     for (const [name, input, title] of cases) {
-      const tok = input ? issue(input).token : 'VW5rbm93bkxpbmtUb2tlbi0zMi1ieXRlcy1iYXNlNjR1cmw'
+      const tok = input ? (await issue(input)).token : 'VW5rbm93bkxpbmtUb2tlbi0zMi1ieXRlcy1iYXNlNjR1cmw'
       const { page, close } = await open()
       await go(page, `${origin}/#/c/${tok}`)
       let ok = true
@@ -363,19 +442,20 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
   // 18. a link preview (an SMS app fetching the URL) does not consume it; opening does not either; completing does
   {
     const phone = '+12015550173'
-    const C = issue({ kind: 'calendar', phone, firstName: 'Kim', tier: 'gold', trusted: true })
-    const logBefore = L.state.log.length
+    const C = await issue({ kind: 'calendar', phone, firstName: 'Kim', tier: 'gold', trusted: true })
+    // every API request of the site goes through its host (the proxy): a preview that reached the API would be in its log
+    const logBefore = proxy.log.length
     const preview = await fetch(`${origin}/#/c/${C.token}`, { headers: { 'user-agent': 'facebookexternalhit/1.1' } })
     const html = await preview.text()
-    const usesOf = () => L.snapshot().links.find((l) => l.phone === phone)!
-    check('links 18: a link preview gets the static home page and reaches no API (the fragment never leaves the device)', preview.status === 200 && html.includes('Oasis Auto Spa') && L.state.log.length === logBefore && !proxy.log.some((l) => l.path.includes(C.token)))
+    const usesOf = async () => (await L.usage(phone)) ?? { uses: -1, exchanges: -1 }
+    check('links 18: a link preview gets the static home page and reaches no API (the fragment never leaves the device)', preview.status === 200 && html.includes('Oasis Auto Spa') && proxy.log.length === logBefore && !proxy.log.some((l) => l.path.includes(C.token)))
     for (let i = 0; i < 2; i++) {
       const { page, close } = await open()
       await go(page, `${origin}/#/c/${C.token}`)
       await waitText(page, 'BOOKING FOR KIM ••73')
       await close()
     }
-    const opened = usesOf()
+    const opened = await usesOf()
     check('links 18: opening the link twice uses nothing (2 exchanges, 0 uses)', opened.uses === 0 && opened.exchanges === 2, JSON.stringify(opened))
     const { page, close } = await open()
     await go(page, `${origin}/#/c/${C.token}`)
@@ -383,15 +463,16 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
     await pickTime(page)
     await btn(page, /^\s*Confirm booking/).click()
     await waitText(page, 'You\'re booked')
-    check('links 18: completing (a booking) uses the link once', usesOf().uses === 1, JSON.stringify(usesOf()))
+    const completed = await usesOf()
+    check('links 18: completing (a booking) uses the link once', completed.uses === 1, JSON.stringify(completed))
     await csp(page)
     await close()
   }
 
   // 20. a second link in the same tab replaces the first
   {
-    const A = issue({ kind: 'calendar', phone: '+12015550174', firstName: 'Maria', trusted: true })
-    const B = issue({ kind: 'calendar', phone: '+12015550175', firstName: 'Jose', trusted: true })
+    const A = await issue({ kind: 'calendar', phone: '+12015550174', firstName: 'Maria', trusted: true })
+    const B = await issue({ kind: 'calendar', phone: '+12015550175', firstName: 'Jose', trusted: true })
     const { page, seen, exchanges, close } = await open()
     await go(page, `${origin}/#/c/${A.token}`)
     await waitText(page, 'BOOKING FOR MARIA ••74')
@@ -407,27 +488,60 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
   }
 
   // 21. PUBLIC_LINKS_ENABLED off: the API answers 404 and the page is the site as without a link
-  {
-    L.state.enabled = false
-    try {
-      const C = issue({ kind: 'calendar', phone: '+12015550176', firstName: 'Off', trusted: true })
-      const { page, t, close } = await open()
-      await go(page, `${origin}/#/c/${C.token}`)
-      await page.waitForTimeout(800)
-      const st = await page.evaluate(() => ({ href: location.href, sheet: !!document.querySelector('#dc-root div[style*="z-index:80"]'), toast: !!document.querySelector('#dc-root div[style*="z-index:95"]') }))
-      const ex = L.state.log.filter((l) => l.path.endsWith('/exchange') && l.body.includes(C.token))
-      check('links 21: with links switched off (404) the page is the home page as today: no sheet, no toast, no error, token scrubbed', !st.sheet && !st.toast && !st.href.includes(C.token) && ex.length === 1 && t.errors.filter((e) => !/^Failed to load resource: .*status of 404 /.test(e)).length === 0, JSON.stringify({ ...st, href: st.href.replace(C.token, '<token>') }))
-      await csp(page)
-      await close()
-    } finally {
-      L.state.enabled = true
-    }
-  }
+  await L.linksOff(async (offOrigin) => {
+    const C = await issue({ kind: 'calendar', phone: '+12015550176', firstName: 'Off', trusted: true })
+    const { page, t, seen, statuses, close } = await open(offOrigin)
+    await go(page, `${offOrigin}/#/c/${C.token}`)
+    await page.waitForTimeout(800)
+    const st = await page.evaluate(() => ({ href: location.href, sheet: !!document.querySelector('#dc-root div[style*="z-index:80"]'), toast: !!document.querySelector('#dc-root div[style*="z-index:95"]') }))
+    const ex = seen.filter((s) => s.method === 'POST' && s.url.endsWith('/api/v1/public/links/exchange') && s.body.includes(C.token))
+    const answered = statuses.filter((x) => x.url.endsWith('/links/exchange')).map((x) => x.status)
+    check(
+      'links 21: with links switched off (404) the page is the home page as today: no sheet, no toast, no error, token scrubbed',
+      !st.sheet && !st.toast && !st.href.includes(C.token) && ex.length === 1 && answered.length === 1 && answered[0] === 404 && t.errors.filter((e) => !/^Failed to load resource: .*status of 404 /.test(e)).length === 0,
+      JSON.stringify({ ...st, href: st.href.replace(C.token, '<token>'), exchanges: answered }),
+    )
+    await csp(page)
+    await close()
+  })
 
+  // the contract the page is written to (src/site/link-contract.testkit.ts, the backend's schemas): every answer it got
+  const contract: string[] = []
+  const routes = new Set<string>()
+  for (const { route, body } of replies) {
+    routes.add(route)
+    const { session, verified, ...state } = body
+    if (route === 'POST /exchange') contract.push(...(typeof session === 'string' && session ? linkStateProblems(state) : ['exchange: no session']).map((x) => `${route} ${x}`))
+    else if (route === 'GET /me') contract.push(...linkStateProblems(body).map((x) => `${route} ${x}`))
+    else if (['POST /verify/code/confirm', 'POST /verify/pin', 'POST /pin', 'POST /pin/reset'].includes(route))
+      contract.push(...(typeof verified === 'boolean' ? linkStateProblems(state) : ['no verified']).map((x) => `${route} ${x}`))
+    else if (route === 'POST /verify/code') contract.push(...keyProblems(route, body, CODE_REQUESTED_KEYS))
+    else if (route === 'POST /bookings') contract.push(...keyProblems(route, body, BOOKING_RESULT_KEYS))
+    else if (route === 'POST /membership/start') contract.push(...keyProblems(route, body, MEMBERSHIP_RESULT_KEYS))
+    else if (route === 'POST /pay/start') contract.push(...keyProblems(route, body, PAY_RESULT_KEYS))
+  }
+  const wanted = ['POST /exchange', 'GET /availability', 'POST /verify/code', 'POST /verify/code/confirm', 'POST /verify/pin', 'POST /pin', 'POST /bookings', 'POST /membership/start', 'POST /pay/start']
+  const unseen = wanted.filter((r) => !routes.has(r))
+  check(
+    `links contract: every 2xx answer of the ${L.name} link API has the shape the page is written to (${replies.length} answers over ${routes.size} routes)`,
+    contract.length === 0 && unseen.length === 0,
+    [...contract.slice(0, 4), ...(unseen.length ? [`never answered: ${unseen.join(', ')}`] : [])].join(' | '),
+  )
   d.check(`links: the only console lines of the link pages were the API's documented 4xx answers (${expectedAll.length})`, expectedAll.every((e) => /status of 4\d\d /.test(e)))
   // 19. CSP clean over every link page
   check('links 19: no Content-Security-Policy violation on any link page (the production policy)', cspAll.length === 0, cspAll.slice(0, 3).join(' | '))
   // and the token of every link only ever in an exchange body, over every page of the run
   const leaks = seenAll.filter((s) => tokens.some((tok) => s.url.includes(tok) || JSON.stringify(s.headers).includes(tok) || (s.body.includes(tok) && !s.url.endsWith('/links/exchange'))))
   check(`links 10: over the whole run (${tokens.length} links) no token in a URL, a header or another body`, leaks.length === 0, leaks.slice(0, 2).map((s) => `${s.method} ${s.url}`).join(' | '))
+  // and on the API side: no token in its logs or (a stack) any row of its schema; a link text's message row shows it masked
+  const sightings = await L.tokenSightings(tokens)
+  check(`links 10: over the whole run the API kept no token (${L.name === 'stack' ? 'server logs, every row of the schema' : 'request log'})`, sightings.length === 0, sightings.slice(0, 4).join('; '))
+  if (L.name === 'stack') {
+    const texted = await L.linkTexts(tokens)
+    check(
+      `links 10: every link was texted through the backend's queue and its message row shows "[private link]", never the token (${texted.masked}/${texted.queued})`,
+      texted.queued >= tokens.length && texted.masked === texted.queued && texted.skipped.length === 0,
+      texted.skipped.slice(0, 3).join(' | '),
+    )
+  }
 }
