@@ -21,12 +21,12 @@ Written by the build, imported by the bridge and the prerender, bundled into the
 | --- | --- | --- |
 | `booking` | `SITE_BOOKING` (`sms` default, `live`) | what Book / Join / "Pay & book" do (below) |
 | `apiOrigin` | `SITE_API_ORIGIN` (`''`) | the API origin for the browser; empty = same origin (nginx proxies `/api/v1/public/*`) |
-| `endpoints`, `timeouts` | `site.config.json` | `/api/v1/public/{hours,availability,bookings,otp,otp/verify,memberships,catalog}` |
+| `endpoints`, `timeouts` | `site.config.json` | `/api/v1/public/{hours,availability,bookings,otp,otp/verify,memberships,catalog,catalog/v2}` |
 | `buildNow` | `SITE_BUILD_NOW` / `PRERENDER_NOW` / now | the prerender instant; the client's first render is pinned to it (DV-CLOCK) |
 | `hours`, `hoursSource` | `SITE_HOURS_JSON` or `src/data/hours.fallback.json` | the public hours payload (Sunday closed) |
 | `availability`, `availabilitySource` | `SITE_AVAILABILITY_JSON` or none | the public availability payload baked into the board |
-| `catalogSnapshot`, `catalogSource` | `SITE_CATALOG_JSON` or none | the public catalog payload (DV-CATALOG), kept only when it is website-ready and `pricing` is `catalog`; with `interim` only its whole-dollar booking fee (`{ guestBookingFeeCents, services: [], addons: [] }`) |
-| `pricing` | `SITE_PRICING`, else `site.config.json` `pricing`, else `interim` | `interim` (DV-PRICE-INTERIM, the default): only the starting prices and the fee; `catalog`: DV-CATALOG |
+| `catalogSnapshot`, `catalogSource` | `SITE_CATALOG_JSON` or none | the public catalog payload (DV-CATALOG), kept only when it is website-ready and `pricing` is `catalog`; with `interim` only its whole-dollar booking fee (`{ guestBookingFeeCents, services: [], addons: [] }`); with `live` the checked catalog v2 (DV-CATALOG2), kept only when website-ready |
+| `pricing` | `SITE_PRICING`, else `site.config.json` `pricing`, else `interim` | `interim` (DV-PRICE-INTERIM, the default): only the starting prices and the fee; `catalog`: DV-CATALOG (v1, the old member/guest model); `live`: DV-CATALOG2 (prices by vehicle size, catalog v2) |
 | `contact`, `catalog`, `fee` | `site.config.json` | the calling number (`phoneE164`/`phoneDisplay`), the texting number (`smsE164`/`smsDisplay`), e-mail, address, maps link; the design's service and add-on ids → catalog keys; the booking fee text |
 
 ## What the bridge replaces
@@ -72,8 +72,9 @@ Written by the build, imported by the bridge and the prerender, bundled into the
   API call is made.
 - **Join (DV-JOIN).** Steps plan → vehicles → details → checkout (terms only, no card fields) → welcome. `live`: the
   details step also requires the receipts e-mail (the API's MembershipBody does), posts `/api/v1/public/memberships`
-  (a 422 on a field goes back to the details step with the API's words); the welcome step says the Squarespace checkout
-  link is on its way by text. `sms`: composes "JOIN VIP: name · phone · email · cars" (e-mail optional). "Book your first
+  (a 422 on a field goes back to the details step with the API's words; with live prices also `planClass`, the size
+  picked); the welcome step says a secure link to pay is on its way by text (a Squarespace checkout, or with Square a
+  membership page: the words name neither since wave Q3). `sms`: composes "JOIN VIP: name · phone · email · cars" (e-mail optional). "Book your first
   wash" (live) opens the sheet at the member sign-in (the membership is pending until paid).
 - **First render (DV-CLOCK, DV-HASH).** The prerender pins `Date` to `buildNow`; the client pins it the same way until
   the host is about to run `componentDidMount` (`src/client/boot.tsx` `freeze`), then the bridge re-renders with the
@@ -96,10 +97,11 @@ Written by the build, imported by the bridge and the prerender, bundled into the
 `window.__oasisNavigate(url)` is a test hook: when defined, sms:/tel: navigations go to it instead of
 `location.href` (scripts/e2e-site.ts).
 
-## Personal links (DV-LINK, DV-STEPUP, DV-LINK-JOIN, DV-LINK-PAY, DV-LINK-DEAD)
+## Personal links (DV-LINK, DV-STEPUP, DV-LINK-JOIN, DV-LINK-PAY, DV-LINK-CARD, DV-LINK-DEAD)
 
 A text from the shop can carry a personal link, `https://oasisautospanj.com/#/<path>/<token>` with `path` `c`
-(calendar, book again), `m` (membership), `p` (payment), `pin` (create / reset a PIN) or `v` (verify), the token 43
+(calendar, book again), `m` (membership), `p` (payment), `pin` (create / reset a PIN), `v` (verify) or `k` (card, wave
+Q3: save a card with Square), the token 43
 base64url characters (backend design `docs/design/ai-assistant-and-phone-identity.md` sections 5 and 7; the identity
 core in backend `docs/api-spec.md` section 27). The page takes the base64url run after the path as the token and ignores
 anything a messaging app or a shortener adds after it (`/`, `.`, `?utm=…`); the whole fragment is scrubbed either way.
@@ -116,9 +118,11 @@ The site side:
 Nothing changes without a fragment, and a 404 from the exchange (`PUBLIC_LINKS_ENABLED` off on the API, the default)
 leaves the page exactly as it is without a link (the fragment is still scrubbed). Links work in both booking modes
 (`SITE_BOOKING=sms|live`): a linked booking never goes to `/public/bookings` or to an sms: text. `site.config.json`
-`links` holds the base path, the redirect host allowlist (`redirectHosts`: `squarespace.com` and its subdomains, https
-only, no credentials or port) and the "text us for a new link" body; the code is in `src/client/link.ts` (capture),
-`src/site/links.ts` (shapes, allowlist, words) and the "links (W3f)" section of `src/site/index.bridge.ts`.
+`links` holds the base path, the redirect host allowlist (`redirectHosts`: `squarespace.com`, `square.link`,
+`square.site` and their subdomains, https only, no credentials or port), the hosts Square's Web Payments SDK may come
+from (`squareSdkHosts`: `web.squarecdn.com`, `sandbox.web.squarecdn.com`) and the "text us for a new link" body; the
+code is in `src/client/link.ts` (capture), `src/client/square.ts` (the SDK, lazily), `src/site/links.ts` (shapes,
+allowlist, words) and the "links (W3f)" section of `src/site/index.bridge.ts`.
 
 ### The link API the site calls
 
@@ -135,11 +139,15 @@ first. The e2e's `--stack` mode cannot run the link checks until W3c is on the s
 Every verification step answers `{verified, ...LinkState}` and the page takes that state (trust, `stepUp`, a name or an
 invoice the stale-record rule hid until the page was verified):
 
-`LinkState` = `{kind, expiresAt, idleExpiresAt, link: {expiresAt}, client: {firstName ('' when unknown or hidden),
-last2, tier: gold|vip|null}, trust: {verified, by: pin|code|null, until}, stepUp: {method: pin|code, freshUntil,
-canSetPinUntil}, appointments: [...] | null, invoice: {number, date, items: [{name, priceCents}], subtotalCents,
-taxCents, tipCents, totalCents, paidCents, balanceCents} | null, plan: {tier, planKey, name, monthlyPriceCents, perks}
-| null}`.
+`LinkState` = `{kind (calendar|verify|pin|membership|pay|book_again|card), expiresAt, idleExpiresAt, link: {expiresAt},
+client: {firstName ('' when unknown or hidden), last2, tier}, trust: {verified, by: pin|code|null, until}, stepUp:
+{method: pin|code, freshUntil, canSetPinUntil}, appointments: [...] | null, invoice: {number, date, items: [{name,
+priceCents, listCents, discountBp, memberDiscountCents, classLabel}], coverage: [...], subtotalCents, taxCents, tipCents,
+totalCents, paidCents, balanceCents} | null, plan: {tier, planKey, name, monthlyPriceCents, perks, billing:
+square|squarespace, prices: [{class, label, monthlyCents, joinable}]} | null, cards: [{id, brand, last4, expMonth,
+expYear, purposes}] | null, cardSetup: {consent: {version, text, purposes: [{key, words}], checkedByDefault: false},
+square: {applicationId, locationId, environment, sdkUrl} | null} | null}` (backend api-spec 28.2 at wave Q3;
+`src/site/link-contract.testkit.ts` holds the key lists).
 
 | call | body | answer the site uses | problems the site handles |
 | --- | --- | --- | --- |
@@ -153,6 +161,11 @@ taxCents, tipCents, totalCents, paidCents, balanceCents} | null, plan: {tier, pl
 | `POST /bookings` + `Idempotency-Key` | `{serviceKey, addonKeys, date, startMin, vehicle: {label}, name?}` (`name` only when the link has no client name) | 201 `{bookingRef, status, start, end, deposit, confirmationBy, service, addons, when, member, bayCount}` (the page uses `bookingRef`, `deposit`, `confirmationBy`) | 403 `IDENTITY_STEP_UP_REQUIRED` (step-up, then again), `PUBLIC_SLOT_*` (pick another time), 409 `IDENTITY_LINK_USED` (dead) |
 | `POST /membership/start` | `{email}` | `{redirectUrl, membershipRef, checkoutExpiresAt}` (`redirectUrl` followed only when allowed) | 403 `IDENTITY_STEP_UP_REQUIRED` (step-up, then again), 422 with an `email` error (back to the e-mail step), 409 `LINK_ALREADY_MEMBER` / `LINK_CHECKOUT_UNAVAILABLE`, 403 `LINK_PRIVILEGES_HELD` (their words) |
 | `POST /pay/start` | `{}` | `{status: 'redirect', redirectUrl}` or `{status: 'link_pending', redirectUrl: null}` | 403 `IDENTITY_STEP_UP_REQUIRED`, 403 `LINK_PRIVILEGES_HELD`, 409 `IDENTITY_LINK_USED` |
+| `POST /deposit/start` | `{bookingRef}` | `{status: redirect\|paid\|none\|link_pending, redirectUrl, amountCents}` (after a link booking whose `deposit.how` is `link`) | 404 (not the page's visit), the API's words |
+| `POST /cards` + `Idempotency-Key` | `{sourceId, verificationToken?, consentVersion, purposes}` (Square's one-time token, the consent the page showed) | 201 `{card, consent}` | 403 `IDENTITY_STEP_UP_REQUIRED`, 422 `CARD_DECLINED` (`detail`), 429 `CARD_SAVE_LOCKED`, 409 `CARD_CONSENT_OUTDATED` (the state is read again), 501 `LINK_ACTION_NOT_READY`, 409 `SQUARE_WRITES_OFF`, 503 |
+| `DELETE /cards/:id` | | `{cardId, state}` | 403 `IDENTITY_STEP_UP_REQUIRED`, 404 `CARD_NOT_FOUND` |
+| `POST /membership/subscribe` + `Idempotency-Key` | `{email, planClass, sourceId, verificationToken?, consentVersion}` (`plan.billing` square) | 202 `{status: pending, membershipRef}` | 422 on `body.email` (back to the e-mail step), 422 `TIER_CLASS_UNPRICED` / 409 `LINK_CHECKOUT_UNAVAILABLE` (back to the plan step), 422 `CARD_DECLINED`, 409 `CARD_CONSENT_OUTDATED`, 409 `LINK_ALREADY_MEMBER`, 503 |
+| `GET /membership/status` | | `{status: none\|pending\|active\|failed, membershipRef}` (asked every 2 s for up to 2 minutes after a subscribe) | |
 
 On every call: 401 `IDENTITY_SESSION_INVALID` → the token (still in memory) is exchanged again once and the call
 repeated (same Idempotency-Key), a failed re-exchange shows the dead-link notice; 401 `IDENTITY_LINK_INVALID`,
@@ -178,7 +191,10 @@ wave).
 | verify | the link sheet with the step-up card (PIN when set, else "Text me a code") | "You're verified" (until the trust date) + optional "Create a PIN for next time" |
 | pin | the step-up card: code (`pin_set`, or `pin_reset` when a PIN exists) → new PIN | "Your PIN is set" |
 | membership | `#/join?<plan>`: plan (the other plan says it is not this link's) → step-up in the join column → "Joining as MARIA ••51" + e-mail → terms ("Continue to checkout") | `POST /membership/start` → Squarespace checkout (allowlist) |
-| pay | the link sheet with the payment review ("Invoice #20611", the visit's date, the items, tax and tip, what was already paid, balance due; "Verify & pay $54") | step-up (fresh every time) → `POST /pay/start` → the payment link (allowlist), "We'll text you a link", "Nothing to pay" |
+| membership billed by Square (`plan.billing` square) | plan with the size picker (`plan.prices`, joinable sizes only) → step-up → e-mail → a fresh step-up → card step (Square's card form, the consent unchecked, the design's terms) | `POST /membership/subscribe` → wait (`GET /membership/status`) → the welcome step, or "Square couldn't take the first payment" |
+| card (`#/k`) | a fresh step-up first, then "SAVED CARDS · MARIA ••51": the saved cards with Remove, "Add a card" with Square's card form and the consent box (unchecked) | "Save card" → `POST /cards`; Remove → `DELETE /cards/:id`; the list is read again (`GET /me`) |
+| `#/paid` (not a link) | Square's checkout sends the client back here: the link sheet's thank-you notice, the address scrubbed | |
+| pay | the link sheet with the payment review ("Invoice #20611", the visit's date, the items, tax and tip, what was already paid, balance due; "Verify & pay $54"; "You'll pay on a secure checkout page.") | step-up (fresh every time) → `POST /pay/start` → the payment link (allowlist; "Taking you to Square's secure checkout" or Squarespace's, by the URL's host), "We'll text you a link", "Nothing to pay" |
 | dead | the link sheet: "This link expired" / "was used" / "was replaced" / "doesn't work" / "Too many tries" | "Text us for a new link" (sms: to the texting number) and "Back to home" |
 
 The link sheet (`state.sheet === 'link'`) hides the design's booking summary column (`site.sheetSummary`). All the view
@@ -228,10 +244,43 @@ lines). The surfaces, before and after, are listed under DV-PRICE-INTERIM in `de
   `DV-PRICE-INTERIM-*`, original only), so the port matches it at zero diff. `src/site/bridge-interim.test.ts` holds the
   bridge and the swaps together over every price state; `tools/parity/copy-swaps.test.ts` checks the swaps against the
   real design document.
-- **Switching to the live catalog (wave Q3c).** Set `pricing` to the new mode, remove the `DV-PRICE-INTERIM-*` swaps
-  from the allow-list, and replace the bridge's DV-PRICE-INTERIM section with the catalog v2 view models; the
-  DV-PRICE-INTERIM ops stay useful (their `site.cat` keys then carry the catalog's texts, `catalogTexts` gives the
-  design's).
+- **Switching to the live catalog.** Built in wave Q3c (below, DV-CATALOG2): set `site.config.json` `pricing` to `live`
+  once the owner has filled the size grid, and have the deploy pass `GET /api/v1/public/catalog/v2` as
+  `SITE_CATALOG_JSON`. The parity harness keeps proving the interim default (its `DV-PRICE-INTERIM-*` swaps stay);
+  `src/site/bridge-live.test.ts` proves the live mode against the design with `designCatalogV2()`.
+
+## Prices by vehicle size (DV-CATALOG2, pricing "live")
+
+`src/site/catalog2.ts` reads `GET /api/v1/public/catalog/v2` (backend ADR 0170 wave Q3d, api-spec 26.1): **nothing is
+trusted** (`parseCatalogV2` checks every field; a malformed item, price row, size or tier is dropped; the starting prices
+are worked out again from the rows that passed; display rounds half up to whole dollars), `websiteReadyV2` decides
+whether it can be shown (a size; one of the design's washes with a description, a duration and a whole-dollar price; the
+design's Gold or VIP sold online with whole-dollar prices and perks; a whole-dollar fee) and `liveCatalog` builds the
+page's model (the sizes, the design's washes, add-ons, tint by film and size, details, quote-only items, the design's
+tiers with their prices by size and inclusions). The bridge's DV-CATALOG2 section applies it:
+
+- `VEH` is the sizes (the booking sheet's chips); the tint page uses its own list (the sizes priced for both films),
+  swapped in while the design's tint views are computed.
+- Price rows: "from $X" unless one price for every size; the AS VIP column is `memberCents` ("SAME PRICE" when equal);
+  a per-size block (`p.sizes`, a DV-CATALOG2 op under the row's description) lists the priced sizes when more than one
+  size has a price ("Other sizes: priced at the shop" when some have none). Included items follow the tiers'
+  inclusions.
+- The booking sheet is priced for the chosen size ("At the shop" for an unpriced one); a verified member (the OTP
+  answer's `member.planClass`) on a larger car than the plan size sees "Included · +$N size difference at the shop" and
+  a review line for it. The request sends `vehicleClass`.
+- The join flow: the design's tiers the catalog sells; a size picker (`site.joinSizes`, a DV-CATALOG2 op under the plan
+  cards) when the tier is sold at more than one size; `planClass` in the request; the sms text names the size.
+- The Gold savings calculator and "What VIP is worth" use the catalog's prices with the design's formulas and labels.
+- `site.cat` comes from `liveTexts` (the design's words with the catalog's numbers).
+- **Fallbacks**: no ready catalog → the interim prices (DV-PRICE-INTERIM), and a section the catalog does not price
+  (add-ons, tint, details, a tier) keeps the interim words for that section: the design's old figures never show.
+- The browser loads `catalog/v2` (instead of v1) once per page for the booking keys and the content; a failed load keeps
+  what the page has, an answer that is not ready brings the interim prices back.
+
+Fixtures (`tools/site/catalog-fixture.ts`): `designCatalogV2()` (the design's numbers: `bridge-live.test.ts` proves the
+page equals the design value for value), `unseededCatalogV2()` (production before the seeds: not ready),
+`seededCatalogV2()` (only the Signature wash at Compact car and Gold: every other section on its fallback) and
+`sizedCatalogV2()` (a filled grid; the e2e's `dist-e2e-sizes` build).
 
 ## Catalog content (DV-CATALOG, pricing "catalog")
 
@@ -256,11 +305,36 @@ booking sheet, a dropped vehicle type, the unseeded fallback),
 
 ## Deployment inputs
 
-`SITE_PRICING` (optional, `interim` | `catalog`) overrides `site.config.json` `pricing` for one build; the deploy kit
-does not pass it, so production builds the interim prices.
+`SITE_PRICING` (optional, `interim` | `catalog` | `live`) overrides `site.config.json` `pricing` for one build; the deploy
+kit does not pass it, so production builds the interim prices. With `live` the kit must pass the body of
+`GET /api/v1/public/catalog/v2` as `SITE_CATALOG_JSON` (a v1 body is not a v2 one: a warning, the interim prices until
+the browser's load).
 
 `deploy/scripts/site-deploy.sh` (backend kit) passes `SITE_URL`, `SITE_HOURS_JSON` (from the local API) and should pass
 `SITE_AVAILABILITY_JSON` (`GET /api/v1/public/availability?days=7`), `SITE_CATALOG_JSON` (`GET /api/v1/public/catalog`;
 harmless before the seed: not ready, a warning, the design's content) and `SITE_BOOKING=live` once the SMS tablet is
 live; until then the default `sms` keeps every Book/Join action on the design's own sms: links. nginx must proxy the
 whole `/api/v1/public/` prefix (the backend's `oasis-site.conf.template` does since the booking API landed).
+
+## Square on the link pages (DV-LINK-CARD; backend ADR 0171 D7, D8, D12)
+
+Card data only ever enters Square's own iframes (PCI SAQ-A): the site never sees a card number. `src/client/square.ts`
+loads Square's Web Payments SDK **lazily**, the first time a page shows a card form (the card page `#/k`, the card step of
+a membership page billed by Square) and never on another page; its URL, the application id and the location come from the
+link API's `cardSetup.square` at runtime (nothing about Square is in the build: `pnpm check:dist` fails a bundle with a
+`squarecdn.com/…js` URL or an application id), and the URL must be https on `links.squareSdkHosts` or the page's own
+origin (the e2e's stub). The form is attached to the block's own element after the render that shows it and destroyed
+when it goes (`__sqSync`); `tokenize` runs with intent STORE, customer-initiated, the client's first name as the billing
+contact, and the one-time token goes to `POST /links/cards` or `POST /links/membership/subscribe` with the consent version
+the page showed. The consent box starts **unchecked** and carries the API's wording with the purposes this page asks for
+(the card page: a no-show fee, a late-cancel fee, a balance, and the membership's payment for a member; a membership page:
+the membership's payment); saving without it ticked is refused on the page.
+
+**CSP**: the production policy is the backend kit's (`deploy/scripts/install.sh` `SITE_CSP`, Square's hosts since wave
+Q3a: `script-src 'self' https://web.squarecdn.com`, `frame-src https://web.squarecdn.com`, Square's connect, style and
+font hosts; `--square-env sandbox` for the sandbox's). The e2e serves every link page with the same policy
+(`scripts/e2e-links.ts` `SITE_CSP`, without `upgrade-insecure-requests`) and a **stub** of the SDK from the fixture API
+(`tools/site/fixture-links.ts` `squareStubJs`, `GET /api/v1/public/__fixture/square.js`, same origin): the real SDK is
+never loaded in a test. The stub's cards: 4111 1111 1111 1111 saves, 4000 0000 0000 0002 is declined, 4000 0000 0000
+0341 saves but the first membership payment fails.
+

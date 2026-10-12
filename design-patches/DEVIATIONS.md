@@ -217,12 +217,13 @@ of every entry below.
   books as a guest (the fee line, its terms and guest prices; a toast says so). In sms mode the member path is the
   design's (phone only).
 - **DV-JOIN** Joining has no card fields: step 4 ("STEP 4 OF 4 · CHECKOUT", was PAYMENT) keeps the terms checkbox
-  and explains that a secure Squarespace checkout link is texted; the card number, expiry and CVC inputs are removed
+  and explains that a secure link to pay is texted (a Squarespace checkout, or with Square a membership page: neutral words
+  since wave Q3); the card number, expiry and CVC inputs are removed
   (the original gets the same removal before render, plus its card validation line), the summary reads "Due at
   checkout" (was "Due today") and the member card loses the fake "•••• 0427". Submit = `POST
   /api/v1/public/memberships` (pending until the checkout is paid; live mode requires the receipts e-mail on the details
   step, as the API does, and a field the API refuses sends the visitor back there); the welcome step reads "…your
-  Squarespace checkout link is on its way by text. Your 4 washes start the moment it's paid." In sms mode the submit
+  secure link to pay is on its way by text. Your 4 washes start the moment it's paid." In sms mode the submit
   composes "JOIN VIP: name · phone · cars" as a text. "Book your first wash" (live) opens the sheet at the member sign-in
   with the phone prefilled (no member pricing while the membership is pending).
 

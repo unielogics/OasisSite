@@ -23,7 +23,8 @@ Environment:
 | `SITE_URL`               | no       | canonical origin (default `site.config.json` `siteUrl`): canonical links, Open Graph, sitemap, robots                           |
 | `SITE_HOURS_JSON`        | no       | body of `GET /api/v1/public/hours`; invalid or unset = committed fallback (Sunday closed) + a build warning                     |
 | `SITE_AVAILABILITY_JSON` | no       | body of `GET /api/v1/public/availability?days=7`; unset = the board shows the hours with "text to check times" + a warning     |
-| `SITE_CATALOG_JSON`      | no       | body of `GET /api/v1/public/catalog` (DV-CATALOG); baked in only when website-ready, else the design's services and prices + a warning; with the interim prices (the default) only its booking fee is baked |
+| `SITE_CATALOG_JSON`      | no       | body of `GET /api/v1/public/catalog` (DV-CATALOG); baked in only when website-ready, else the design's services and prices + a warning; with the interim prices (the default) only its booking fee is baked; with `SITE_PRICING`/`pricing` `live` it must be the body of `GET /api/v1/public/catalog/v2` (DV-CATALOG2), baked in (checked) only when website-ready, else the interim prices + a warning |
+| `SITE_PRICING`           | no       | `interim` (the default, `site.config.json` `pricing`), `catalog` (DV-CATALOG v1) or `live` (DV-CATALOG2: prices by vehicle size); the kit does not pass it |
 | `SITE_BOOKING`           | no       | `sms` (default: Book/Join compose sms: texts, no API calls) or `live` (the public booking API; needs the SMS tablet)           |
 | `SITE_API_ORIGIN`        | no       | API origin for the browser; default `''` = same origin (nginx proxies `/api/v1/public/*`)                                      |
 | `SITE_BUILD_NOW`         | no       | the prerender instant (default: now); `PRERENDER_NOW` pins it for parity builds, never set that one in production             |
@@ -56,15 +57,32 @@ object-src 'none'`:
   inline `<script>` elements are data blocks (`type="application/ld+json"`), which the CSP does not execute;
 - `style-src 'unsafe-inline'` is needed for the designs' inline `style=""` attributes (the stylesheet itself is a file);
 - `connect-src 'self'` covers the hours, availability, booking, code and join calls and the personal-link calls
-  (`/api/v1/public/*` and `/api/v1/public/links/*`, same origin); the redirects to the Squarespace checkout and payment
-  pages are top-level navigations, which the policy does not restrict (the page follows only https squarespace.com,
-  `site.config.json` `links.redirectHosts`);
+  (`/api/v1/public/*` and `/api/v1/public/links/*`, same origin); the redirects to the Squarespace and Square checkout
+  and payment pages are top-level navigations, which the policy does not restrict (the page follows only https
+  squarespace.com, square.link and square.site, `site.config.json` `links.redirectHosts`);
 - `img-src data:` is for images the design embeds as data URIs (none in the fixtures);
 - `manifest.json` records the theme script's sha256 (`themeScript.sha256`) in case a stricter hash-based policy is
   ever wanted; it is not needed with `'self'`.
 
 A `<link rel="preconnect">` to an external font host is kept only if the design's helmet carries it and no
 `head.drop` patch removes it; it is not a request, so the CSP does not block it, and the owner decides (DV line).
+
+**The one external script: Square's Web Payments SDK, at runtime, on link pages only (DV-LINK-CARD).** The build itself
+requests nothing external (`pnpm check:dist`: every script under `/assets/`, and no Square SDK URL or application id in
+any file). A personal link page that shows a card form (the card page `#/k`, a membership page billed by Square) loads
+`square.js` from the URL the link API gives (`cardSetup.square.sdkUrl`: `https://web.squarecdn.com/v1/square.js`, or the
+sandbox's), only when the form shows; Square's card form then runs in its own iframes. The production policy therefore
+carries Square's hosts (the kit's `install.sh` `SITE_CSP` since wave Q3a, `--square-env sandbox` for the sandbox):
+
+```
+default-src 'none'; script-src 'self' https://web.squarecdn.com; style-src 'self' 'unsafe-inline' https://web.squarecdn.com;
+img-src 'self' data:; font-src 'self' https://square-fonts-production-f.squarecdn.com https://d1g145x70srn7h.cloudfront.net;
+connect-src 'self' https://web.squarecdn.com https://pci-connect.squareup.com https://o160250.ingest.sentry.io;
+frame-src https://web.squarecdn.com; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self';
+object-src 'none'; upgrade-insecure-requests
+```
+
+Every other page of the site loads nothing from Square (the e2e checks it: no earlier page asks for the SDK).
 
 ## nginx expectations (from the plan; the kit owns the templates)
 
@@ -75,6 +93,7 @@ A `<link rel="preconnect">` to an external font host is kept only if the design'
 - `location /api/v1/public/links/` (personal links, DV-LINK): proxied like the rest of `/api/v1/public/` but **never
   cached** (bearer sessions, per-client answers) and with its own limit zone; the backend kit owns it (wave W3c). The
   link token never reaches nginx: it rides in the URL fragment and in one POST body.
+- `location = /api/v1/public/catalog/v2` (DV-CATALOG2): cached like the v1 catalog (the backend kit has it, wave Q3d).
 - everything else under `/api`, `/hooks`, `/dev-storage` → 404; dotfiles → 404.
 
 `tools/parity/serve-dist.ts` mimics these rules (clean URLs, 404 page, immutable assets, no-cache HTML, the hours and

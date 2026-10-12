@@ -1,5 +1,6 @@
 // e2e: personal links (DEVIATIONS.md DV-LINK, DV-STEPUP, DV-LINK-JOIN, DV-LINK-PAY, DV-LINK-DEAD; backend design
-// docs/design/ai-assistant-and-phone-identity.md section 7, checks 10-21), run by scripts/e2e-site.ts on the launch build
+// docs/design/ai-assistant-and-phone-identity.md section 7, checks 10-21; wave Q3, ADR 0171: checks 22-26, the card page,
+// a membership billed by Square, Square's checkout, the deposit and #/paid), run by scripts/e2e-site.ts on the launch build
 // (SITE_BOOKING=sms: links work in either booking mode) against a link API through a LinkDriver (tools/site/link-driver.ts):
 // the fixture's link routes (tools/site/fixture-links.ts) or a live stack's real backend (tools/site/stack-links.ts: links
 // issued with the backend's issueClientLink and texted through its queue, codes read from the stack's outbox). Every page
@@ -12,11 +13,25 @@ import type { Browser, BrowserContext, Page, Request } from '@playwright/test'
 import type { LinkDriver, IssueLinkInput } from '../tools/site/link-driver'
 import type { SiteProxy } from '../tools/site/proxy'
 import { money, shopDate } from '../src/site/links'
-import { BOOKING_RESULT_KEYS, CODE_REQUESTED_KEYS, keyProblems, linkStateProblems, MEMBERSHIP_RESULT_KEYS, PAY_RESULT_KEYS } from '../src/site/link-contract.testkit'
+import {
+  BOOKING_RESULT_KEYS,
+  CARD_REMOVE_RESULT_KEYS,
+  CARD_SAVE_RESULT_KEYS,
+  CODE_REQUESTED_KEYS,
+  DEPOSIT_RESULT_KEYS,
+  ENROLLMENT_STATUS_KEYS,
+  keyProblems,
+  linkStateProblems,
+  MEMBERSHIP_RESULT_KEYS,
+  PAY_RESULT_KEYS,
+} from '../src/site/link-contract.testkit'
 
-/** install.sh SITE_CSP (backend deploy kit) without upgrade-insecure-requests (the e2e host is plain http). */
+/**
+ * install.sh SITE_CSP (backend deploy kit, the production policy with Square's Web Payments SDK hosts since wave Q3a) without
+ * upgrade-insecure-requests (the e2e host is plain http). The SDK itself is the fixture's stub, served same-origin.
+ */
 export const SITE_CSP =
-  "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+  "default-src 'none'; script-src 'self' https://web.squarecdn.com; style-src 'self' 'unsafe-inline' https://web.squarecdn.com; img-src 'self' data:; font-src 'self' https://square-fonts-production-f.squarecdn.com https://d1g145x70srn7h.cloudfront.net; connect-src 'self' https://web.squarecdn.com https://pci-connect.squareup.com https://o160250.ingest.sentry.io; frame-src https://web.squarecdn.com; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
 
 export interface LinkTracker {
   errors: string[]
@@ -110,7 +125,7 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
       if (!m || r.status() < 200 || r.status() >= 300) return
       try {
         const body = (await r.json()) as Record<string, unknown>
-        replies.push({ route: `${r.request().method()} ${m[1]!.replace(/\/appointments\/[^/]+\//, '/appointments/:ref/')}`, body })
+        replies.push({ route: `${r.request().method()} ${m[1]!.replace(/\/appointments\/[^/]+\//, '/appointments/:ref/').replace(/\/cards\/[^/]+$/, '/cards/:id')}`, body })
         if (m[1] === '/exchange') {
           const { session, ...rest } = body
           exchanges.push(String(session ?? ''))
@@ -487,6 +502,158 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
     await close()
   }
 
+  // 22-26. wave Q3 (ADR 0171): the card page, a membership billed by Square, Square's checkout, the deposit, #/paid. They
+  // run against the fixture's link API (a stack runs PAYMENT_PROCESSOR=squarespace: saved cards and Square memberships are
+  // off there, the routes answer 501), every page with the production CSP (Square's hosts) and the fixture's STUB of
+  // Square's Web Payments SDK (served same-origin; never the real SDK).
+  if (L.name === 'fixture') {
+    const stubLoads = () => L.squareStubLoads?.() ?? -1
+    const stub = (page: Page) => page.evaluate(() => (window as any).__squareStub ?? null)
+    const typeCard = async (page: Page, number: string) => {
+      const field = page.locator('#dc-root input[data-square-stub="card"]')
+      await field.waitFor({ state: 'attached', timeout: 15_000 })
+      await field.fill(number)
+    }
+    // 22. lazily: no page of the run so far loaded Square's SDK (none showed a card form)
+    check('links 22: Square\'s SDK is loaded only where a card form shows (no earlier link page asked for it)', stubLoads() === 0, `loads ${stubLoads()}`)
+    // 22. the card page: PIN, the saved cards, the form, the consent unchecked and required, save, remove, a declined card
+    {
+      const phone = '+12015550181'
+      const K = await issue({ kind: 'card', phone, firstName: 'Lena', pin: '7391', cardsOn: true, cards: [{ last4: '0005', purposes: ['balance'] }] })
+      const { page, seen, close } = await open()
+      await go(page, `${origin}/#/k/${K.token}`)
+      await page.locator('#dc-root input[placeholder="PIN"]').fill('7391')
+      await btn(page, /^\s*Verify\s*$/).click()
+      await waitText(page, 'SAVED CARDS · LENA ••81')
+      await waitText(page, 'Visa ••0005')
+      const consent = page.locator('#dc-root button').filter({ hasText: /^Save this card with Square so Oasis Auto Spa can charge it for: a no-show fee, a late-cancel fee and a balance you owe\./ })
+      const unchecked = (await consent.locator('svg').count()) === 0
+      await typeCard(page, '4111 1111 1111 1111')
+      const posts = () => seen.filter((s) => s.method === 'POST' && s.url.endsWith('/links/cards'))
+      await btn(page, /^\s*Save card\s*$/).click()
+      await waitText(page, 'Tick the box to agree, then save the card.')
+      const before = posts().length
+      await consent.click()
+      await btn(page, /^\s*Save card\s*$/).click()
+      await waitText(page, 'Visa ••1111 is saved.')
+      const body = JSON.parse(posts().at(-1)?.body || '{}')
+      const s = await stub(page)
+      check(
+        'links 22: the card page opens after the PIN with the saved cards and Square\'s card form; the consent box (the API\'s wording) starts unchecked and is required',
+        unchecked && before === 0 && stubLoads() === 1 && s?.attaches >= 1,
+        JSON.stringify({ unchecked, before, loads: stubLoads(), attaches: s?.attaches }),
+      )
+      check(
+        'links 22: Save card sends Square\'s one-time token (intent STORE, customer-initiated) with the consent version and purposes, and the list shows the new card',
+        body.sourceId === 'cnon:card-nonce-ok' && body.consentVersion === 'v1' && JSON.stringify(body.purposes) === '["no_show_fee","late_cancel_fee","balance"]' && s?.tokenize?.[0]?.intent === 'STORE' && s?.tokenize?.[0]?.customerInitiated === true && !!posts().at(-1)?.headers['idempotency-key'],
+        JSON.stringify({ body, tokenize: s?.tokenize?.[0] }),
+      )
+      // a declined card: the API's words, nothing saved
+      await typeCard(page, '4000 0000 0000 0002')
+      await consent.click()
+      await btn(page, /^\s*Save card\s*$/).click()
+      await waitText(page, 'This card was declined. Try another card, or pay at the shop.')
+      // remove the first card of the list
+      await page.locator('#dc-root button').filter({ hasText: /^\s*Remove\s*$/ }).first().click()
+      await waitText(page, 'The card is removed.')
+      const dels = seen.filter((x) => x.method === 'DELETE' && /\/links\/cards\/[0-9a-f-]{36}$/.test(x.url))
+      check('links 22: a declined card shows the API\'s words; Remove sends DELETE /cards/:id and the list follows', dels.length === 1, `${dels.length} DELETE`)
+      await csp(page)
+      await close()
+    }
+    // 23. a membership billed by Square: size, PIN, e-mail, card + consent, subscribe, the wait for the first payment
+    {
+      const prices = [
+        { class: 'compact_car', label: 'Compact car', monthlyCents: 12900, joinable: true },
+        { class: 'large_suv', label: 'Large SUV', monthlyCents: 15900, joinable: true },
+      ]
+      const plan = { tier: 'gold' as const, planKey: L.planKey('gold'), name: 'Gold', monthlyPriceCents: 12900, perks: ['Unlimited washes'], checkoutUrl: null, billing: 'square' as const, prices }
+      const run = async (phone: string, card: string) => {
+        const M = await issue({ kind: 'membership', phone, firstName: 'Sam', pin: '7391', cardsOn: true, plan })
+        const p = await open()
+        await go(p.page, `${origin}/#/m/${M.token}`)
+        await waitText(p.page, 'STEP 1 OF 4')
+        await btn(p.page, /^\s*Large SUV · \$159\/mo\s*$/).click()
+        await waitText(p.page, 'Priced for')
+        await btn(p.page, /^\s*Continue\s*$/).click()
+        await p.page.locator('#dc-root input[placeholder="PIN"]').fill('7391')
+        await btn(p.page, /^\s*Verify\s*$/).click()
+        await waitText(p.page, 'Square emails your receipts there every month.')
+        await p.page.locator('#dc-root input[placeholder="Email (for receipts)"]').fill('sam@gmail.com')
+        await btn(p.page, /^\s*Continue\s*$/).click()
+        await waitText(p.page, 'STEP 4 OF 4 · CARD')
+        await typeCard(p.page, card)
+        await btn(p.page, /^\s*I agree to be billed \$159 a month for Gold/).click()
+        await p.page.locator('#dc-root button').filter({ hasText: /^Save this card with Square so Oasis Auto Spa can charge it for: your membership’s monthly payment\./ }).click()
+        await btn(p.page, /^\s*Join · \$159\/mo\s*$/).click()
+        return p
+      }
+      const a = await run('+12015550182', '4111 1111 1111 1111')
+      await waitText(a.page, 'Your Gold membership is active.')
+      const sub = JSON.parse(a.seen.filter((s) => s.method === 'POST' && s.url.endsWith('/links/membership/subscribe')).at(-1)?.body || '{}')
+      const polls = a.seen.filter((s) => s.method === 'GET' && s.url.endsWith('/links/membership/status')).length
+      check(
+        'links 23: a membership billed by Square: the size picked (Large SUV $159), a fresh PIN, the e-mail, the card and the consent, then the page waits for the first payment and opens the welcome',
+        sub.planClass === 'large_suv' && sub.email === 'sam@gmail.com' && sub.sourceId === 'cnon:card-nonce-ok' && sub.consentVersion === 'v1' && polls >= 2 && !a.seen.some((s) => s.url.endsWith('/membership/start')),
+        JSON.stringify({ sub, polls }),
+      )
+      await csp(a.page)
+      await a.close()
+      const b = await run('+12015550183', '4000 0000 0000 0341')
+      await waitText(b.page, 'Square couldn’t take the first payment.')
+      check('links 23: when Square refuses the first payment the card step says so in plain words', true)
+      await csp(b.page)
+      await b.close()
+    }
+    // 24. payment on Square's checkout: the page names it and follows the square.link URL
+    {
+      const phone = '+12015550184'
+      const url = 'https://square.link/u/inv20611'
+      const P = await issue({ kind: 'pay', phone, firstName: 'Ravi', pin: '7391', invoice: { ...INVOICE, url } })
+      const { page, close } = await open()
+      await go(page, `${origin}/#/p/${P.token}`)
+      await waitText(page, 'You’ll pay on a secure checkout page.')
+      await btn(page, /^\s*Verify & pay /).click()
+      await page.locator('#dc-root input[placeholder="PIN"]').fill('7391')
+      await btn(page, /^\s*Verify\s*$/).click()
+      await waitText(page, 'Taking you to Square’s secure checkout to pay.')
+      const n = await navs(page)
+      check('links 24: a Square payment link (square.link) is followed and named as Square\'s secure checkout', n.length === 1 && n[0] === url, n.join(' | '))
+      await csp(page)
+      await close()
+    }
+    // 25. the booking deposit by link: after a link booking, "Pay the $25 deposit now" opens Square's checkout
+    {
+      const phone = '+12015550185'
+      const C = await issue({ kind: 'calendar', phone, firstName: 'Dee', trusted: true, depositLink: true })
+      const { page, seen, close } = await open()
+      await go(page, `${origin}/#/c/${C.token}`)
+      await waitText(page, 'BOOKING FOR DEE ••85')
+      await pickTime(page)
+      await btn(page, /^\s*I understand the/).click()
+      // the sticky bar carries a "Book" too (hidden under the sheet); the sheet's CTA is the last one
+      await btn(page, /^\s*Book\s*$/).last().click()
+      await waitText(page, 'You\'re booked')
+      await btn(page, /^\s*Pay the \$25 deposit now\s*$/).click()
+      await page.waitForTimeout(800)
+      const n = await navs(page)
+      const dep = seen.filter((s) => s.method === 'POST' && s.url.endsWith('/links/deposit/start'))
+      check('links 25: a booking whose deposit is taken by link offers "Pay the $25 deposit now", which opens Square\'s checkout', dep.length === 1 && n.length === 1 && /^https:\/\/square\.link\//.test(n[0]!), `${dep.length} ${n.join(' | ')}`)
+      await csp(page)
+      await close()
+    }
+    // 26. #/paid: back from Square's checkout
+    {
+      const { page, close } = await open()
+      await go(page, `${origin}/#/paid?orderId=fixture`)
+      await waitText(page, 'Square is confirming your payment now.')
+      const href = await page.evaluate(() => location.href)
+      check('links 26: #/paid (Square\'s way back) shows a thank-you and leaves a clean address', !href.includes('#'), href)
+      await csp(page)
+      await close()
+    }
+  }
+
   // 21. PUBLIC_LINKS_ENABLED off: the API answers 404 and the page is the site as without a link
   await L.linksOff(async (offOrigin) => {
     const C = await issue({ kind: 'calendar', phone: '+12015550176', firstName: 'Off', trusted: true })
@@ -519,8 +686,16 @@ export async function runLinkChecks(d: LinkDeps): Promise<void> {
     else if (route === 'POST /bookings') contract.push(...keyProblems(route, body, BOOKING_RESULT_KEYS))
     else if (route === 'POST /membership/start') contract.push(...keyProblems(route, body, MEMBERSHIP_RESULT_KEYS))
     else if (route === 'POST /pay/start') contract.push(...keyProblems(route, body, PAY_RESULT_KEYS))
+    else if (route === 'POST /cards') contract.push(...keyProblems(route, body, CARD_SAVE_RESULT_KEYS))
+    else if (route === 'DELETE /cards/:id') contract.push(...keyProblems(route, body, CARD_REMOVE_RESULT_KEYS))
+    else if (route === 'POST /membership/subscribe' || route === 'GET /membership/status') contract.push(...keyProblems(route, body, ENROLLMENT_STATUS_KEYS))
+    else if (route === 'POST /deposit/start') contract.push(...keyProblems(route, body, DEPOSIT_RESULT_KEYS))
   }
-  const wanted = ['POST /exchange', 'GET /availability', 'POST /verify/code', 'POST /verify/code/confirm', 'POST /verify/pin', 'POST /pin', 'POST /bookings', 'POST /membership/start', 'POST /pay/start']
+  const wanted = [
+    ...['POST /exchange', 'GET /availability', 'POST /verify/code', 'POST /verify/code/confirm', 'POST /verify/pin', 'POST /pin', 'POST /bookings', 'POST /membership/start', 'POST /pay/start'],
+    // wave Q3: the fixture's (a stack runs with saved cards and Square memberships off)
+    ...(L.name === 'fixture' ? ['POST /cards', 'DELETE /cards/:id', 'POST /membership/subscribe', 'GET /membership/status', 'POST /deposit/start'] : []),
+  ]
   const unseen = wanted.filter((r) => !routes.has(r))
   check(
     `links contract: every 2xx answer of the ${L.name} link API has the shape the page is written to (${replies.length} answers over ${routes.size} routes)`,

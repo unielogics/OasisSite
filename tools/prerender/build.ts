@@ -2,7 +2,7 @@
 // docs/deploy-contract.md. Usage: tsx tools/prerender/build.ts [--variant=prod|parity] [--out dist] [--html-only]
 //   [--pages design/pages.json] [--now <iso instant>]
 // Environment: SITE_URL, SITE_HOURS_JSON, SITE_AVAILABILITY_JSON, SITE_CATALOG_JSON, SITE_BOOKING (sms|live), SITE_API_ORIGIN,
-// SITE_PRICING (interim|catalog), SITE_BUILD_NOW / PRERENDER_NOW (tools/prerender/site-env.ts).
+// SITE_PRICING (interim|catalog|live), SITE_BUILD_NOW / PRERENDER_NOW (tools/prerender/site-env.ts).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -31,9 +31,9 @@ export interface BuildOptions {
   siteUrl?: string
   hoursJson?: string | null
   availabilityJson?: string | null
-  /** DV-CATALOG: the GET /api/v1/public/catalog snapshot (undefined: SITE_CATALOG_JSON) */
+  /** DV-CATALOG: the GET /api/v1/public/catalog snapshot (DV-CATALOG2, pricing live: the /catalog/v2 one; undefined: SITE_CATALOG_JSON) */
   catalogJson?: string | null
-  /** DV-PRICE-INTERIM: interim | catalog (undefined: SITE_PRICING, else site.config.json `pricing`) */
+  /** DV-PRICE-INTERIM: interim | catalog | live (undefined: SITE_PRICING, else site.config.json `pricing`) */
   pricing?: string | null
   booking?: string | null
   apiOrigin?: string | null

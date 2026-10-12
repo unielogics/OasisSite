@@ -5,7 +5,8 @@ The marketing site at https://oasisautospanj.com, built from the owner's Claude 
 dashboard: the design is followed pixel for pixel, every deviation is listed in `design-patches/DEVIATIONS.md` with a
 DV id (the owner's decisions of 2026-10-10: live hours with Sunday closed, real availability and booking with an SMS
 fallback, no card capture, placeholder photos, self-hosted fonts, the theme following the visitor's device, a separate
-texting number, personal links from the shop's texts: DV-LINK…), and a parity harness proves zero difference between
+texting number, personal links from the shop's texts: DV-LINK…; prices by vehicle size and Square on the link pages:
+DV-CATALOG2, DV-LINK-CARD), and a parity harness proves zero difference between
 the original and `dist/` (DOM, computed style and rects, pixels at threshold 0, `renderVals`, console) at 390x844 and
 1440x900 in both themes, with the owner's decisions applied to the original as text swaps.
 
@@ -37,9 +38,13 @@ See `docs/intake.md`, `docs/compiler.md`, `docs/site.md` (the bridge: hours, ava
 - **No inline `<script>` with executable content** (the only inline script is the LocalBusiness JSON-LD data block; the
   theme script, DV-THEME, is the external `/assets/theme.<hash>.js`, a parser-blocking script in `<head>` before the
   stylesheet, on the home page and the 404 page; `pnpm check:dist` enforces the placement);
-  **no external request** of any kind (fonts, scripts and images are all under `/assets/`).
+  **no external request** by the build (fonts, scripts and images are all under `/assets/`; `check:dist` also refuses a
+  Square SDK URL or application id in any file). The one exception is at runtime, on personal link pages only: a page
+  that shows a card form (`#/k`, a membership page billed by Square) loads Square's Web Payments SDK from the URL the link
+  API gives (DV-LINK-CARD, docs/deploy-contract.md "Content Security Policy").
 - Environment read at build time: `SITE_URL`, `SITE_HOURS_JSON` (fallback: `src/data/hours.fallback.json`, Sunday
-  closed), `SITE_AVAILABILITY_JSON`, `SITE_CATALOG_JSON` (DV-CATALOG), `SITE_BOOKING` (`sms` default | `live`), `SITE_API_ORIGIN` (default same origin),
+  closed), `SITE_AVAILABILITY_JSON`, `SITE_CATALOG_JSON` (DV-CATALOG; the catalog v2 body with `pricing` `live`, DV-CATALOG2), `SITE_PRICING`
+  (`interim` default | `catalog` | `live`), `SITE_BOOKING` (`sms` default | `live`), `SITE_API_ORIGIN` (default same origin),
   `SITE_BUILD_NOW` — see `docs/deploy-contract.md`.
 - `pnpm check:dist` verifies the output and the deploy kit runs it after the build.
 

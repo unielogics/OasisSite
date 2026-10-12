@@ -43,12 +43,15 @@ export interface LinkDriver {
   payLinkRequested(phone: string): Promise<boolean>
   /** Runs `fn` with the link API switched off (PUBLIC_LINKS_ENABLED=false); `fn` gets the site's origin to use. */
   linksOff(fn: (siteOrigin: string) => Promise<void>): Promise<void>
+  /** How many times the stub of Square's Web Payments SDK was served (the fixture's; DV-LINK-CARD's lazy loading). */
+  squareStubLoads?: () => number
 }
 
 /** The fixture API's link routes (tools/site/fixture-links.ts) as a LinkDriver. */
-export function fixtureLinkDriver(L: import('./fixture-links').LinkFixture, siteOrigin: string): LinkDriver {
+export function fixtureLinkDriver(L: import('./fixture-links').LinkFixture, siteOrigin: string, squareStubLoads?: () => number): LinkDriver {
   return {
     name: 'fixture',
+    squareStubLoads,
     issue: async (i, origin) => L.issue(i, origin),
     lastCode: async () => {
       const s = L.snapshot()

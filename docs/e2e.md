@@ -15,7 +15,8 @@ Two builds are made per run (`dist-e2e-live`: `SITE_BOOKING=live` with the API's
 `dist-e2e-sms`: the launch default) and served on `--port` (3301) and `--port`+1; with `--api fixture` a third one,
 `dist-e2e-catalog` (the launch default with a changed catalog as its `SITE_CATALOG_JSON` snapshot, built with
 `pricing: "catalog"`: the two launch builds are the interim prices, DV-PRICE-INTERIM), is served on `--port`+3 for the
-catalog check below. `--skip-build` reuses them.
+catalog check below, and a fourth one, `dist-e2e-sizes` (`pricing: "live"`, DV-CATALOG2, `SITE_BOOKING=live`, a filled
+size grid `sizedCatalogV2()` as its snapshot), on `--port`+4 for the live price checks. `--skip-build` reuses them.
 Results: the console and `parity-reports/e2e-site.json`.
 
 ## The live stack
@@ -109,6 +110,12 @@ paces its link openings). Where the fixture and the real API differ by design:
    catalog request held: `#/wash` first shows the snapshot; released, the changed catalog shows "SAVE $60" and
    `#/membership` $109; on a second page production's unseeded catalog brings the design's services and prices back
    ("SAVE $54", no "SAVE $62", Hand wax, Interior deep clean) and none of the dashboard's own services.
+   Live price mode (DV-CATALOG2) over `dist-e2e-sizes` with the fixture's catalog v2 a filled grid: the page loads
+   `GET /public/catalog/v2`; `#/wash` reads "from $40" with the priced sizes ("Large SUV $70 · members $63", "Other sizes:
+   priced at the shop"); the booking sheet's vehicle chips are the sizes and the wash is priced for the size chosen (Large
+   SUV $70, the Exterior wash "At the shop"); the guest booking sends `vehicleClass: large_suv` and no vehicle; the join
+   page's size picker sets the price ($159/mo) and the request carries `planClass`; a v2 answer that is not website-ready
+   (production before the seeds) shows the interim prices (no grid figure, no design figure).
 7. SMS mode: Book composes `sms:+18623885827?&body=WASH booking: …` (wash, vehicle, time), Join composes
    `JOIN VIP: name · phone · car`, the design's own text links carry the texting number, and no POST reaches the API.
    Texting vs calling (DV-CONTACT): over the home view, the open menu, every hash route and the live join welcome step,
@@ -127,9 +134,11 @@ paces its link openings). Where the fixture and the real API differ by design:
    title and the description), and $40 and $129 are there.
 9. Over every page: no console error or page error, no request to another origin, no 5xx.
 10-21. Personal links (`scripts/e2e-links.ts`), against the fixture's link API (the backend's own shapes, held to them
-   by `tools/site/fixture-links.test.ts` with the key lists of `src/site/link-contract.testkit.ts`) or a live stack's real
+   by `tools/site/fixture-links.test.ts` with the key lists of `src/site/link-contract.testkit.ts`, the backend's at wave
+   Q3: `cards`, `cardSetup`, the plan's `billing` and `prices`, the invoice's sizes and coverage, a booking's
+   `pricing`) or a live stack's real
    one (above, `tools/site/stack-links.ts`). They run on the launch build (`SITE_BOOKING=sms`; links do not depend on the
-   booking mode), every page with the production Content-Security-Policy (the kit's `SITE_CSP` minus
+   booking mode), every page with the production Content-Security-Policy (the kit's `SITE_CSP` with Square's hosts minus
    `upgrade-insecure-requests`, the test host is plain http) injected on the document, links issued as the shop issues
    them (the URL a text would carry); every 2xx answer of the link API is held to the contract keys (exchange, me, the
    verification steps, code request, booking, membership and payment starts; every route of the run answered):
@@ -158,6 +167,20 @@ paces its link openings). Where the fixture and the real API differ by design:
    its session;
    **21** links switched off (the fixture's gate, or a stack API with `PUBLIC_LINKS_ENABLED=false`: one exchange,
    answered 404): the home page as today (no sheet, no toast, the token scrubbed).
+   Wave Q3 (fixture only: a stack runs `PAYMENT_PROCESSOR=squarespace`, where saved cards and Square memberships answer
+   501), every page with the production CSP carrying Square's hosts and the fixture's **stub** of Square's Web Payments
+   SDK (`GET /api/v1/public/__fixture/square.js`, same origin; never the real SDK):
+   **22** no earlier link page loaded the SDK (lazy); the card page (`#/k`): PIN, the saved cards, Square's card form,
+   the consent box with the API's wording unchecked and required ("Tick the box…" and no request), Save card sends the
+   one-time token (intent STORE, customer-initiated), the consent version and purposes with an Idempotency-Key and the
+   list shows the card; a declined card shows the API's words; Remove sends `DELETE /cards/:id`;
+   **23** a membership billed by Square: the size picked (Large SUV $159), a fresh PIN, the e-mail, the card and the
+   consent, `POST /membership/subscribe {email, planClass, sourceId, consentVersion}`, the page asks
+   `GET /membership/status` until active and opens the welcome; a card whose first payment fails says so;
+   **24** a `square.link` payment link is followed and named "Square's secure checkout";
+   **25** a link booking whose deposit is taken by link offers "Pay the $25 deposit now" → `POST /deposit/start` → Square's
+   checkout;
+   **26** `#/paid` shows the thank-you notice and leaves a clean address.
    Chromium logs each documented 4xx answer of the link API ("Failed to load resource: … 401") as a console line; those
    are counted and set aside for link pages only, every other console line still fails check 9.
 

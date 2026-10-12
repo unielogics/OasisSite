@@ -122,6 +122,8 @@ const NOW_FRESH_MS = 10 * 60_000
 const REFRESH_MS = 5 * 60_000
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+/** Addresses that never receive mail (reserved for examples and tests, RFC 2606): refused before a Square membership. */
+const UNDELIVERABLE = /@(?:[^@\s]+\.)?(?:example\.(?:com|net|org)|[^@\s]+\.(?:test|example|invalid|localhost))$/i
 
 /** The real epoch time (Date.now() is the shop's wall clock for a visitor elsewhere, DV-CLOCK; payload stamps are UTC). */
 const realNow = (): number =>
@@ -2967,8 +2969,14 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       } else if (st === 2) {
         Object.assign(jv, { s2: false, eyebrow: 'STEP 3 OF 4 · EMAIL', t1: 'Your', t2: 'email.', sub: 'Square emails your receipts there every month. Use an email you check.', progress: '60%', canBack: true, back: toPlan })
         jv.next = () => {
-          if (!EMAIL.test(String(j.email || '').trim())) {
+          const email = String(j.email || '').trim()
+          if (!EMAIL.test(email)) {
             this.setJn({ err: 'Add your email for the receipts.' })
+            return
+          }
+          // Square ends a subscription whose receipts bounce: an address that can never receive mail is refused here too
+          if (UNDELIVERABLE.test(email)) {
+            this.setJn({ err: 'Use an email you check: Square sends your membership receipts there.' })
             return
           }
           // the card goes in after a fresh PIN or code: the form is never shown to a page that may not use it

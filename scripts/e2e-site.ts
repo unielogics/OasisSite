@@ -4,8 +4,8 @@
 //   pnpm e2e:site --stack site [--dashboard ~/oasis/dashboard]   a live stack started with the dashboard's
 //                                                     `pnpm live:up --name site --backend <wt> --profile design,demo,website-catalog`
 //                                                     (scripts/e2e-stack.sh does it all: up, the e2e, down)
-//   options: --port 3301 (the site's host), --skip-build (reuse dist-e2e-live / dist-e2e-sms / dist-e2e-catalog), --headed,
-//            --only links (the personal-link checks 10-21 and the hygiene checks only)
+//   options: --port 3301 (the site's host), --skip-build (reuse dist-e2e-live / dist-e2e-sms / dist-e2e-catalog /
+//            dist-e2e-sizes), --headed, --only links (the personal-link checks 10-26 and the hygiene checks only)
 //
 // Builds the site twice (SITE_BOOKING=live with the stack's hours and availability baked in, and the launch default
 // SITE_BOOKING=sms), serves each through tools/site/proxy.ts (nginx's same-origin /api/v1/public/* mapping) and checks:
@@ -16,7 +16,8 @@
 // membership; the honeypot creates nothing; the interim prices (DV-PRICE-INTERIM, the default): no "$" figure but $40,
 // $129 and the $25 fee in the prerendered pages and every view at both viewports and themes, and a changed catalog shows
 // nothing of itself; the catalog price mode on its own build (DV-CATALOG: a changed price in the fixture's catalog
-// appears after the page's catalog load, an unseeded catalog leaves the design's content); no page error, no 5xx, no
+// appears after the page's catalog load, an unseeded catalog leaves the design's content); the live price mode on its
+// own build (DV-CATALOG2: prices by vehicle size, the size in the booking and the join); no page error, no 5xx, no
 // external request; in sms mode every Book/Join action produces an sms: link with the composed body; and the personal
 // links (scripts/e2e-links.ts) against the fixture's link API or, on a stack started with PUBLIC_LINKS_ENABLED=true, the
 // real one (tools/site/stack-links.ts).
@@ -31,7 +32,7 @@ import { parseArgs } from 'node:util'
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { buildSite } from '../tools/prerender/build'
 import { startFixtureApi, type FixtureApi } from '../tools/site/fixture-api'
-import { designCatalog, unseededCatalog, withMemberPrice } from '../tools/site/catalog-fixture'
+import { designCatalog, designCatalogV2, sizedCatalogV2, unseededCatalog, unseededCatalogV2, withMemberPrice } from '../tools/site/catalog-fixture'
 import { startSiteProxy, type SiteProxy } from '../tools/site/proxy'
 import { ROOT, CHROMIUM_FLAGS } from '../tools/parity/config'
 import { runLinkChecks } from './e2e-links'
@@ -376,13 +377,17 @@ async function main(): Promise<number> {
   changedCatalog.plans[0]!.priceCents = 10900
   const catalogDir = path.join(ROOT, 'dist-e2e-catalog')
   const snapshotCatalog = withMemberPrice(designCatalog(), 'signature-hand-wash', 52)
-  const dirs = api.kind === 'fixture' ? [liveDir, smsDir, catalogDir] : [liveDir, smsDir]
+  // DV-CATALOG2 (fixture only): the "live" price mode (catalog v2) with a filled grid as its snapshot
+  const sizesDir = path.join(ROOT, 'dist-e2e-sizes')
+  const dirs = api.kind === 'fixture' ? [liveDir, smsDir, catalogDir, sizesDir] : [liveDir, smsDir]
   if (!values['skip-build'] || dirs.some((d) => !fs.existsSync(path.join(d, 'index.html')))) {
     await buildSite({ root: ROOT, variant: 'prod', outDir: liveDir, hoursJson: JSON.stringify(hours.body), availabilityJson: JSON.stringify(avail0.body), catalogJson: JSON.stringify(catalog0.body), booking: 'live', apiOrigin: '', log: () => {} })
     await buildSite({ root: ROOT, variant: 'prod', outDir: smsDir, hoursJson: JSON.stringify(hours.body), availabilityJson: null, booking: 'sms', apiOrigin: '', log: () => {} })
     // DV-CATALOG is the "catalog" price mode now (the launch default is the interim prices, DV-PRICE-INTERIM)
     if (api.kind === 'fixture')
       await buildSite({ root: ROOT, variant: 'prod', outDir: catalogDir, hoursJson: JSON.stringify(hours.body), availabilityJson: null, catalogJson: JSON.stringify(snapshotCatalog), booking: 'sms', pricing: 'catalog', apiOrigin: '', log: () => {} })
+    if (api.kind === 'fixture')
+      await buildSite({ root: ROOT, variant: 'prod', outDir: sizesDir, hoursJson: JSON.stringify(hours.body), availabilityJson: JSON.stringify(avail0.body), catalogJson: JSON.stringify(sizedCatalogV2()), booking: 'live', pricing: 'live', apiOrigin: '', log: () => {} })
     log(`built ${dirs.map((d) => path.basename(d)).join(', ')}`)
   }
   const proxy: SiteProxy = await startSiteProxy({ dir: liveDir, apiOrigin: api.origin, port })
@@ -408,7 +413,7 @@ async function main(): Promise<number> {
   // with PUBLIC_LINKS_ENABLED=true and this process has its PIN_PEPPER
   async function linkChecks(smsProxy: SiteProxy): Promise<void> {
     if (api.kind === 'fixture') {
-      await runLinkChecks({ browser, proxy: smsProxy, links: fixtureLinkDriver(api.fixture!.links, smsProxy.origin), newPage, ready, check, trackers })
+      await runLinkChecks({ browser, proxy: smsProxy, links: fixtureLinkDriver(api.fixture!.links, smsProxy.origin, () => api.fixture!.state.squareStubLoads), newPage, ready, check, trackers })
       return
     }
     const stack = api.stack!
@@ -755,7 +760,7 @@ async function main(): Promise<number> {
       check('join: step 4 has no card fields', (await page.locator('#dc-root input[autocomplete^="cc-"]').count()) === 0)
       await btn(page, /^\s*I agree to be billed/).click()
       await btn(page, /^\s*Start Gold/).click()
-      await page.waitForSelector('#dc-root :text("checkout link is on its way")', { timeout: 20_000 })
+      await page.waitForSelector('#dc-root :text("link to pay is on its way")', { timeout: 20_000 })
       audits.push({ view: 'join welcome (live)', audit: await auditContacts(page) })
       const resp = t.responses.find((r) => r.url.includes('/public/memberships'))
       const body = resp ? (JSON.parse(resp.body) as Record<string, any>) : null
@@ -877,6 +882,96 @@ async function main(): Promise<number> {
           await plain.u.ctx.close()
         } finally {
           await catProxy.close()
+        }
+        // DV-CATALOG2 ("live" price mode, GET /public/catalog/v2) on its own build: a filled grid (five sizes, prices that
+        // differ by size, 10% off for members, Gold at two sizes) as the snapshot and the API's answer
+        const sizesProxy = await startSiteProxy({ dir: sizesDir, apiOrigin: api.origin, port: port + 4 })
+        try {
+          fixture.state.catalogV2 = sizedCatalogV2()
+          const a = await newPage(browser, sizesProxy.origin)
+          trackers.push(a.t)
+          const sent: { url: string; body: string }[] = []
+          a.page.on('request', (r) => {
+            if (r.method() === 'POST' && /\/api\/v1\/public\/(bookings|memberships)$/.test(r.url())) sent.push({ url: r.url(), body: r.postData() ?? '' })
+          })
+          let v2 = 0
+          a.page.on('request', (r) => {
+            if (r.url().endsWith('/api/v1/public/catalog/v2')) v2++
+          })
+          await a.page.goto(`${sizesProxy.origin}/#/wash`, { waitUntil: 'load' })
+          await ready(a.page)
+          await a.page.waitForTimeout(600)
+          const wash = await pageText(a.page)
+          check(
+            'live prices: the page loads GET /public/catalog/v2; the wash page reads "from $40" with the priced sizes ("Large SUV $70 · members $63", "Other sizes: priced at the shop")',
+            v2 > 0 && /from\s+\$40/.test(wash) && /Large SUV \$70 · members \$63/.test(wash) && /Other sizes: priced at the shop/.test(wash),
+            `v2=${v2} ${wash.slice(0, 300).replace(/\s+/g, ' ')}`,
+          )
+          await a.page.goto(`${sizesProxy.origin}/`, { waitUntil: 'load' })
+          await ready(a.page)
+          await btn(a.page, /^\s*Book it\s*$/).click()
+          await settle(a.page)
+          await btn(a.page, /Continue as guest/).click()
+          await settle(a.page)
+          await btn(a.page, /^\s*Large SUV\s*$/).click()
+          await settle(a.page)
+          const sheet = await pageText(a.page)
+          check(
+            'live prices: the booking sheet\'s vehicle chips are the sizes, and the wash is priced for the size chosen (Large SUV $70; the Exterior wash "At the shop")',
+            /Compact car/.test(sheet) && /Compact SUV/.test(sheet) && /\$70\s*guest price/.test(sheet) && /At the shop/.test(sheet),
+            sheet.slice(0, 400).replace(/\s+/g, ' '),
+          )
+          await btn(a.page, /^\s*Review booking|^\s*Choose a time/).first().click()
+          await settle(a.page)
+          if (/Pick a time/.test(await pageText(a.page))) {
+            const slot = a.page.locator('#dc-root button').filter({ hasText: /^\d+:\d\d (AM|PM)\s*(OPEN|LAST BAY)$/ }).first()
+            await slot.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+            await slot.click()
+            await btn(a.page, /^\s*Review · /).click()
+            await settle(a.page)
+          }
+          await a.page.locator('#dc-root input[placeholder="Full name"]').fill('Lee Sizes')
+          await a.page.locator('#dc-root input[placeholder="Mobile number"]').fill('+12015550191')
+          await btn(a.page, /^\s*I understand the \$25 booking fee/).click()
+          await btn(a.page, /^\s*Book\s*$/).last().click()
+          await a.page.waitForSelector('#dc-root :text("You\'re booked")', { timeout: 20_000 }).catch(() => {})
+          const booked = JSON.parse(sent.find((x) => x.url.endsWith('/bookings'))?.body || '{}')
+          check('live prices: the booking request sends the size (vehicleClass large_suv) and no made-up vehicle', booked.vehicleClass === 'large_suv' && booked.vehicle === undefined, JSON.stringify(booked).slice(0, 200))
+          // the join flow: Gold is sold at two sizes, so a size picker; the size sets the price and goes with the request
+          // (a fresh document: a fragment navigation would keep the booking sheet open over the join page)
+          await a.page.goto('about:blank')
+          await a.page.goto(`${sizesProxy.origin}/#/join?gold`, { waitUntil: 'load' })
+          await ready(a.page)
+          await btn(a.page, /^\s*Large SUV · \$159\/mo\s*$/).click()
+          await settle(a.page)
+          const plan = await pageText(a.page)
+          await btn(a.page, /^\s*Continue\s*$/).click()
+          await a.page.locator('#dc-root input[placeholder="Year, make, model"]').fill('2022 Honda Pilot')
+          await btn(a.page, /^\s*Continue\s*$/).click()
+          await a.page.locator('#dc-root input[placeholder="Full name"]').fill('Lee Sizes')
+          await a.page.locator('#dc-root input[placeholder="Mobile number"]').fill('+12015550192')
+          await a.page.locator('#dc-root input[placeholder="Email (for receipts)"]').fill('lee@example.com')
+          await btn(a.page, /^\s*Continue\s*$/).click()
+          await settle(a.page)
+          await btn(a.page, /^\s*I agree to be billed \$159 a month/).click()
+          await btn(a.page, /^\s*Start Gold · \$159\/mo/).click()
+          await a.page.waitForSelector('#dc-root :text("link to pay is on its way")', { timeout: 20_000 }).catch(() => {})
+          const joined = JSON.parse(sent.find((x) => x.url.endsWith('/memberships'))?.body || '{}')
+          check('live prices: the join page\'s size picker sets the price ($159/mo for a Large SUV) and the request carries planClass', /Priced for\s*Large SUV/.test(plan) && /\$159\/mo/.test(plan) && joined.planClass === 'large_suv' && joined.tier === 'gold', JSON.stringify(joined).slice(0, 200))
+          await a.ctx.close()
+          // a live answer that is not website-ready (production before the seeds): the interim prices, never the design's figures
+          fixture.state.catalogV2 = unseededCatalogV2()
+          const b = await newPage(browser, sizesProxy.origin)
+          trackers.push(b.t)
+          await b.page.goto(`${sizesProxy.origin}/#/wash`, { waitUntil: 'load' })
+          await ready(b.page)
+          await b.page.waitForFunction(() => !/\$70/.test(document.getElementById('dc-root')?.innerText ?? ''), null, { timeout: 20_000 }).catch(() => {})
+          const plain = await pageText(b.page)
+          check('live prices: a catalog that is not website-ready shows the interim prices (no grid figure, no design figure)', /from \$40/.test(plain) && !/\$70|\$54|SAVE \$/.test(plain) && /Priced by vehicle size/.test(plain), plain.slice(0, 200).replace(/\s+/g, ' '))
+          await b.ctx.close()
+        } finally {
+          fixture.state.catalogV2 = designCatalogV2()
+          await sizesProxy.close()
         }
       } finally {
         fixture.state.catalog = designCatalog()

@@ -1,7 +1,10 @@
 // check:dist — verifies a build against the contract in README.md: index.html with the marker, 404.html, robots.txt,
 // sitemap.xml, manifest.json; hashed files only under assets/; well-formed HTML with <html lang> and a <title>; no
 // executable inline <script>; no localhost/127.0.0.1; every internal link, script, stylesheet, image and font
-// reference resolves to an emitted file; no bundle uuid left anywhere.
+// reference resolves to an emitted file; no bundle uuid left anywhere; nothing external is requested by the build: every
+// script is under /assets/, and nothing of Square's Web Payments SDK is baked in (its URL and application id come from the
+// link API at runtime and the SDK is loaded only on a link page that shows a card form: DV-LINK-CARD, the one exception
+// to "no external request", documented in README "Build contract" and docs/deploy-contract.md).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,6 +25,8 @@ const TOP_LEVEL = new Set(['index.html', '404.html', 'robots.txt', 'sitemap.xml'
 const HASHED = /^assets\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.[0-9a-f]{8}\.[a-z0-9]+$/
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 const DATA_BLOCK_TYPES = new Set(['application/ld+json', 'application/json', 'importmap-ignored'])
+/** Square's SDK URL or an application id baked into a file (DV-LINK-CARD: they come from the link API at runtime). */
+const SQUARE_BAKED = /https?:\/\/[a-z0-9.-]*squarecdn\.com\/[^\s"'`]*\.js|sq0id[pb]-[A-Za-z0-9_-]+/
 
 function listFiles(dir: string, prefix = ''): string[] {
   const out: string[] = []
@@ -71,6 +76,7 @@ export function checkDist(dist: string, marker: string): CheckResult {
   for (const f of files.filter((x) => x.endsWith('.html'))) {
     const html = fs.readFileSync(path.join(dist, f), 'utf8')
     if (/localhost|127\.0\.0\.1/.test(html)) problems.push(`${f}: contains localhost`)
+    if (SQUARE_BAKED.test(html)) problems.push(`${f}: Square's SDK URL or an application id is baked into the page`)
     if (UUID.test(html)) problems.push(`${f}: contains a bundle uuid`)
     if (!/^<!DOCTYPE html>/i.test(html)) problems.push(`${f}: missing <!DOCTYPE html>`)
     const parseErrors: string[] = []
@@ -122,6 +128,7 @@ export function checkDist(dist: string, marker: string): CheckResult {
   for (const f of files.filter((x) => x.endsWith('.css') || x.endsWith('.js'))) {
     const text = fs.readFileSync(path.join(dist, f), 'utf8')
     if (/https?:\/\/(localhost|127\.0\.0\.1)/.test(text)) problems.push(`${f}: contains localhost`)
+    if (SQUARE_BAKED.test(text)) problems.push(`${f}: Square's SDK URL or an application id is baked into the build`)
     if (UUID.test(text) && f.endsWith('.css')) problems.push(`${f}: contains a bundle uuid`)
     for (const m of text.matchAll(/url\(["']?(\/(?:assets|fonts)\/[^"')]+)["']?\)/g))
       if (!resolves(m[1]!)) problems.push(`${f}: url(${m[1]}) does not resolve`)
