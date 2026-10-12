@@ -13,7 +13,9 @@
 // GET /api/v1/ops/snapshot as the seeded manager); the slot turns last/booked on reload; the OTP member path books
 // without a fee (the code read from the fixture's texts, or recovered from the stack's challenge hash because the
 // simulator delivers the text instantly and delivered one-time codes are redacted); a join creates a pending
-// membership; the honeypot creates nothing; the catalog's prices show (DV-CATALOG: a changed price in the fixture's catalog
+// membership; the honeypot creates nothing; the interim prices (DV-PRICE-INTERIM, the default): no "$" figure but $40,
+// $129 and the $25 fee in the prerendered pages and every view at both viewports and themes, and a changed catalog shows
+// nothing of itself; the catalog price mode on its own build (DV-CATALOG: a changed price in the fixture's catalog
 // appears after the page's catalog load, an unseeded catalog leaves the design's content); no page error, no 5xx, no
 // external request; in sms mode every Book/Join action produces an sms: link with the composed body; and the personal
 // links (scripts/e2e-links.ts) against the fixture's link API or, on a stack started with PUBLIC_LINKS_ENABLED=true, the
@@ -220,8 +222,10 @@ async function newPage(
   origin: string,
   timezoneId = 'America/New_York',
   colorScheme: 'light' | 'dark' = 'light',
+  viewport: { width: number; height: number } = { width: 390, height: 844 },
 ): Promise<{ ctx: BrowserContext; page: Page; t: Tracker }> {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, timezoneId, locale: 'en-US', colorScheme })
+  const phone = viewport.width < 600
+  const ctx = await browser.newContext({ viewport, hasTouch: phone, isMobile: phone, timezoneId, locale: 'en-US', colorScheme })
   const t: Tracker = { errors: [], blocked: [], fiveHundreds: [], navigations: [], responses: [] }
   await ctx.route('**/*', (route) => {
     const u = new URL(route.request().url())
@@ -376,8 +380,9 @@ async function main(): Promise<number> {
   if (!values['skip-build'] || dirs.some((d) => !fs.existsSync(path.join(d, 'index.html')))) {
     await buildSite({ root: ROOT, variant: 'prod', outDir: liveDir, hoursJson: JSON.stringify(hours.body), availabilityJson: JSON.stringify(avail0.body), catalogJson: JSON.stringify(catalog0.body), booking: 'live', apiOrigin: '', log: () => {} })
     await buildSite({ root: ROOT, variant: 'prod', outDir: smsDir, hoursJson: JSON.stringify(hours.body), availabilityJson: null, booking: 'sms', apiOrigin: '', log: () => {} })
+    // DV-CATALOG is the "catalog" price mode now (the launch default is the interim prices, DV-PRICE-INTERIM)
     if (api.kind === 'fixture')
-      await buildSite({ root: ROOT, variant: 'prod', outDir: catalogDir, hoursJson: JSON.stringify(hours.body), availabilityJson: null, catalogJson: JSON.stringify(snapshotCatalog), booking: 'sms', apiOrigin: '', log: () => {} })
+      await buildSite({ root: ROOT, variant: 'prod', outDir: catalogDir, hoursJson: JSON.stringify(hours.body), availabilityJson: null, catalogJson: JSON.stringify(snapshotCatalog), booking: 'sms', pricing: 'catalog', apiOrigin: '', log: () => {} })
     log(`built ${dirs.map((d) => path.basename(d)).join(', ')}`)
   }
   const proxy: SiteProxy = await startSiteProxy({ dir: liveDir, apiOrigin: api.origin, port })
@@ -429,6 +434,69 @@ async function main(): Promise<number> {
     } finally {
       await links.close()
     }
+  }
+
+  // DV-PRICE-INTERIM: the "$" figures of a text that are not the starting prices or the fee
+  const ALLOWED = new Set(['$40', '$129', '$25'])
+  const badFigures = (text: string): string[] => [...new Set((text.match(/\$\s?\d[\d,]*(?:\.\d+)?/g) ?? []).map((f) => f.replace(/\s/g, '')))].filter((f) => !ALLOWED.has(f))
+  async function interimScan(at: SiteProxy): Promise<void> {
+    for (const dir of [liveDir, smsDir]) {
+      const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8')
+      const bad = badFigures(html)
+      check(`interim prices: the prerendered ${path.basename(dir)}/index.html shows no figure but $40, $129 and $25`, bad.length === 0 && /from \$129/.test(html) && /\$40/.test(html), bad.join(' '))
+    }
+    const views = ['', 'membership', 'wash', 'tint', 'detailing', 'experience', 'visit', 'join', 'join?gold']
+    const texts = (page: Page) =>
+      page.evaluate(() => [document.getElementById('dc-root')?.textContent ?? '', document.title, document.querySelector('meta[name="description"]')?.getAttribute('content') ?? ''].join('\n'))
+    for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 }])
+      for (const scheme of ['light', 'dark'] as const) {
+        const { ctx, page, t } = await newPage(browser, at.origin, 'America/New_York', scheme, viewport)
+        trackers.push(t)
+        const seen: string[] = []
+        const bad: string[] = []
+        const scan = async (view: string) => {
+          const text = await texts(page)
+          seen.push(...(text.match(/\$\d+/g) ?? []))
+          for (const f of badFigures(text)) bad.push(`${view}: ${f}`)
+        }
+        await page.goto(`${at.origin}/`, { waitUntil: 'load' })
+        await ready(page)
+        await scan('home (hydrated)')
+        // the price rows flip to the member side when the pricing section scrolls in
+        await page.evaluate(() => document.getElementById('pricing')?.scrollIntoView({ block: 'start' }))
+        await page.waitForTimeout(1200)
+        await scan('home (prices flipped)')
+        for (const v of views.slice(1)) {
+          await page.evaluate((h) => (location.hash = h), `#/${v}`)
+          await page.waitForTimeout(500)
+          await scan(`#/${v}`)
+          if (v === 'tint')
+            for (const chip of [/^\s*SUV \/ Crossover\s*$/, /^\s*Truck \/ Van\s*$/]) {
+              await btn(page, chip).first().click()
+              await scan(`#/tint ${chip.source}`)
+            }
+        }
+        // the join flow (VIP, then Gold) and the booking sheet as a guest and as a member
+        await page.evaluate(() => (location.hash = '#/join'))
+        await page.waitForTimeout(400)
+        await btn(page, /^\s*Continue\s*$/).click()
+        await scan('#/join vehicles')
+        await page.evaluate(() => (location.hash = '#/'))
+        await page.waitForTimeout(400)
+        await page.evaluate(() => window.scrollTo(0, 0))
+        await btn(page, /^\s*Book it\s*$/).first().click()
+        await settle(page)
+        await scan('sheet who')
+        await btn(page, /Continue as guest/).click()
+        await btn(page, /^\s*Hand wax/).click()
+        await scan('sheet guest wash')
+        await btn(page, /^\s*Review booking/).click()
+        await settle(page)
+        await scan('sheet guest review')
+        await ctx.close()
+        const label = `${viewport.width}x${viewport.height} ${scheme}`
+        check(`interim prices: every view at ${label} shows no figure but $40, $129 and $25 (${views.length} views, the sheet, the join flow)`, bad.length === 0 && seen.includes('$40') && seen.includes('$129'), bad.slice(0, 6).join(' | '))
+      }
   }
 
   // 9. hygiene over every page, and the report
@@ -658,7 +726,8 @@ async function main(): Promise<number> {
       await page.waitForSelector('#dc-root :text("Choose your wash")', { timeout: 20_000 })
       const verify = t.responses.find((r) => r.url.endsWith('/public/otp/verify'))
       const active = verify ? (JSON.parse(verify.body) as { member: { active: boolean } }).member.active : null
-      const guestPrices = await page.locator('#dc-root :text("guest price")').count()
+      // the guest side of the wash step (the interim prices, DV-PRICE-INTERIM: the guest note reads "by vehicle size")
+      const guestPrices = await page.locator('#dc-root :text-is("by vehicle size")').count()
       const memberPrices = await page.locator('#dc-root :text("1 of 4 this month")').count()
       check('non-member: a verified number without an active membership gets guest prices (the fee applies), not member pricing', active === false && guestPrices >= 1 && memberPrices === 0, `active=${active} guest=${guestPrices} member=${memberPrices}`)
       await ctx.close()
@@ -729,55 +798,73 @@ async function main(): Promise<number> {
       await ctx.close()
     }
 
-    // 7b. DV-CATALOG: the website's prices come from the catalog (fixture only: the test swaps the API's catalog)
+    // 7b. prices and the catalog (fixture only: the test swaps the API's catalog). The launch builds are the interim prices
+    // (DV-PRICE-INTERIM): a changed catalog shows nothing of itself. DV-CATALOG ("catalog" price mode) on its own build.
     if (api.kind === 'fixture') {
       const fixture = api.fixture!
       const pageText = (page: Page) => page.evaluate(() => document.getElementById('dc-root')?.innerText ?? '')
       try {
-        // a changed price: the Signature wash at $50 for members ($60 for guests), Gold at $109
+        // interim (the live build): the Signature wash at $50 / $60 and Gold at $109 in the API's catalog change nothing
         fixture.state.catalog = changedCatalog
         const { ctx, page, t } = await newPage(browser, proxy.origin)
         trackers.push(t)
+        let asked = 0
+        page.on('request', (r) => {
+          if (r.url().includes('/api/v1/public/catalog')) asked++
+        })
         await page.goto(`${proxy.origin}/#/wash`, { waitUntil: 'load' })
         await ready(page)
-        await page.waitForFunction(() => /SAVE \$60/.test(document.getElementById('dc-root')?.innerText ?? ''), null, { timeout: 20_000 }).catch(() => {})
+        await page.waitForTimeout(800)
         const wash = await pageText(page)
-        check('catalog: a changed price in the API\'s catalog shows on the wash page after the catalog load (live build)', /SAVE \$60/.test(wash), wash.slice(0, 200).replace(/\s+/g, ' '))
+        check(
+          'interim prices: the catalog is loaded (booking keys) but a changed price in it does not show on the wash page (live build)',
+          asked > 0 && /from \$40/.test(wash) && !/\$60|\$50|SAVE \$/.test(wash),
+          `asked=${asked} ${wash.slice(0, 200).replace(/\s+/g, ' ')}`,
+        )
         await page.goto(`${proxy.origin}/#/membership`, { waitUntil: 'load' })
         await page.waitForTimeout(800)
-        check('catalog: the Gold price follows the catalog on the membership page', /\$109/.test(await pageText(page)))
+        const mem = await pageText(page)
+        check('interim prices: the catalog\'s Gold price does not show on the membership page', /from \$129\/mo/.test(mem) && !/\$109|\$99/.test(mem), mem.slice(0, 200).replace(/\s+/g, ' '))
         await ctx.close()
-        // an unseeded catalog (production before the website-catalog seed) over a page whose build snapshot is the
-        // changed catalog: the page first shows the snapshot (Signature "SAVE $62"), and the unseeded live answer brings the
-        // design's own content back ("SAVE $54"), never the dashboard's list. The catalog request is held until the
-        // snapshot was seen.
-        fixture.state.catalog = unseededCatalog()
+        // DV-CATALOG ("catalog" price mode): the page first shows the build snapshot (Signature "SAVE $62"), then the live
+        // answer (changed: "SAVE $60", Gold $109); an unseeded live answer brings the design's own content back ("SAVE
+        // $54"), never the dashboard's list. The catalog request is held until the snapshot was seen.
         const catProxy = await startSiteProxy({ dir: catalogDir, apiOrigin: api.origin, port: port + 3 })
         try {
-          const u = await newPage(browser, catProxy.origin)
-          trackers.push(u.t)
-          let release: () => void = () => {}
-          const held = new Promise<void>((r) => (release = r))
-          let asked = 0
-          await u.page.route('**/api/v1/public/catalog*', async (route) => {
-            asked++
-            await held
-            await route.continue()
-          })
-          await u.page.goto(`${catProxy.origin}/#/wash`, { waitUntil: 'load' })
-          await ready(u.page)
-          const before = await pageText(u.page)
-          release()
-          await u.page.waitForFunction(() => !/SAVE \$62/.test(document.getElementById('dc-root')?.innerText ?? ''), null, { timeout: 20_000 }).catch(() => {})
-          await u.page.waitForTimeout(500)
-          const plain = await pageText(u.page)
-          check('catalog: the build snapshot shows before the catalog load (Signature SAVE $62)', asked > 0 && /SAVE \$62/.test(before), `asked=${asked} ${before.slice(0, 160).replace(/\s+/g, ' ')}`)
+          const held = async (cat: unknown) => {
+            fixture.state.catalog = cat as any
+            const u = await newPage(browser, catProxy.origin)
+            trackers.push(u.t)
+            let release: () => void = () => {}
+            const gate = new Promise<void>((r) => (release = r))
+            let n = 0
+            await u.page.route('**/api/v1/public/catalog*', async (route) => {
+              n++
+              await gate
+              await route.continue()
+            })
+            await u.page.goto(`${catProxy.origin}/#/wash`, { waitUntil: 'load' })
+            await ready(u.page)
+            const before = await pageText(u.page)
+            release()
+            await u.page.waitForFunction(() => !/SAVE \$62/.test(document.getElementById('dc-root')?.innerText ?? ''), null, { timeout: 20_000 }).catch(() => {})
+            await u.page.waitForTimeout(500)
+            return { u, n, before, after: await pageText(u.page) }
+          }
+          const changed = await held(changedCatalog)
+          check('catalog mode: the build snapshot shows before the catalog load (Signature SAVE $62)', changed.n > 0 && /SAVE \$62/.test(changed.before), `asked=${changed.n} ${changed.before.slice(0, 160).replace(/\s+/g, ' ')}`)
+          check('catalog mode: a changed price in the API\'s catalog shows on the wash page after the catalog load', /SAVE \$60/.test(changed.after), changed.after.slice(0, 200).replace(/\s+/g, ' '))
+          await changed.u.page.evaluate(() => (location.hash = '#/membership'))
+          await changed.u.page.waitForTimeout(800)
+          check('catalog mode: the Gold price follows the catalog on the membership page', /\$109/.test(await pageText(changed.u.page)))
+          await changed.u.ctx.close()
+          const plain = await held(unseededCatalog())
           check(
-            'catalog: an unseeded live catalog brings the built-in services and prices back (no dashboard-internal items)',
-            /SAVE \$54/.test(plain) && !/SAVE \$62/.test(plain) && /Hand wax/.test(plain) && /Interior deep clean/.test(plain) && !/Express Hand Wash|Premium Hand Wash/.test(plain),
-            plain.slice(0, 200).replace(/\s+/g, ' '),
+            'catalog mode: an unseeded live catalog brings the built-in services and prices back (no dashboard-internal items)',
+            /SAVE \$54/.test(plain.after) && !/SAVE \$62/.test(plain.after) && /Hand wax/.test(plain.after) && /Interior deep clean/.test(plain.after) && !/Express Hand Wash|Premium Hand Wash/.test(plain.after),
+            plain.after.slice(0, 200).replace(/\s+/g, ' '),
           )
-          await u.ctx.close()
+          await plain.u.ctx.close()
         } finally {
           await catProxy.close()
         }
@@ -966,6 +1053,10 @@ async function main(): Promise<number> {
       textWants.every((w) => textShown.some((t) => t.text.includes(w))) && textShown.every((t) => !t.inTel),
       textShown.map((t) => `${t.view}: ${t.text}`).slice(0, 8).join(' | '),
     )
+
+    // 8e. interim prices (DV-PRICE-INTERIM): no "$" figure but $40 (the Signature wash), $129 (membership) and the $25
+    // fee, in the prerendered pages and in every view at both viewports and both themes (hidden text included)
+    await interimScan(smsProxy)
   } finally {
     await smsProxy.close()
     await browser.close()

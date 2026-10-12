@@ -13,8 +13,9 @@ bash scripts/e2e-stack.sh [--only links]  # a live stack up, the e2e against it,
 
 Two builds are made per run (`dist-e2e-live`: `SITE_BOOKING=live` with the API's hours and availability baked in;
 `dist-e2e-sms`: the launch default) and served on `--port` (3301) and `--port`+1; with `--api fixture` a third one,
-`dist-e2e-catalog` (the launch default with a changed catalog as its `SITE_CATALOG_JSON` snapshot), is served on
-`--port`+3 for the catalog check below. `--skip-build` reuses them.
+`dist-e2e-catalog` (the launch default with a changed catalog as its `SITE_CATALOG_JSON` snapshot, built with
+`pricing: "catalog"`: the two launch builds are the interim prices, DV-PRICE-INTERIM), is served on `--port`+3 for the
+catalog check below. `--skip-build` reuses them.
 Results: the console and `parity-reports/e2e-site.json`.
 
 ## The live stack
@@ -95,17 +96,18 @@ paces its link openings). Where the fixture and the real API differ by design:
 4. The member path: menu → Book a time → mobile → Continue → the code step → the code → Verify → "1 of 4 this
    month" → a time → the review asks for the full name (no mobile field) → Confirm booking → 201 with
    `deposit.dueCents = 0` and `member: true`, booked under the typed name (fixture). A verified number without an active
-   membership gets guest prices ("guest price", no "1 of 4 this month").
+   membership gets guest prices (the guest note "by vehicle size", no "1 of 4 this month").
 5. `#/join?gold` → vehicles → details (Continue without the e-mail is refused on that step: "Add your email for the
    receipts.") → the checkout step has no card field → terms → Start Gold → 201 `pending_payment`,
    `next: checkout_link_by_sms`; a pending membership row exists for the number.
 6. The honeypot (`website` non-empty) answers 202 with a fake reference and creates nothing.
-   Catalog (DV-CATALOG, fixture only; the live build bakes the API's catalog as `SITE_CATALOG_JSON`): with the fixture's
-   catalog changed (Signature Hand Wash at $50 for members, Gold at $109) `#/wash` shows "SAVE $60" after the page's
-   catalog load and `#/membership` shows $109. Over `dist-e2e-catalog` (snapshot: Signature Hand Wash at $52, "SAVE
-   $62") with the catalog request held, `#/wash` first shows the snapshot; released, production's unseeded catalog
-   brings the design's services and prices back ("SAVE $54", no "SAVE $62", Hand wax, Interior deep clean) and none of
-   the dashboard's own services.
+   Prices and the catalog (fixture only). Interim prices (DV-PRICE-INTERIM, the live build): with the fixture's catalog
+   changed (Signature Hand Wash at $50 for members, Gold at $109) the page still loads the catalog (booking keys) but
+   `#/wash` keeps "from $40" with no $50/$60 and no "SAVE $", and `#/membership` keeps "from $129/mo" with no $109 or $99.
+   Catalog price mode (DV-CATALOG) over `dist-e2e-catalog` (snapshot: Signature Hand Wash at $52, "SAVE $62") with the
+   catalog request held: `#/wash` first shows the snapshot; released, the changed catalog shows "SAVE $60" and
+   `#/membership` $109; on a second page production's unseeded catalog brings the design's services and prices back
+   ("SAVE $54", no "SAVE $62", Hand wax, Interior deep clean) and none of the dashboard's own services.
 7. SMS mode: Book composes `sms:+18623885827?&body=WASH booking: …` (wash, vehicle, time), Join composes
    `JOIN VIP: name · phone · car`, the design's own text links carry the texting number, and no POST reaches the API.
    Texting vs calling (DV-CONTACT): over the home view, the open menu, every hash route and the live join welcome step,
@@ -117,6 +119,11 @@ paces its link openings). Where the fixture and the real API differ by design:
    device change flips the page while nothing is stored; the header toggle stores its choice, which holds over a live
    device change and a reload on a device that says otherwise; the menu's Appearance Light on a dark device is stored
    and kept after a reload; no hydration error in any of them.
+   Interim prices (DV-PRICE-INTERIM): the prerendered `index.html` of both launch builds and, at 390x844 and 1440x900
+   in the light and the dark theme, the home view (before and after the price rows flip), every hash route (`#/tint`
+   with each vehicle type), the join flow's vehicles step and the booking sheet (who, the guest wash step with an
+   add-on, the review) show no "$" figure but $40, $129 and $25 (the page's whole text, hidden parts included, the
+   title and the description), and $40 and $129 are there.
 9. Over every page: no console error or page error, no request to another origin, no 5xx.
 10-21. Personal links (`scripts/e2e-links.ts`), against the fixture's link API (the backend's own shapes, held to them
    by `tools/site/fixture-links.test.ts` with the key lists of `src/site/link-contract.testkit.ts`) or a live stack's real

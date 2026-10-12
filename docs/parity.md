@@ -22,9 +22,12 @@ port's placeholders differ only inside the slots, which region masks cover (`DV-
 its data-props default, see the port contract's theme item). Before render the original gets every wording decision of
 `design-patches/copy-map.json` as a text swap (`tools/parity/copy-swaps.ts`: template, logic and `source` entries,
 identity entries skipped), so the ORIGINAL renders "Book", Sunday closed, no card fields, "Due at checkout", … and the
-port must match it at zero diff. `parity/allowlist.json` holds only what cannot be a swap: the logo's hashed `src`,
+port must match it at zero diff. `parity/allowlist.json` holds only what cannot be a copy-map swap: the logo's hashed `src`,
 the hero pill (the design's clock formula vs real bay counts, `DV-AVAIL-pill` + mask, `expect.min 0`), the bridge's
-one extra `site` key in renderVals, the slot masks and the sidecar 404.
+one extra `site` key in renderVals, the slot masks, the sidecar 404, and the interim prices (`DV-PRICE-INTERIM-*`:
+55 pre-render swaps on the original's markup and logic; the port's side is the bridge's `pricing` switch, not a compile
+change, so they cannot live in the copy map; `src/site/bridge-interim.test.ts` proves them equal to the bridge's
+values).
 
 - Code: `tools/parity/**`. Data: `parity/` (`fonts/`, `fontconfig/`, `allowlist.json`, `tolerances.json`,
   `console-baseline.json`). Output: `parity-reports/` (gitignored).
@@ -145,7 +148,9 @@ channel, measured 5603/5479 px); every other step stays at threshold 0.
 `--against-original` (and the self-test gates) serve a second copy of the ORIGINAL as the port. Both copies carry the
 copy-map swaps, so the comparison is "the design with the owner's decisions" against itself; the allow-list's own swaps
 stay on the baseline only (the swap gate relies on that). The diff-side allow-list entries then report as unused
-("allow-list problems") in a dry run, which is expected: the self-test passes an empty allow-list.
+("allow-list problems") in a dry run, which is expected: the self-test passes an empty allow-list. Since
+DV-PRICE-INTERIM the baseline of a dry run with the real allow-list carries the interim prices and the second original
+does not, so the price views differ there too; the self-tests are unaffected (empty allow-list).
 
 ## Deviations: `parity/allowlist.json`
 

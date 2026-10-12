@@ -25,7 +25,8 @@ Written by the build, imported by the bridge and the prerender, bundled into the
 | `buildNow` | `SITE_BUILD_NOW` / `PRERENDER_NOW` / now | the prerender instant; the client's first render is pinned to it (DV-CLOCK) |
 | `hours`, `hoursSource` | `SITE_HOURS_JSON` or `src/data/hours.fallback.json` | the public hours payload (Sunday closed) |
 | `availability`, `availabilitySource` | `SITE_AVAILABILITY_JSON` or none | the public availability payload baked into the board |
-| `catalogSnapshot`, `catalogSource` | `SITE_CATALOG_JSON` or none | the public catalog payload (DV-CATALOG), kept only when it is website-ready |
+| `catalogSnapshot`, `catalogSource` | `SITE_CATALOG_JSON` or none | the public catalog payload (DV-CATALOG), kept only when it is website-ready and `pricing` is `catalog` |
+| `pricing` | `SITE_PRICING`, else `site.config.json` `pricing`, else `interim` | `interim` (DV-PRICE-INTERIM, the default): only the starting prices and the fee; `catalog`: DV-CATALOG |
 | `contact`, `catalog`, `fee` | `site.config.json` | the calling number (`phoneE164`/`phoneDisplay`), the texting number (`smsE164`/`smsDisplay`), e-mail, address, maps link; the design's service and add-on ids → catalog keys; the booking fee text |
 
 ## What the bridge replaces
@@ -196,7 +197,35 @@ before. Production's catalog (2026-10-11) still carries the dashboard's own serv
 Wash + Interior, …) until the owner runs the backend's `website-catalog` seed, so `SITE_BOOKING=live` books nothing
 until then; the seed gives every design item its key (an add-on new to the design is booked under its catalog key).
 
-## Catalog content (DV-CATALOG)
+## Interim prices (DV-PRICE-INTERIM, the default)
+
+Owner, 2026-10-12 (plan decision 9): prices depend on the vehicle size, a single wash starts at $40 and membership at
+$129/month, and the real per-size catalog (public catalog v2) comes later. Until the site switches to it,
+`site.config.json` `"pricing": "interim"` makes the page show only three figures: the Signature Hand Wash "from $40",
+Gold "from $129" (/mo) and the $25 booking fee. Every other price reads "Priced by vehicle size — ask us", or "Ask us"
+where the design's slot only fits a price; the old model's statements are gone (guests' "prices 20% higher", member vs
+guest pairs, "SAVE $N", the Gold savings calculator, "A VIP month, priced as a guest", the tint savings, the "$0"
+lines). The surfaces, before and after, are listed under DV-PRICE-INTERIM in `design-patches/DEVIATIONS.md`.
+
+- **The live catalog is not applied to the content** in this mode (`__applyCatalog` keeps the design's data and
+  `__site` null; the build does not bake `SITE_CATALOG_JSON`, with a warning): it carries the old member/guest model.
+  It is still fetched for the booking keys (the availability query and a live booking), exactly as before.
+- **Where the words come from.** The bridge's DV-PRICE-INTERIM section (`__interimHome`, `__interimPrice`,
+  `__interimPages`, `__interimJoin`, `__interimSheet`) writes the interim words over the design's view models, field
+  for field and key order kept; the template's fixed texts are `site.cat` values (`src/site/catalog.ts` `interimTexts`;
+  catalog mode: `catalogTexts`, the design's words): the 18 DV-CATALOG ops plus 12 DV-PRICE-INTERIM ops in
+  `design-patches/index.patch.json` (one `set-attr` appends `display:{{ site.cat.calcDisplay }}` to the calculator box,
+  `none` in interim mode). The figures and words live in `INTERIM` (`src/site/catalog.ts`).
+- **Parity.** The harness applies the same decision to the original as pre-render swaps (`parity/allowlist.json`
+  `DV-PRICE-INTERIM-*`, original only), so the port matches it at zero diff. `src/site/bridge-interim.test.ts` holds the
+  bridge and the swaps together over every price state; `tools/parity/copy-swaps.test.ts` checks the swaps against the
+  real design document.
+- **Switching to the live catalog (wave Q3c).** Set `pricing` to the new mode, remove the `DV-PRICE-INTERIM-*` swaps
+  from the allow-list, and replace the bridge's DV-PRICE-INTERIM section with the catalog v2 view models; the
+  DV-PRICE-INTERIM ops stay useful (their `site.cat` keys then carry the catalog's texts, `catalogTexts` gives the
+  design's).
+
+## Catalog content (DV-CATALOG, pricing "catalog")
 
 The same catalog payload is the page's content once it is **website-ready** (`src/site/catalog.ts` `websiteCatalog`):
 both washes under their keys with a description, a duration and whole-dollar member and guest prices, both plans with a
@@ -218,6 +247,9 @@ booking sheet, a dropped vehicle type, the unseeded fallback),
 `tools/prerender/prerender.test.ts` (the baked snapshot) and the e2e's catalog checks.
 
 ## Deployment inputs
+
+`SITE_PRICING` (optional, `interim` | `catalog`) overrides `site.config.json` `pricing` for one build; the deploy kit
+does not pass it, so production builds the interim prices.
 
 `deploy/scripts/site-deploy.sh` (backend kit) passes `SITE_URL`, `SITE_HOURS_JSON` (from the local API) and should pass
 `SITE_AVAILABILITY_JSON` (`GET /api/v1/public/availability?days=7`), `SITE_CATALOG_JSON` (`GET /api/v1/public/catalog`;
