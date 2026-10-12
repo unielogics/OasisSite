@@ -103,7 +103,8 @@ paces its link openings). Where the fixture and the real API differ by design:
 6. The honeypot (`website` non-empty) answers 202 with a fake reference and creates nothing.
    Prices and the catalog (fixture only). Interim prices (DV-PRICE-INTERIM, the live build): with the fixture's catalog
    changed (Signature Hand Wash at $50 for members, Gold at $109) the page still loads the catalog (booking keys) but
-   `#/wash` keeps "from $40" with no $50/$60 and no "SAVE $", and `#/membership` keeps "from $129/mo" with no $109 or $99.
+   `#/wash` keeps "from $40" with no $50/$60 and no "SAVE $", and `#/membership` keeps "from $129/mo" with no $109 or $99;
+   with the catalog's booking fee at $30 (a Settings value) `#/membership` shows $30 and no $25 (the fee follows it).
    Catalog price mode (DV-CATALOG) over `dist-e2e-catalog` (snapshot: Signature Hand Wash at $52, "SAVE $62") with the
    catalog request held: `#/wash` first shows the snapshot; released, the changed catalog shows "SAVE $60" and
    `#/membership` $109; on a second page production's unseeded catalog brings the design's services and prices back

@@ -410,7 +410,7 @@ describe('build on the configured page (design/pages.json: the raw Oasis Site v2
 })
 
 describe('DV-PRICE-INTERIM: the prerendered page shows only the starting prices and the fee (the default)', { timeout: 300_000 }, () => {
-  it('no "$" figure but $40, $129 and $25; a ready catalog snapshot is not baked and changes nothing', async () => {
+  it('no "$" figure but $40, $129 and the fee; a ready catalog snapshot changes only the fee', async () => {
     const { designCatalog, withMemberPrice } = await import('../site/catalog-fixture')
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oasis-dist-i-'))
     const build = async (catalogJson: string | null) => {
@@ -429,9 +429,15 @@ describe('DV-PRICE-INTERIM: the prerendered page shows only the starting prices 
     const cat = withMemberPrice(designCatalog(), 'signature-hand-wash', 50)
     cat.plans[0]!.priceCents = 10900
     const snap = await build(JSON.stringify(cat))
-    expect(snap.r.catalogSource).toBe('none')
+    // only its booking fee is baked (the design's $25 here): the page is the same
+    expect(snap.r.catalogSource).toBe('SITE_CATALOG_JSON')
     expect(snap.r.warnings.some((w) => w.includes('pricing is interim'))).toBe(true)
     expect(snap.index).toBe(plain.index)
+    // a changed fee (Settings) is what the prerendered page says, wherever it said $25
+    cat.guestBookingFeeCents = 3000
+    const fee = await build(JSON.stringify(cat))
+    expect(fee.index).toBe(plain.index.replace(/\$25(?![0-9])/g, '$$30'))
+    expect(fee.index).toContain('$30 non-refundable booking fee')
     fs.rmSync(dir, { recursive: true, force: true })
   })
 })

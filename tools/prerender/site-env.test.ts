@@ -41,13 +41,20 @@ describe('pricing (DV-PRICE-INTERIM)', () => {
     expect(() => env('v2')).toThrow(/pricing .* must be interim or catalog, got v2/)
   })
 
-  it('interim never bakes a catalog snapshot (the old price model), catalog mode bakes a ready one', async () => {
+  it('interim bakes only the booking fee of a catalog snapshot (never the old price model), catalog mode bakes a ready one', async () => {
     const { designCatalog } = await import('../site/catalog-fixture')
-    const json = JSON.stringify(designCatalog())
+    const cat = designCatalog()
+    cat.guestBookingFeeCents = 3000
+    const json = JSON.stringify(cat)
     const interim = env(null, site, json)
-    expect(interim.e.catalogSnapshot).toBeNull()
-    expect(interim.e.catalogSource).toBe('none')
+    expect(interim.e.catalogSnapshot).toEqual({ guestBookingFeeCents: 3000, services: [], addons: [] })
+    expect(interim.e.catalogSource).toBe('SITE_CATALOG_JSON')
     expect(interim.warnings.join('\n')).toMatch(/pricing is interim/)
+    // no whole-dollar fee (or no catalog payload): nothing is baked
+    for (const bad of [JSON.stringify({ ...cat, guestBookingFeeCents: 2550 }), '{"nope":1}', 'not json']) {
+      const e = env(null, site, bad).e
+      expect([e.catalogSnapshot, e.catalogSource]).toEqual([null, 'none'])
+    }
     expect(env('catalog', site, json).e.catalogSource).toBe('SITE_CATALOG_JSON')
   })
 })

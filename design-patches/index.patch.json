@@ -321,7 +321,7 @@
       "tpl": 581,
       "expectTag": "span",
       "expect": "/mo",
-      "with": "{{= site.cat.tierPer }}",
+      "with": "{{ t.per }}",
       "dv": "DV-PRICE-INTERIM"
     },
     {

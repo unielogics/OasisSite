@@ -143,7 +143,8 @@ describe('no figure but the starting prices and the fee', () => {
     expect(t.vals()).toMatchObject({ tintPriceLabel: 'CERAMIC · SUV / CROSSOVER', tintVip: 'Ask us', tintGuest: '', tintSave: '' })
     t.c.setState({ page: 'join', jn: { ...t.c.state.jn, tier: 'gold', step: 3 } })
     let jv = t.vals().jv
-    expect(jv.tiers.map((x: any) => [x.name, x.price])).toEqual([['Gold', 'from $129'], ['VIP', 'Ask us']])
+    // Gold keeps the design's "/mo" next to its starting price ("from $129/mo"); VIP's "Ask us" has none
+    expect(jv.tiers.map((x: any) => [x.name, x.price, x.per])).toEqual([['Gold', 'from $129', '/mo'], ['VIP', 'Ask us', '']])
     expect(jv.lines.map((l: any) => l.value)).toEqual(['from $129/mo', '1', '4', 'None'])
     expect(jv.due).toBe('from $129')
     expect(jv.ctaLabel).toBe('Start Gold')
@@ -176,7 +177,8 @@ describe('the catalog never brings the old prices back in interim mode', () => {
     const list = states(plain.c)
     const want = valsOver(plain, list, true)
     const t = makeSite({ booking: 'live', availability: board, catalog: cat, routes: { '/api/v1/public/catalog': () => ok(cat), '/api/v1/public/availability': () => ok(board) } })
-    expect(t.env.catalogSnapshot).toBeNull()
+    // only the booking fee (a Settings value) is baked from it
+    expect(t.env.catalogSnapshot).toEqual({ guestBookingFeeCents: 2500, services: [], addons: [] })
     t.c.__refreshAll()
     await t.settle()
     expect(t.calls.some((c) => c.path === '/api/v1/public/catalog')).toBe(true)
@@ -188,12 +190,46 @@ describe('the catalog never brings the old prices back in interim mode', () => {
     for (let i = 0; i < list.length; i++) expect(got[i], JSON.stringify(list[i]).slice(0, 160)).toEqual(want[i])
   })
 
+  it('the booking fee follows the catalog (Settings): every $25 of the page reads the catalog fee, and nothing else changes', async () => {
+    const cat = withMemberPrice(designCatalog(), 'signature-hand-wash', 50)
+    cat.plans[0]!.priceCents = 10900
+    cat.guestBookingFeeCents = 3000
+    const plain = makeSite({ booking: 'live', availability: board })
+    const list = states(plain.c)
+    const want = valsOver(plain, list, true).map((v) => JSON.parse(JSON.stringify(v).replace(/\$25(?![0-9])/g, '$$30')))
+    expect(JSON.stringify(want)).toContain('$30')
+    // the build snapshot (the prerendered page) and the browser's live answer
+    const snap = makeSite({ booking: 'live', availability: board, catalog: cat })
+    expect(snap.env.catalogSnapshot).toEqual({ guestBookingFeeCents: 3000, services: [], addons: [] })
+    const live = makeSite({ booking: 'live', availability: board, routes: { '/api/v1/public/catalog': () => ok(cat), '/api/v1/public/availability': () => ok(board) } })
+    live.c.__refreshAll()
+    await live.settle()
+    for (const t of [snap, live]) {
+      expect(t.c.__site).toBeNull()
+      const got = valsOver(t, list, true)
+      for (let i = 0; i < list.length; i++) expect(got[i], JSON.stringify(list[i]).slice(0, 160)).toEqual(want[i])
+      const allowed = new Set(interimFigures(30))
+      for (const v of got) for (const f of figures(v)) expect(allowed.has(f.replace(/\s/g, '')), f).toBe(true)
+    }
+    // a fee the website cannot show (not whole dollars, or none) keeps the design's $25
+    for (const fee of [2550, undefined]) {
+      const odd = { ...cat, guestBookingFeeCents: fee }
+      const t = makeSite({ booking: 'live', availability: board, routes: { '/api/v1/public/catalog': () => ok(odd), '/api/v1/public/availability': () => ok(board) } })
+      t.c.__refreshAll()
+      await t.settle()
+      expect(t.vals().site.cat.fee).toBe('$25')
+    }
+  })
+
   it('catalog mode keeps DV-CATALOG: the same catalog shows its prices', async () => {
     const cat = withMemberPrice(designCatalog(), 'signature-hand-wash', 50)
     const t = makeSite({ booking: 'live', availability: board, pricing: 'catalog', routes: { '/api/v1/public/catalog': () => ok(cat), '/api/v1/public/availability': () => ok(board) } })
     t.c.__refreshAll()
     await t.settle()
     expect(t.vals().prGroups[0].rows[0]).toMatchObject({ name: 'Signature Hand Wash', g: '$60', save: 'SAVE $60' })
+    // the join flow's plan cards keep the design's "/mo" on both plans
+    t.c.setState({ page: 'join', jn: { ...t.c.state.jn, tier: 'gold', step: 0 } })
+    expect(t.vals().jv.tiers.map((x: any) => [x.name, x.price, x.per])).toEqual([['Gold', '$99', '/mo'], ['VIP', '$169', '/mo']])
   })
 })
 
@@ -217,7 +253,7 @@ describe('the template texts (site.cat) equal the original markup after the swap
   const bound = cfg.ops.filter((op): op is Extract<typeof op, { op: 'replace-text' }> => op.op === 'replace-text' && /site\.cat\./.test(op.with))
 
   it('every bound text: interim mode reads the swapped original, catalog mode the design', () => {
-    expect(bound.length).toBe(29)
+    expect(bound.length).toBe(28)
     const keyOf = (op: (typeof bound)[number]) => /site\.cat\.(\w+)/.exec(op.with)![1]!
     for (const op of bound) {
       expect(builtIn[keyOf(op)], keyOf(op)).toBe(op.expect)

@@ -357,7 +357,6 @@ export const DESIGN_STATIC_TEXTS: Readonly<Record<string, string>> = {
   priceIntro: "Everyone sees guest pricing. Here's what the same visit costs as a VIP member.",
   memberFee: '$0',
   vipFirst: 'VIP members book first and pay $0 for their washes. Guests can book any open time.',
-  tierPer: '/mo',
   barPer: '/mo',
   upsellHead: 'AS A VIP THIS VISIT IS $0',
 }
@@ -397,10 +396,19 @@ export const INTERIM = {
   /** what a member owes at pickup (a larger car pays the size difference at the shop) */
   memberDue: 'Ask us',
   none: 'None',
+  /** the join flow's plan cards: the suffix after each plan's price (Gold keeps the design's "/mo"; "Ask us" has none) */
+  tierPerGold: '/mo',
   /** the guest review step's fee sub-line ends with this instead of an amount */
   payRest: 'the rest after your wash.',
   upsell: 'No booking fee, with wax and engine bay included.',
 } as const
+
+/**
+ * The guest booking fee of a catalog payload in whole dollars (a Settings value, guestBookingFeeCents), or null when it
+ * has none the website can show. Interim mode takes only this from the catalog: the fee is not part of the old price
+ * model, and the API charges this amount.
+ */
+export const catalogFee = (raw: unknown): number | null => (isObj(raw) ? dollars(raw.guestBookingFeeCents, 0) : null)
 
 /** The figures interim mode may show: the two starting prices and the booking fee. */
 export const interimFigures = (fee: number): string[] => [INTERIM.washFromAmount, INTERIM.goldAmount, `$${fee}`]
@@ -437,7 +445,6 @@ export function interimTexts(fee: number): Record<string, string> {
     priceIntro: `${INTERIM.priced}, and we'll reply with a quote.`,
     memberFee: INTERIM.none,
     vipFirst: 'VIP members book first. Guests can book any open time.',
-    tierPer: '',
     barPer: '',
     upsellHead: 'AS A VIP MEMBER',
   }

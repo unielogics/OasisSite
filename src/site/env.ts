@@ -55,7 +55,8 @@ export interface SiteEnv {
   catalog: CatalogConfig
   /**
    * DV-CATALOG: the GET /api/v1/public/catalog snapshot baked into the page (SITE_CATALOG_JSON), kept only when it is
-   * website-ready (src/site/catalog.ts websiteCatalog); null: the design's built-in content until the browser's refresh
+   * website-ready (src/site/catalog.ts websiteCatalog); null: the design's built-in content until the browser's refresh.
+   * Interim pricing (DV-PRICE-INTERIM) keeps only its guest booking fee: { guestBookingFeeCents, services: [], addons: [] }.
    */
   catalogSnapshot: PublicCatalog | null
   catalogSource: 'SITE_CATALOG_JSON' | 'none'

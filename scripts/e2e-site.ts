@@ -826,6 +826,16 @@ async function main(): Promise<number> {
         const mem = await pageText(page)
         check('interim prices: the catalog\'s Gold price does not show on the membership page', /from \$129\/mo/.test(mem) && !/\$109|\$99/.test(mem), mem.slice(0, 200).replace(/\s+/g, ' '))
         await ctx.close()
+        // the booking fee is a Settings value: a $30 fee in the API's catalog is the fee the page shows (and only that)
+        fixture.state.catalog = { ...changedCatalog, guestBookingFeeCents: 3000 }
+        const f = await newPage(browser, proxy.origin)
+        trackers.push(f.t)
+        await f.page.goto(`${proxy.origin}/#/membership`, { waitUntil: 'load' })
+        await ready(f.page)
+        await f.page.waitForFunction(() => /\$30/.test(document.getElementById('dc-root')?.innerText ?? ''), null, { timeout: 20_000 }).catch(() => {})
+        const feeText = await pageText(f.page)
+        check('interim prices: the booking fee follows the API\'s catalog ($30 on the membership page, no $25)', /\$30\b/.test(feeText) && !/\$25\b|\$60|\$109/.test(feeText), feeText.slice(0, 200).replace(/\s+/g, ' '))
+        await f.ctx.close()
         // DV-CATALOG ("catalog" price mode): the page first shows the build snapshot (Signature "SAVE $62"), then the live
         // answer (changed: "SAVE $60", Gold $109); an unseeded live answer brings the design's own content back ("SAVE
         // $54"), never the dashboard's list. The catalog request is held until the snapshot was seen.

@@ -25,6 +25,7 @@ import { decideTheme, LIGHT_QUERY, readStoredTheme, storeTheme, type ThemeConfig
 import { designTime, hoursRows, hoursTable, withToday, type HoursTable } from './hours'
 import {
   catalogMatch,
+  catalogFee,
   catalogTexts,
   DESIGN_DETAIL,
   DESIGN_FILMS,
@@ -159,6 +160,16 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
   const smsUrl = (body: string): string => `sms:${env.contact.smsE164}?&body=${encodeURIComponent(body)}`
   // DV-PRICE-INTERIM: anything but an explicit "catalog" is the interim prices (the old catalog never comes back by mistake)
   const interim = env.pricing !== 'catalog'
+  // the join flow's plan cards: the template's "/mo" after the price binds each plan's own suffix (t.per, DV-PRICE-INTERIM)
+  const tierWith = (t: any, price: string, per: string): any => {
+    const { name, price: _price, per: _per, ...rest } = t
+    void _price
+    void _per
+    return { name, price, per, ...rest }
+  }
+  /** catalog mode: every plan keeps the design's "/mo" (a suffix the plan already carries stays) */
+  const withTierPer = (r: Record<string, any>): Record<string, any> =>
+    r.jv && Array.isArray(r.jv.tiers) ? { ...r, jv: { ...r.jv, tiers: r.jv.tiers.map((t: any) => ('per' in t ? t : tierWith(t, t.price, '/mo'))) } } : r
 
   class SiteComponent extends Base {
     __mounted = false
@@ -509,11 +520,13 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       // only over the design's own data model (a logic class without it is left alone)
       if (!Array.isArray(this.WASH) || !Array.isArray(this.DURING) || !Array.isArray(this.VEH) || !this.TINT || typeof this.FEE !== 'number') return false
       if (!this.__design) this.__design = { WASH: this.WASH, DURING: this.DURING, TINT: this.TINT, VEH: this.VEH, FEE: this.FEE }
-      // DV-PRICE-INTERIM: the catalog's content carries the old price model and is not applied (its keys still are)
+      // DV-PRICE-INTERIM: the catalog's content carries the old price model and is not applied (its keys still are); only
+      // its guest booking fee is (a Settings value, what the API charges; else the design's)
       const site = raw && !interim ? websiteCatalog(raw, env.catalog, this.__design).site : null
-      const changed = JSON.stringify(site) !== JSON.stringify(this.__site)
+      const fee = interim ? (catalogFee(raw) ?? this.__design.FEE) : null
+      const changed = JSON.stringify(site) !== JSON.stringify(this.__site) || (fee !== null && fee !== this.FEE)
       this.__site = site
-      Object.assign(this, designContentOf(site, this.__design))
+      Object.assign(this, designContentOf(site, this.__design), fee !== null ? { FEE: fee } : {})
       // an add-on or a vehicle type the new lists do not carry leaves the visitor's choice (the tint page and the booking
       // sheet look the chosen vehicle type up in VEH and TINT); a vehicle falls back to the list's first, as the design starts
       const has = (id: string) => this.DURING.some((a: any) => a.id === id)
@@ -558,7 +571,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     __catalogTexts(): Record<string, string> {
       if (!this.__design) return {}
-      if (interim) return interimTexts(this.__design.FEE)
+      if (interim) return interimTexts(this.FEE)
       return catalogTexts(priceFacts(this.__site, this.__design!, (m) => this.g(m)))
     }
 
@@ -780,7 +793,13 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     // the Signature Hand Wash "from $40", membership "from $129/mo" (Gold) and the booking fee. Each method below takes the
     // design's view model and writes the interim words over its prices, field for field and key order kept; the parity
     // allow-list's DV-PRICE-INTERIM swaps give the original design the same values (src/site/bridge-interim.test.ts holds
-    // the two together over every price state).
+    // the two together over every price state). The booking fee is the catalog's (Settings) when it has one: every "$25"
+    // the design writes is the fee, and __fee() writes the current one over it.
+
+    /** The design's fee amount ("$25") in a string replaced by the current fee (FEE: the catalog's, else the design's). */
+    __fee(x: unknown): unknown {
+      return swapAmount(x, this.__design!.FEE, this.FEE)
+    }
 
     /** The Gold savings calculator: the box is hidden (site.cat.calcDisplay) and its numbers are gone. */
     __interimHome(v: Record<string, any>): Record<string, any> {
@@ -804,7 +823,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         vipMonth: [],
         vipMonthGuest: '',
         vipMonthSave: '',
-        faqs: (v.faqs || []).map((f: any) => (typeof f.a === 'string' ? { ...f, a: f.a.replace('to hold a time, on top of guest pricing.', 'to hold a time.') } : f)),
+        faqs: (v.faqs || []).map((f: any) => (typeof f.a === 'string' ? { ...f, a: this.__fee(f.a.replace('to hold a time, on top of guest pricing.', 'to hold a time.')) } : f)),
       }
     }
 
@@ -814,7 +833,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       return {
         ...v,
         compRows: (v.compRows || []).map((row: any) =>
-          row.f === 'Booking fee' ? { ...row, cells: row.cells.map((c: any) => (c.t === '$0' ? { ...c, t: INTERIM.none } : c)) } : row,
+          row.f === 'Booking fee' ? { ...row, cells: row.cells.map((c: any) => (c.t === '$0' ? { ...c, t: INTERIM.none } : 't' in c ? { ...c, t: this.__fee(c.t) } : c)) } : row,
         ),
         washCards: (v.washCards || []).map((c: any, i: number) => (cardPrice[i] ? { ...c, g: cardPrice[i] } : c)),
         tintPriceLabel: typeof v.tintPriceLabel === 'string' ? v.tintPriceLabel.replace(/^VIP · /, '') : v.tintPriceLabel,
@@ -837,7 +856,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         ...r,
         jv: {
           ...jv,
-          tiers: jv.tiers.map((t: any) => (label[t.name] ? { ...t, price: label[t.name]!.label } : t)),
+          // the price, then its suffix (the template's "/mo" span binds t.per): Gold "from $129/mo", VIP "Ask us"
+          tiers: jv.tiers.map((t: any) => (label[t.name] ? tierWith(t, label[t.name]!.label, t.name === 'Gold' ? INTERIM.tierPerGold : '') : t)),
           agreeText: typeof jv.agreeText === 'string' ? jv.agreeText.replace(/^I agree to be billed \$[\d,]+ a month for /, 'I agree to be billed monthly for ') : jv.agreeText,
           lines: (jv.lines || []).map((l: any, i: number) => (i === 0 ? { ...l, value: tier.mo } : l.label === 'Booking fees' ? { ...l, value: INTERIM.none } : l)),
           due: tier.label,
@@ -870,6 +890,11 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         else if (typeof sh.dueSub === 'string') out.dueSub = sh.dueSub.replace(/Pay \$[\d,]+ after your wash\.$/, () => 'Pay ' + INTERIM.payRest)
         out.upsell = INTERIM.upsell
       }
+      // the fee amounts (the fee lines, what is due now, its sub-line, the button): the current fee
+      const fee = (l: any) => (l && typeof l.value === 'string' ? { ...l, value: this.__fee(l.value) } : l)
+      if (Array.isArray(out.lines)) out.lines = out.lines.map(fee)
+      if (Array.isArray(out.sumLines)) out.sumLines = out.sumLines.map(fee)
+      for (const k of ['due', 'dueSub', 'ctaLabel']) if (typeof out[k] === 'string') out[k] = this.__fee(out[k])
       return { ...r, sh: out }
     }
     // ==== end of DV-PRICE-INTERIM ===========================================================================================
@@ -977,7 +1002,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     joinVM(): Record<string, any> {
-      const r = interim ? this.__interimJoin(super.joinVM()) : this.__catalogJoin(super.joinVM())
+      const r = interim ? this.__interimJoin(super.joinVM()) : withTierPer(this.__catalogJoin(super.joinVM()))
       const j = this.state.jn
       const jv = r.jv
       if (!jv || this.state.page !== 'join') return r

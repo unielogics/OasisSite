@@ -381,10 +381,10 @@
       "id": "DV-PRICE-INTERIM-tier-per",
       "page": "index",
       "kind": "text",
-      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join flow's plan prices carry their own /mo.",
+      "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join flow's plan cards: each plan's own suffix after the price (Gold /mo, VIP none; the port binds t.per).",
       "swap": {
         "find": "<span style=\"font-size:12px;color:var(--ink3);font-weight:700;\">/mo</span>",
-        "replace": "<span style=\"font-size:12px;color:var(--ink3);font-weight:700;\"></span>",
+        "replace": "<span style=\"font-size:12px;color:var(--ink3);font-weight:700;\">{{ t.per }}</span>",
         "count": 1,
         "target": "template"
       }
@@ -660,7 +660,7 @@
       "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join flow: Gold from $129.",
       "swap": {
         "find": "gold:{ name:'Gold', price:99,",
-        "replace": "gold:{ name:'Gold', price:99, label:'from $129', mo:'from $129/mo',",
+        "replace": "gold:{ name:'Gold', price:99, label:'from $129', mo:'from $129/mo', per:'/mo',",
         "count": 1,
         "target": "logic"
       }
@@ -672,7 +672,7 @@
       "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join flow: VIP has no figure.",
       "swap": {
         "find": "vip:{ name:'VIP', price:169,",
-        "replace": "vip:{ name:'VIP', price:169, label:'Ask us', mo:'Ask us',",
+        "replace": "vip:{ name:'VIP', price:169, label:'Ask us', mo:'Ask us', per:'',",
         "count": 1,
         "target": "logic"
       }
@@ -684,7 +684,7 @@
       "reason": "DV-PRICE-INTERIM (owner, 2026-10-12): the join flow's plan cards.",
       "swap": {
         "find": "price:'$' + v.price,",
-        "replace": "price:v.label,",
+        "replace": "price:v.label, per:v.per,",
         "count": 1,
         "target": "logic"
       }

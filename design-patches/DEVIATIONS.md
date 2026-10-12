@@ -85,14 +85,16 @@ of every entry below.
 - **DV-PRICE-INTERIM** Interim website prices (owner, 2026-10-12, plan decision 9): prices depend on the vehicle size,
   a single wash starts at **$40** and membership at **$129/month**; the real per-size catalog (public catalog v2) comes
   later. Until the site switches to it, `site.config.json` `"pricing": "interim"` (the default; `SITE_PRICING` overrides
-  it for a build) shows ONLY the Signature Hand Wash "from $40", Gold "from $129" and the $25 booking fee; every other
+  it for a build) shows ONLY the Signature Hand Wash "from $40", Gold "from $129" and the booking fee; every other
   price reads "Priced by vehicle size — ask us", or "Ask us" where the design's slot only fits a price, in the design's
   own typography and components. Every statement of the old price model goes (guests' "prices 20% higher", member vs
   guest pairs, "SAVE $N", the Gold savings calculator, "A VIP month, priced as a guest", the tint savings, the $0
-  statements); no new figure and no new perk. Unchanged: the $25 booking fee wording, the perks bullets, hours, the
+  statements); no new figure and no new perk. Unchanged: the booking fee wording and amount (the catalog's
+  `guestBookingFeeCents`, a Settings value, when it has a whole-dollar one, else the design's $25; the build bakes it
+  and the browser's catalog load applies it, wherever the page says "$25"), the perks bullets, hours, the
   booking and join flows, links, theme. In interim mode the live catalog (DV-CATALOG v1, the old member/guest model) is
   never applied to the page's content (neither the build snapshot nor the browser's load; its keys still name the
-  booked wash and add-ons); `"pricing": "catalog"` brings DV-CATALOG back unchanged. The port writes the interim words
+  booked wash and add-ons, and its fee is the fee); `"pricing": "catalog"` brings DV-CATALOG back unchanged. The port writes the interim words
   in the bridge (`src/site/index.bridge.ts` DV-PRICE-INTERIM section over the design's view models, `site.cat` from
   `src/site/catalog.ts` `interimTexts` for the template's texts: the 18 DV-CATALOG ops plus 12 new ops, one of them a
   `set-attr` that appends `display:{{ site.cat.calcDisplay }}` to the calculator box).
@@ -130,7 +132,8 @@ of every entry below.
     book first. Guests can book any open time.", "Join VIP".
   - sticky bar: "VIP · $169/mo", "Priority times · Gold from $99" → "VIP · Ask us", "Priority times · Gold from
     $129" (the design's format; "/mo" would end in an ellipsis on a phone).
-  - #/join / plan cards: "$99/mo", "$169/mo" → "from $129", "Ask us"; summary "Gold membership $99/mo", "Booking fees
+  - #/join / plan cards: "$99/mo", "$169/mo" → "from $129/mo", "Ask us" (the "/mo" span binds each plan's own suffix,
+    `t.per`: Gold "/mo", VIP none, so "Ask us" carries no "/mo"); summary "Gold membership $99/mo", "Booking fees
     $0", "Due at checkout $99" → "from $129/mo" (VIP "Ask us"), "None", "from $129" (VIP "Ask us"); terms "I agree to be
     billed $99 a month for Gold until I cancel. …" → "I agree to be billed monthly for Gold until I cancel. …"; button
     "Start Gold · $99/mo" → "Start Gold".

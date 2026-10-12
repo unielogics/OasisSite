@@ -9,13 +9,14 @@
 //   SITE_CATALOG_JSON               GET /api/v1/public/catalog body, inline or a file path (DV-CATALOG): baked in only when
 //                                   it is website-ready (src/site/catalog.ts), else the design's built-in content + a warning
 //   SITE_PRICING=interim|catalog    overrides site.config.json `pricing` (DV-PRICE-INTERIM; default interim): interim never
-//                                   bakes or applies the catalog's content (the old price model), catalog is DV-CATALOG
+//                                   bakes or applies the catalog's content (the old price model), only its booking fee;
+//                                   catalog is DV-CATALOG
 //   SITE_BUILD_NOW / PRERENDER_NOW  the build instant (default: now); the parity build pins it to the harness's clock
 import fs from 'node:fs'
 import path from 'node:path'
 import type { PublicHours } from '../../src/hours/format'
 import { validateAvailability, type Availability } from '../../src/site/availability'
-import { configDesign, PRICING_MODES, websiteCatalog, type PricingMode, type PublicCatalog } from '../../src/site/catalog'
+import { catalogFee, configDesign, PRICING_MODES, websiteCatalog, type PricingMode, type PublicCatalog } from '../../src/site/catalog'
 import type { SiteEnv } from '../../src/site/env'
 import type { SiteConfig } from './seo'
 
@@ -66,10 +67,22 @@ export function buildSiteEnv(i: SiteEnvInput): SiteEnv {
   // DV-PRICE-INTERIM: the price mode (an unknown value fails the build rather than guessing)
   const pricing = (i.pricing || s.pricing || 'interim') as PricingMode
   if (!PRICING_MODES.includes(pricing)) throw new Error(`pricing (site.config.json or SITE_PRICING) must be ${PRICING_MODES.join(' or ')}, got ${pricing}`)
-  // DV-CATALOG: the catalog snapshot, kept only when the page would use it (website-ready, pricing "catalog")
+  // DV-CATALOG: the catalog snapshot, kept only when the page would use it (website-ready, pricing "catalog"); interim
+  // mode keeps only its guest booking fee (a Settings value, what the API charges), never the old price model
   let catalogSnapshot: PublicCatalog | null = null
   if (pricing === 'interim') {
-    if (i.catalogJson) i.warn('pricing is interim (DV-PRICE-INTERIM): SITE_CATALOG_JSON is not baked and the catalog\'s prices are not shown')
+    if (i.catalogJson) {
+      let fee: number | null = null
+      try {
+        fee = catalogFee(readSnapshot(i.catalogJson))
+      } catch {
+        /* not a catalog payload: the design's fee */
+      }
+      if (fee !== null) catalogSnapshot = { guestBookingFeeCents: fee * 100, services: [], addons: [] }
+      i.warn(
+        `pricing is interim (DV-PRICE-INTERIM): SITE_CATALOG_JSON's prices are not shown; ${fee !== null ? `only its booking fee ($${fee}) is baked` : "it has no whole-dollar booking fee, the page shows the design's"}`,
+      )
+    }
   } else if (i.catalogJson) {
     try {
       const raw = readSnapshot(i.catalogJson)
