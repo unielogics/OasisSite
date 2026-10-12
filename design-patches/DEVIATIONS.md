@@ -177,9 +177,15 @@ of every entry below.
   - **Booking sheet**: priced for the chosen size; a size the item has no price for reads "At the shop" ("by vehicle
     size"); a member's included wash reads the design's "$0 · 1 of 4 this month" (the tier's own count), and a verified
     member whose plan size is known sees "Included · +$N size difference at the shop" (no % off on the difference,
-    plan decision 2) with a "Size difference · at the shop" review line; add-ons a member's tier includes read
-    "Included", others the member price at the size; the review's due amounts and the guest upsell follow. The request
-    sends `vehicleClass` (the size key) and no made-up `vehicle.label`.
+    plan decision 2; the cents difference rounded half up once) with a "Size difference · at the shop" review line;
+    when the site cannot know the difference (no price at the chosen size, or an unknown plan size on a car above the
+    starting price) the wash reads "Included · size difference, if any, at the shop", the review line "if any" and
+    what is due "At the shop", never "$0"; add-ons a member's tier includes read "Included", others the member price at
+    the size at the member's own tier's % off; the review's due amounts follow. The guest upsell's "As VIP: $X" counts
+    the wash too (nothing when VIP includes it at the car's size, else the size difference from the best size VIP is
+    sold at, or VIP's member price when VIP does not include it) and the add-ons VIP does not include, at VIP's % off;
+    anything unpriced keeps the interim words. The request sends `vehicleClass` (the size key) and no made-up
+    `vehicle.label`.
   - **Join flow**: the plan cards are the design's tiers the catalog sells ("from $129" when the price depends on the
     size); a **size picker** (the design's chips, "VEHICLE SIZE", only when the tier is sold at more than one size)
     sets the monthly price of the summary, the terms and the button; the request sends `planClass`; the sms text names

@@ -9,6 +9,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { serializeVals } from '../dc/serialize'
 import { designCatalogV2, seededCatalogV2, sizedCatalogV2, unseededCatalogV2 } from '../../tools/site/catalog-fixture'
 import { makeSite as makeAnySite, payload, type Handler, type SiteOptions } from './bridge.testkit'
+import { INTERIM } from './catalog'
 
 const makeSite = (o: SiteOptions = {}) => makeAnySite({ pricing: 'live', ...o })
 
@@ -201,8 +202,16 @@ describe('a filled grid', () => {
     expect(t.c.state.tier).toBe('gold')
     let sh = t.vals().sh
     expect(sh.washes[0]).toMatchObject({ price: 'Included', note: '+$30 size difference at the shop' })
-    // the Exterior wash is not priced at that size: the shop prices it
-    expect(sh.washes[1]).toMatchObject({ price: '$0', note: '1 of 4 this month' })
+    // the Exterior wash is not priced at that size: the shop prices it, so never "$0" (a difference may still be due)
+    expect(sh.washes[1]).toMatchObject({ price: 'Included', note: 'size difference, if any, at the shop' })
+    t.c.setState({ step: 'review', bk: { ...t.c.state.bk, svc: 'exterior', addons: ['wax'], day: 1, slot: 540 } })
+    sh = t.vals().sh
+    expect(sh.lines.map((l: any) => [l.label, l.value])).toEqual([
+      ['Exterior Hand Wash', 'Included'],
+      ['Size difference · at the shop', 'if any'],
+      ['Hand wax', '$42'],
+    ])
+    expect(sh.due).toBe('At the shop')
     t.c.setState({ step: 'review', bk: { ...t.c.state.bk, svc: 'signature', addons: ['wax'], day: 1, slot: 540 } })
     sh = t.vals().sh
     expect(sh.lines.map((l: any) => [l.label, l.value])).toEqual([
@@ -214,6 +223,75 @@ describe('a filled grid', () => {
     // the same member on their own plan size: no difference
     t.c.setState({ step: 'svc', bk: { ...t.c.state.bk, vehicle: 'compact_car' } })
     expect(t.vals().sh.washes[0]).toMatchObject({ price: '$0', note: '1 of 4 this month' })
+  })
+
+  const verified = async (cat: unknown, member: Record<string, unknown>, vehicle: string) => {
+    const t = makeSite({
+      booking: 'live',
+      availability: board,
+      catalog: cat,
+      routes: routes(cat, {
+        '/api/v1/public/otp': () => ok({ challengeId: '0b5c2a3e-1111-4c2b-9d1e-2f6a7b8c9d0e', expiresInSec: 600 }, 202),
+        '/api/v1/public/otp/verify': () => ok({ memberToken: 'x'.repeat(43), expiresInSec: 1800, member: { firstName: 'Dana', washesLeft: 3, active: true, ...member } }),
+      }),
+    })
+    t.c.setState({ sheet: 'book', step: 'who', bk: { ...t.c.state.bk, phone: '2015550199', vehicle } })
+    await t.c.__memberContinue()
+    t.c.setState({ bk: { ...t.c.state.bk, code: '123456' } })
+    await t.c.__verifyCode()
+    return t
+  }
+
+  it('the size difference is the cents difference rounded half up, not a difference of rounded prices', async () => {
+    const cat = sizedCatalogV2()
+    cat.services[0]!.prices = cat.services[0]!.prices.map((p) => (p.class === 'large_car' ? { ...p, cents: 4050, memberCents: 3600 } : p.class === 'large_suv' ? { ...p, cents: 4549, memberCents: 4100 } : p))
+    const t = await verified(cat, { tier: 'gold', plan: 'Gold', tierName: 'Gold', planClass: 'large_car', memberDiscountBp: 1000 }, 'large_suv')
+    let sh = t.vals().sh
+    expect(sh.washes[0]).toMatchObject({ price: 'Included', note: '+$5 size difference at the shop' })
+    t.c.setState({ step: 'review', bk: { ...t.c.state.bk, svc: 'signature', addons: [], day: 1, slot: 540 } })
+    sh = t.vals().sh
+    expect(sh.lines.slice(0, 2).map((l: any) => [l.label, l.value])).toEqual([
+      ['Signature Hand Wash', 'Included'],
+      ['Size difference · at the shop', '+$5'],
+    ])
+    expect(sh.due).toBe('$5')
+  })
+
+  it('a verified member pays their own tier\'s % off on what the plan does not include', async () => {
+    // VIP is 15% off while the catalog shows 10% (the lowest): tire shine $14 -> $11.90 -> $12 for VIP, not $13
+    const t = await verified(sizedCatalogV2(), { tier: 'vip', plan: 'VIP', tierName: 'VIP', planClass: 'compact_car', memberDiscountBp: 1500 }, 'compact_car')
+    expect(t.c.state.tier).toBe('vip')
+    const sh = t.vals().sh
+    const tire = sh.addons.find((a: any) => a.name === 'Tire shine & dressing')
+    expect(tire).toMatchObject({ price: '+$12' })
+  })
+
+  describe('the guest review\'s "As VIP" line counts the wash and the size', () => {
+    const review = (cat: unknown, svc: string, vehicle: string) => {
+      const t = makeSite({ booking: 'sms', availability: board, catalog: cat })
+      t.c.setState({ sheet: 'book', step: 'review', bk: { ...t.c.state.bk, who: 'guest', svc, vehicle, addons: ['wax'], day: 1, slot: 540 } })
+      return t.vals().sh.upsell
+    }
+    it('VIP includes the wash at the car\'s size: $0 (wax included too)', () => {
+      expect(review(sizedCatalogV2(), 'signature', 'compact_car')).toBe('You’d pay $112 as a guest. As VIP: $0, with wax and engine bay included.')
+    })
+    it('VIP does not include the wash: its member price at VIP\'s own % off', () => {
+      const cat = sizedCatalogV2()
+      cat.tiers[1]!.inclusions = cat.tiers[1]!.inclusions.filter((x) => x.serviceKey !== 'exterior-hand-wash')
+      // Exterior $30 at Compact car, VIP 15% off: $25.50 -> $26
+      expect(review(cat, 'exterior', 'compact_car')).toBe('You’d pay $102 as a guest. As VIP: $26, with wax and engine bay included.')
+    })
+    it('a car larger than any size VIP is sold at: the size difference', () => {
+      // Signature $70 at Large SUV, VIP sold at Compact car only ($40): $30 at the shop
+      expect(review(sizedCatalogV2(), 'signature', 'large_suv')).toBe('You’d pay $142 as a guest. As VIP: $30, with wax and engine bay included.')
+      // VIP sold at Large SUV too: priced at the car's size, nothing to add
+      const cat = sizedCatalogV2()
+      cat.tiers[1]!.prices = [...cat.tiers[1]!.prices, { class: 'large_suv', monthlyCents: 24900 }]
+      expect(review(cat, 'signature', 'large_suv')).toBe('You’d pay $142 as a guest. As VIP: $0, with wax and engine bay included.')
+    })
+    it('a wash without a price at the size: the interim words, never a made-up VIP price', () => {
+      expect(review(sizedCatalogV2(), 'exterior', 'large_suv')).toBe(INTERIM.upsell)
+    })
   })
 
   it('the booking request sends the size key, never a made-up vehicle', async () => {

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { designCatalogV2, seededCatalogV2, sizedCatalogV2, unseededCatalogV2 } from '../../tools/site/catalog-fixture'
 import { catalogTexts, DESIGN_PLANS, priceFacts, type CatalogKeys } from './catalog'
-import { dollarsOf, guestMarkupPct, liveCatalog, liveTexts, parseCatalogV2, priceAt, tierPriceAt, tierUniform, usd, websiteReadyV2, type CatalogV2 } from './catalog2'
+import { dollarsOf, guestMarkupPct, liveCatalog, liveTexts, memberAt, memberCents, parseCatalogV2, priceAt, sizeDifferenceCents, tierPriceAt, tierUniform, usd, websiteReadyV2, type CatalogV2 } from './catalog2'
 
 const KEYS: CatalogKeys = {
   services: { signature: { key: 'signature-hand-wash', name: 'Signature Hand Wash' }, exterior: { key: 'exterior-hand-wash', name: 'Exterior Hand Wash' } },
@@ -43,6 +43,14 @@ describe('money', () => {
     expect(guestMarkupPct(1667)).toBe(20)
     expect(guestMarkupPct(0)).toBe(0)
     expect(guestMarkupPct(10_000)).toBe(0)
+  })
+  it('a member price at a tier\'s own % off follows the backend (price-book memberCents): half up to whole dollars, never above', () => {
+    expect(memberCents(3000, 1500)).toBe(2600) // 25.50 -> 26
+    expect(memberCents(1200, 1500)).toBe(1000) // 10.20 -> 10
+    expect(memberCents(4549, 0)).toBe(4549)
+    expect(memberCents(4549, 10_000)).toBe(0)
+    expect(memberCents(50, 100)).toBe(0) // 0.495 -> 0, never above the price
+    expect(memberCents(4050, 1)).toBe(4000) // 40.4959 -> 40
   })
 })
 
@@ -173,7 +181,8 @@ describe('liveCatalog: the page model', () => {
     const l = liveCatalog(ready(sizedCatalogV2()), KEYS, { WASH, DURING })
     const sig = l.wash[0]!
     expect([sig.g, sig.m, sig.uniform, sig.bySize.length]).toEqual([40, 36, false, 5])
-    expect(priceAt(sig, 'large_suv')).toEqual({ g: 70, m: 63, gMax: null, mMax: null })
+    expect(priceAt(sig, 'large_suv')).toEqual({ g: 70, m: 63, gMax: null, mMax: null, gc: 7000, mc: 6300 })
+    expect([sig.gc, sig.mc]).toEqual([4000, 3600])
     const ext = l.wash[1]!
     expect(ext.bySize.map((x) => x.label)).toEqual(['Compact car', 'Large car'])
     expect(priceAt(ext, 'truck')).toBeNull()
@@ -181,6 +190,34 @@ describe('liveCatalog: the page model', () => {
     expect(l.tint!.guest.carbon!.truck).toEqual([330, 390])
     const gold = l.tiers.gold!
     expect([gold.price, tierUniform(gold), tierPriceAt(gold, 'large_suv'), tierPriceAt(gold, 'truck')]).toEqual([129, false, 159, null])
+    expect([gold.memberDiscountBp, l.tiers.vip!.memberDiscountBp, l.discountBp]).toEqual([1000, 1500, 1000])
+  })
+
+  it('a member price at a tier\'s % off: the catalog\'s own when the tier\'s % off is the one it shows, else worked out', () => {
+    const l = liveCatalog(ready(sizedCatalogV2()), KEYS, { WASH, DURING })
+    const ext = priceAt(l.wash[1]!, 'compact_car')!
+    expect(memberAt(ext, 1000, l.discountBp)).toBe(2700)
+    expect(memberAt(ext, 1500, l.discountBp)).toBe(2600)
+  })
+
+  it('the size difference of an included item, in cents (ADR 0170: covered up to the plan-size price)', () => {
+    const raw = sizedCatalogV2()
+    // Signature: $40.50 at Large car, $45.49 at Large SUV (cents a whole-dollar display would round apart)
+    raw.services[0]!.prices = raw.services[0]!.prices.map((p) => (p.class === 'large_car' ? { ...p, cents: 4050, memberCents: 3600 } : p.class === 'large_suv' ? { ...p, cents: 4549, memberCents: 4100 } : p))
+    const l = liveCatalog(ready(raw), KEYS, { WASH, DURING })
+    const [sig, ext] = [l.wash[0]!, l.wash[1]!]
+    expect(sizeDifferenceCents(sig, 'large_suv', 'large_car', l.sizes)).toBe(499) // $5, not $45 - $41 = $4
+    expect(dollarsOf(sizeDifferenceCents(sig, 'large_suv', 'large_car', l.sizes)!)).toBe(5)
+    expect(sizeDifferenceCents(sig, 'large_car', 'large_suv', l.sizes)).toBe(0) // a smaller car than the plan size
+    expect(sizeDifferenceCents(sig, 'compact_car', null, l.sizes)).toBe(0) // the starting price: nothing to add, whatever the plan
+    expect(sizeDifferenceCents(sig, 'truck', null, l.sizes)).toBeNull() // the plan size unknown
+    expect(sizeDifferenceCents(sig, 'truck', 'retired_size', l.sizes)).toBeNull() // a plan size the catalog no longer lists
+    // Exterior has no price at the SUV sizes: the shop prices it, the difference is not known
+    expect(sizeDifferenceCents(ext, 'large_suv', 'compact_car', l.sizes)).toBeNull()
+    expect(sizeDifferenceCents(ext, 'large_suv', 'large_suv', l.sizes)).toBeNull()
+    expect(sizeDifferenceCents(ext, 'large_car', 'compact_car', l.sizes)).toBe(500)
+    // a plan size without a price: covered up to the starting price (backend planSizeCents -> the from price)
+    expect(sizeDifferenceCents(ext, 'large_car', 'truck', l.sizes)).toBe(500)
   })
 
   it('production after the seeds: only the Signature wash and Gold; every other section falls back', () => {

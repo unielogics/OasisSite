@@ -267,7 +267,14 @@ tiers with their prices by size and inclusions). The bridge's DV-CATALOG2 sectio
   inclusions.
 - The booking sheet is priced for the chosen size ("At the shop" for an unpriced one); a verified member (the OTP
   answer's `member.planClass`) on a larger car than the plan size sees "Included · +$N size difference at the shop" and
-  a review line for it. The request sends `vehicleClass`.
+  a review line for it (`sizeDifferenceCents`: the cents difference, rounded half up once); an included wash with no
+  price at the chosen size (or a plan size the site does not know) is never "$0": "Included · size difference, if any,
+  at the shop", a review line "if any" and what is due reads "At the shop". A member's other prices use their own
+  tier's % off (`memberAt`: the catalog's `memberCents` when the tier's % off is the one it shows, else the backend's
+  rule). The guest review's "As VIP: $X" adds the wash (nothing when VIP includes it and is sold at the car's size,
+  else the size difference from the best size VIP is sold at; VIP's member price when it does not include it) and the
+  add-ons VIP does not include; the interim words when anything is unpriced. Amounts stay in cents until shown. The
+  request sends `vehicleClass`.
 - The join flow: the design's tiers the catalog sells; a size picker (`site.joinSizes`, a DV-CATALOG2 op under the plan
   cards) when the tier is sold at more than one size; `planClass` in the request; the sms text names the size.
 - The Gold savings calculator and "What VIP is worth" use the catalog's prices with the design's formulas and labels.

@@ -51,9 +51,12 @@ export { catalogMatch, slugOfName } from './catalog'
 // ---- links (W3f): imports ----
 import { installLinkCapture, onLink, takeLink, type CapturedLink } from '../client/link'
 import {
+  dollarsOf,
   liveCatalog,
   liveTexts,
+  memberAt,
   priceAt,
+  sizeDifferenceCents,
   tierPriceAt,
   tierUniform,
   websiteReadyV2,
@@ -1292,7 +1295,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     /**
      * The booking sheet priced for the chosen size: a guest's price at the size ("At the shop" for a size the catalog does
      * not price), a member's inclusions (the size difference of an included wash, paid at the shop, for a verified member
-     * whose plan size is known), the fee lines, what is due and the upsell.
+     * whose plan size is known; "if any" when the site cannot know it), the fee lines, what is due and the upsell. Every
+     * amount is in cents until it is shown (one half-up rounding per figure, plan decision 2).
      */
     __liveSheet(r: Record<string, any>): Record<string, any> {
       const l = this.__live!
@@ -1303,29 +1307,28 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const isG = b.who === 'guest'
       const size = String(b.vehicle)
       const tier = !isG && s.tier ? (l.tiers[s.tier as DesignTier] ?? null) : null
+      const bp = tier ? tier.memberDiscountBp : l.discountBp
       const incl = (key: string | undefined) => (key ? tier?.inclusions.find((x) => x.serviceKey === key) : undefined)
       const washItem = (id: string) => l.wash.find((w) => w.id === id) ?? null
       const addonItem = (id: string) => l.during?.find((a) => a.id === id) ?? null
       const at = (it: LiveItem | null): SizePrice | null => (it ? priceAt(it, size) : null)
       const planClass = this.__member?.member.active ? this.__member.member.planClass : null
       const SHOP = 'At the shop'
-      const washOf = (w: any): { included: boolean; amount: number | null; diff: number } => {
+      /** amount: what the line costs (cents; null: at the shop); diff: an included wash's size difference (null: if any) */
+      const washOf = (w: any): { included: boolean; amount: number | null; diff: number | null } => {
         const it = washItem(w.id)
         const p = at(it)
-        if (isG) return { included: false, amount: p ? p.g : null, diff: 0 }
-        if (it && incl(it.key)) {
-          const plan = planClass ? priceAt(it, planClass) : null
-          return { included: true, amount: 0, diff: p && plan && p.g > plan.g ? p.g - plan.g : 0 }
-        }
-        return { included: false, amount: p ? p.m : null, diff: 0 }
+        if (isG) return { included: false, amount: p ? p.gc : null, diff: 0 }
+        if (it && incl(it.key)) return { included: true, amount: 0, diff: sizeDifferenceCents(it, size, planClass, l.sizes) }
+        return { included: false, amount: p ? memberAt(p, bp, l.discountBp) : null, diff: 0 }
       }
       const addonOf = (a: any): { included: boolean; amount: number | null } => {
         const it = addonItem(a.id)
         if (!isG && it && incl(it.key)) return { included: true, amount: 0 }
         const p = at(it)
-        return { included: false, amount: p ? (isG ? p.g : p.m) : null }
+        return { included: false, amount: p ? (isG ? p.gc : memberAt(p, bp, l.discountBp)) : null }
       }
-      const money = (x: number | null) => (x === null ? SHOP : '$' + x)
+      const money = (x: number | null) => (x === null ? SHOP : '$' + dollarsOf(x))
       const wash = this.WASH.find((w: any) => w.id === b.svc) || this.WASH[0]
       const ads = this.DURING.filter((a: any) => b.addons.includes(a.id))
       const out: Record<string, any> = { ...sh }
@@ -1336,7 +1339,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
           const x = washOf(w)
           if (isG) return { ...o, price: money(x.amount), note: x.amount === null ? 'by vehicle size' : o.note }
           if (x.included) {
-            if (x.diff > 0) return { ...o, price: 'Included', note: `+$${x.diff} size difference at the shop` }
+            if (x.diff === null) return { ...o, price: 'Included', note: 'size difference, if any, at the shop' }
+            if (x.diff > 0) return { ...o, price: 'Included', note: `+$${dollarsOf(x.diff)} size difference at the shop` }
             const n2 = incl(washItem(w.id)?.key)
             return { ...o, price: '$0', note: n2?.perCycle ? `1 of ${n2.perCycle} this month` : 'included every visit' }
           }
@@ -1347,14 +1351,15 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
           const a = this.DURING[n]
           if (!a) return o
           const x = addonOf(a)
-          return x.included ? { ...o, price: 'Included', priceCol: 'var(--accentText)' } : { ...o, price: x.amount === null ? SHOP : '+$' + x.amount, priceCol: 'var(--ink3)' }
+          return x.included ? { ...o, price: 'Included', priceCol: 'var(--accentText)' } : { ...o, price: x.amount === null ? SHOP : '+$' + dollarsOf(x.amount), priceCol: 'var(--ink3)' }
         })
       const w = washOf(wash)
       if (Array.isArray(sh.lines)) {
         const lines: any[] = [
           { ...sh.lines[0], value: isG ? money(w.amount) : w.included ? 'Included' : money(w.amount), vc: isG || !w.included ? 'var(--ink)' : 'var(--accentText)' },
         ]
-        if (w.diff > 0) lines.push({ label: 'Size difference · at the shop', value: '+$' + w.diff, lc: 'var(--ink2)', vc: 'var(--ink)' })
+        if (w.diff === null) lines.push({ label: 'Size difference · at the shop', value: 'if any', lc: 'var(--ink2)', vc: 'var(--ink)' })
+        else if (w.diff > 0) lines.push({ label: 'Size difference · at the shop', value: '+$' + dollarsOf(w.diff), lc: 'var(--ink2)', vc: 'var(--ink)' })
         ads.forEach((a: any, k: number) => {
           const x = addonOf(a)
           lines.push({ ...sh.lines[k + 1], value: x.included ? 'Included' : money(x.amount), vc: x.included ? 'var(--accentText)' : 'var(--ink)' })
@@ -1374,7 +1379,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       if (sh.bReview) {
         const parts = [w.included ? w.diff : w.amount, ...ads.map((a: any) => addonOf(a).amount)]
         const unknown = parts.some((x) => x === null)
-        const sum = parts.reduce((a: number, x) => a + (x ?? 0), 0)
+        const sum = dollarsOf(parts.reduce((a: number, x) => a + (x ?? 0), 0))
         if (sh.isGuest) {
           out.due = '$' + l.fee
           if (typeof sh.dueSub === 'string')
@@ -1384,22 +1389,46 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         } else out.due = unknown ? SHOP : this.$(sum)
         if (typeof sh.upsell === 'string') {
           const vip = l.tiers.vip
-          if (!vip || unknown) out.upsell = INTERIM.upsell
+          const cost = vip && !unknown ? this.__vipVisitCents(vip, wash, ads, size) : null
+          if (!vip || cost === null) out.upsell = INTERIM.upsell
           else {
-            const vipCost = ads.reduce((acc: number, a: any) => {
-              const it = addonItem(a.id)
-              if (it && vip.inclusions.some((x) => x.serviceKey === it.key)) return acc
-              return acc + (at(it)?.m ?? 0)
-            }, 0)
             const extras = ['wax', 'engine'].every((id) => {
               const it = addonItem(id)
               return !!it && vip.inclusions.some((x) => x.serviceKey === it.key)
             })
-            out.upsell = 'You’d pay ' + this.$(sum + l.fee) + ' as a guest. As VIP: ' + this.$(vipCost) + (extras ? ', with wax and engine bay included.' : '.')
+            out.upsell = 'You’d pay ' + this.$(sum + l.fee) + ' as a guest. As VIP: ' + this.$(dollarsOf(cost)) + (extras ? ', with wax and engine bay included.' : '.')
           }
         }
       }
       return { ...r, sh: out }
+    }
+
+    /**
+     * What the same visit would cost a VIP member (cents), for the guest review's "As VIP" line; null when the site cannot
+     * know it. The wash: nothing when VIP includes it and is sold at the car's size, else the size difference from the best
+     * size VIP is sold at (a household plan is priced at a chosen size); its member price at VIP's % off when VIP does not
+     * include it. Each add-on: nothing when VIP includes it, else its member price at VIP's % off.
+     */
+    __vipVisitCents(vip: LiveTier, wash: any, ads: any[], size: string): number | null {
+      const l = this.__live!
+      const it = l.wash.find((w) => w.id === wash?.id) ?? null
+      const p = it ? priceAt(it, size) : null
+      if (!it || !p) return null
+      let cost: number
+      if (vip.inclusions.some((x) => x.serviceKey === it.key)) {
+        const plans = vip.prices.some((x) => x.class === size) ? [size] : vip.prices.map((x) => x.class)
+        const diffs = plans.map((pc) => sizeDifferenceCents(it, size, pc, l.sizes)).filter((x): x is number => x !== null)
+        if (!diffs.length) return null
+        cost = Math.min(...diffs)
+      } else cost = memberAt(p, vip.memberDiscountBp, l.discountBp)
+      for (const a of ads) {
+        const ai = l.during?.find((d) => d.id === a.id) ?? null
+        if (ai && vip.inclusions.some((x) => x.serviceKey === ai.key)) continue
+        const ap = ai ? priceAt(ai, size) : null
+        if (!ap) return null
+        cost += memberAt(ap, vip.memberDiscountBp, l.discountBp)
+      }
+      return cost
     }
     // ==== end of DV-CATALOG2 ================================================================================================
 

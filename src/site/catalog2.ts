@@ -87,6 +87,15 @@ export const dollarsOf = (cents: number): number => Math.floor((cents + 50) / 10
 export const usd = (cents: number): string => '$' + dollarsOf(cents).toLocaleString('en-US')
 /** a whole number of dollars */
 export const wholeDollars = (cents: number): boolean => cents % 100 === 0
+/**
+ * The backend's member price (catalog/price-book.ts memberCents, plan decision 2): price x (1 - % off), rounded half up to
+ * whole dollars, never above the price; 0 % leaves the price as it is.
+ */
+export function memberCents(cents: number, discountBp: number): number {
+  if (discountBp <= 0) return cents
+  if (discountBp >= 10_000) return 0
+  return Math.min(cents, Math.floor((cents * (10_000 - discountBp) * 2 + 1_000_000) / 2_000_000) * 100)
+}
 
 function includedInOf(x: unknown): V2IncludedIn[] {
   if (!Array.isArray(x)) return []
@@ -296,12 +305,17 @@ export function websiteReadyV2(raw: unknown, keys: CatalogKeys, designWash: { id
 }
 
 // ---- the page's model in the design's units ----------------------------------------------------------------------------------
-/** One size's price of an item, in whole dollars (g: the regular "guest" price, m: the member price; ranges for tint). */
+/**
+ * One size's price of an item, in whole dollars (g: the regular "guest" price, m: the member price at the catalog's shown
+ * % off; ranges for tint) for display, and in cents (gc, mc) for any sum or difference (rounded once, at the end).
+ */
 export interface SizePrice {
   g: number
   m: number
   gMax: number | null
   mMax: number | null
+  gc: number
+  mc: number
 }
 
 /** An item as the page shows it. */
@@ -309,9 +323,11 @@ export interface LiveItem {
   key: string
   name: string
   sub: string
-  /** the starting prices (whole dollars) */
+  /** the starting prices (whole dollars; gc, mc in cents) */
   g: number
   m: number
+  gc: number
+  mc: number
   /** one price for every size (no "from"): every size priced alike, or an item without prices by size */
   uniform: boolean
   /** priced sizes only, in size order */
@@ -333,6 +349,8 @@ export interface LiveTier {
   prices: { class: string; label: string; price: number }[]
   vipBooking: boolean
   inclusions: V2Inclusion[]
+  /** the tier's member % off (basis points) */
+  memberDiscountBp: number
 }
 
 /** What a ready v2 catalog gives the page. */
@@ -370,6 +388,8 @@ function liveItem(i: V2Item, sizes: [string, string][], sub: string): LiveItem {
       m: dollarsOf(p.memberCents),
       gMax: p.maxCents === null ? null : dollarsOf(p.maxCents),
       mMax: p.memberMaxCents === null ? null : dollarsOf(p.memberMaxCents),
+      gc: p.cents,
+      mc: p.memberCents,
     },
   }))
   const base = i.prices.length === 0
@@ -378,7 +398,19 @@ function liveItem(i: V2Item, sizes: [string, string][], sub: string): LiveItem {
     base ||
     (bySize.length === sizes.length &&
       bySize.every((x) => x.p.gMax === null && x.p.g === first!.p.g && x.p.m === first!.p.m))
-  return { key: i.key, name: i.name, sub, g: dollarsOf(i.fromCents), m: dollarsOf(i.memberFromCents), uniform, bySize, base, includedIn: i.includedIn }
+  return {
+    key: i.key,
+    name: i.name,
+    sub,
+    g: dollarsOf(i.fromCents),
+    m: dollarsOf(i.memberFromCents),
+    gc: i.fromCents,
+    mc: i.memberFromCents,
+    uniform,
+    bySize,
+    base,
+    includedIn: i.includedIn,
+  }
 }
 
 /** "incl" (every visit / unlimited) or "2× / mo" for an add-on a tier includes (the design's DURING `vip` field). */
@@ -459,6 +491,7 @@ export function liveCatalog(cat: CatalogV2, keys: CatalogKeys, design: { WASH: {
       prices: t.prices.map((x) => ({ class: x.class, label: sizes.find(([k]) => k === x.class)?.[1] ?? x.class, price: dollarsOf(x.monthlyCents) })),
       vipBooking: t.vipBooking,
       inclusions: t.inclusions,
+      memberDiscountBp: t.memberDiscountBp,
     }
   }
   return {
@@ -478,8 +511,29 @@ export function liveCatalog(cat: CatalogV2, keys: CatalogKeys, design: { WASH: {
 
 /** An item's price at a size: its own row, or every size's one price for an item without prices by size; null: at the shop. */
 export function priceAt(i: LiveItem, size: string): SizePrice | null {
-  if (i.base) return { g: i.g, m: i.m, gMax: null, mMax: null }
+  if (i.base) return { g: i.g, m: i.m, gMax: null, mMax: null, gc: i.gc, mc: i.mc }
   return i.bySize.find((x) => x.class === size)?.p ?? null
+}
+
+/**
+ * A member's price (cents) at a tier's own % off: the catalog's member price when the tier's % off is the one the catalog
+ * shows (memberDisplay), else worked out the way the backend does.
+ */
+export const memberAt = (p: SizePrice, discountBp: number, shownBp: number): number => (discountBp === shownBp ? p.mc : memberCents(p.gc, discountBp))
+
+/**
+ * What a member still pays at the shop (cents) for an item the plan includes, on a car of `size`, the plan priced at
+ * `planClass` (plan decision 2, backend price-book priceLine: covered up to min(price at the size, price at the plan size);
+ * a plan size without a price is covered up to the starting price; the difference gets no % off). null: the site cannot know
+ * it, so it never shows $0 for it: the size has no price (the shop prices it, "Confirm price"), or the plan size is unknown
+ * (or no longer listed) and the car costs more than the starting price.
+ */
+export function sizeDifferenceCents(i: LiveItem, size: string, planClass: string | null, sizes: [string, string][]): number | null {
+  const visit = priceAt(i, size)
+  if (!visit) return null
+  if (visit.gc <= i.gc) return 0
+  if (planClass === null || !sizes.some(([k]) => k === planClass)) return null
+  return Math.max(0, visit.gc - (priceAt(i, planClass)?.gc ?? i.gc))
 }
 
 /** A tier's monthly price at a size (whole dollars), or null when it is not sold at that size. */
