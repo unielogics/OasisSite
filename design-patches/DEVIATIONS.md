@@ -229,7 +229,7 @@ of every entry below.
 ## Personal links (owner decisions of 2026-10-10; backend design ai-assistant-and-phone-identity.md sections 5 and 7)
 
 Everything below happens only when the page is opened from a personal link the shop texted
-(`https://oasisautospanj.com/#/c|m|p|pin|v/<token>`) AND the link API answers (`PUBLIC_LINKS_ENABLED` on the API). Without
+(`https://oasisautospanj.com/#/c|m|p|pin|v|k/<token>`) AND the link API answers (`PUBLIC_LINKS_ENABLED` on the API). Without
 a link fragment, or when the API answers 404 (links switched off, the default), the site renders and behaves exactly as
 the entries above say: the new blocks are `sc-if`s that render nothing, and the parity runs stay at zero. The linked
 states have no counterpart in the design, so they are not in the parity harness: they are pinned by port goldens
@@ -270,6 +270,18 @@ test (every declaration of the new blocks is one the design itself uses) and the
   4 · EMAIL": a "Joining as MARIA ••51" line and the design's e-mail field; the name and phone fields are not shown, the
   link already knows them) → the design's terms step ("Continue to checkout") → `POST /links/membership/start {email}`
   and a redirect to the plan's Squarespace checkout. The vehicles step is skipped (the request carries the e-mail only).
+  **Billed by Square** (the API's `plan.billing` is `square`; backend ADR 0171 D8, wave Q3b): plan with a **size picker**
+  (the design's chips under the plan card, only when the plan is sold at more than one size; a size not set up at Square
+  reads "ask us" and cannot be picked; the plan card, the summary, the terms and the button carry the chosen size's
+  monthly price) → verify → e-mail ("Square emails your receipts there every month") → a fresh PIN or code is required
+  before the card step → **card step** ("STEP 4 OF 4 · CARD": a design-styled card block above the design's terms box with
+  Square's card form, DV-LINK-CARD, and the consent box, unchecked, with the API's wording for the membership's monthly
+  payment) → `POST /links/membership/subscribe {email, planClass, sourceId, verificationToken?, consentVersion}` → the
+  page waits ("Setting up your membership with Square…") asking `GET /links/membership/status` every 2 seconds for up
+  to 2 minutes: `active` opens the design's welcome step ("Your Gold membership is active. Square emails your receipts
+  every month."), `failed` shows "Square couldn't take the first payment…" on the card step, a longer wait ends on "Almost
+  there … We'll text you as soon as your membership is active." A refused e-mail goes back to the e-mail step, a size no
+  longer open online to the plan step. Billed by Squarespace (the default): the flow above, unchanged.
 - **DV-LINK-PAY** A **payment** link opens the link sheet with a review block (the design's review card: the invoice
   number, the visit's date, its items with tax and tip, what was already paid, "Balance due" and the amount) and the design's CTA "Verify & pay $54" → the
   step-up card (fresh PIN or code, every time) → `POST /links/pay/start` → a redirect to the invoice's payment link.
@@ -278,6 +290,33 @@ test (every declaration of the new blocks is one the design itself uses) and the
   **Redirect allowlist** (DV-LINK-JOIN too): the page follows only `https://` URLs on `site.config.json`
   `links.redirectHosts` (squarespace.com and its subdomains), whatever the API answered; anything else shows "We
   couldn't open the payment page. Text us at 862-388-5827 …" and navigates nowhere.
+  **Square** (ADR 0171 D3, wave Q2b): the review reads "You'll pay on a secure checkout page." and the redirect
+  "Taking you to Square's secure checkout to pay." (or Squarespace's, by the URL's host); `links.redirectHosts` carries
+  `square.link` and `square.site` beside `squarespace.com`. **Deposit**: after a booking on a calendar link whose deposit
+  the shop takes by link (the answer's `deposit.how` `link`), the done step has a button "Pay the $25 deposit now" (the
+  design's secondary button) → `POST /links/deposit/start {bookingRef}` → Square's checkout (allowlist), "Your deposit is
+  paid", "We'll text you a payment link shortly", or "There's no deposit to pay online for this visit. Pay at the
+  counter." **`#/paid`**: Square's checkout sends the client back to `/#/paid` (the payment link's `redirect_url`); the
+  page scrubs it and shows a notice "Thank you · Square is confirming your payment now. Your receipt comes by email or
+  text." (a static view: the page does not know the payment).
+- **DV-LINK-CARD** A **card** link (`#/k/<token>`, backend ADR 0171 D7 and D12, wave Q3a) opens the link sheet for saving a
+  card with Square: a fresh PIN or code first (saving and removing need one), then "SAVED CARDS · MARIA ••51 / Your
+  cards": the client's saved cards from the API (`cards`: "Visa ••4242 · Expires 12/28 · For a no-show fee and a balance
+  you owe", each with Remove → `DELETE /links/cards/:id`), "No saved cards yet.", and an "Add a card" block (the step-up
+  card's frame) with **Square's card form** and the **consent box, unchecked**, carrying the API's wording
+  (`cardSetup.consent.text` with the purposes filled in: a no-show fee, a late-cancel fee and a balance, plus the
+  membership's monthly payment for a member); the design's CTA "Save card" → Square's one-time token →
+  `POST /links/cards {sourceId, verificationToken?, consentVersion, purposes}` (Idempotency-Key) → "Visa ••4242 is saved.
+  You can remove it here any time." A declined card, the daily lock, an outdated wording (reloaded) and a missing
+  step-up show the API's words. Without `cardSetup` (saved cards off: the default) the page says "Saving a card online
+  isn't open yet. Text us…". **Square's Web Payments SDK** (`src/client/square.ts`) is loaded only on these two pages
+  (the card page, a membership page billed by Square) and only when the card form shows: its URL, application id and
+  location come from the API's `cardSetup.square` at runtime (nothing about Square is in the build); the URL must be
+  https on `site.config.json` `links.squareSdkHosts` (Square's CDNs) or the page's own origin; the card form is
+  Square's own iframe (the card number never reaches the page: PCI SAQ-A); `tokenize` is called with intent STORE,
+  customer-initiated, the client's first name as the billing contact. The production CSP (the backend kit's
+  `install.sh SITE_CSP`) lets Square's hosts through; this is the one external script the site loads, at runtime, on
+  link pages only (README "Build contract", docs/deploy-contract.md).
 - **DV-LINK-DEAD** A link the API refuses (`401 IDENTITY_LINK_INVALID` with `meta.reason`) opens the link sheet with
   "This link expired", "This link was used", "This link was replaced" or "This link doesn't work" (and "Too many tries"
   after five wrong entries), a plain line saying what to do, a "Text us for a new link" sms: link to the texting number

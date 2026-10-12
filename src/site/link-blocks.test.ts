@@ -23,7 +23,7 @@ import { installLinkCapture, resetLinkCapture } from '../client/link'
 import { configCatalog, makeSite, payload, ROOT, type Handler } from './bridge.testkit'
 import { exchangeAnswer, invoiceAnswer, planAnswer, stepAnswer, type LinkStateOpts } from './link-contract.testkit'
 
-const LINK_DVS = ['DV-LINK', 'DV-STEPUP', 'DV-LINK-JOIN', 'DV-LINK-PAY', 'DV-LINK-DEAD']
+const LINK_DVS = ['DV-LINK', 'DV-STEPUP', 'DV-LINK-JOIN', 'DV-LINK-PAY', 'DV-LINK-DEAD', 'DV-LINK-CARD']
 const GOLDENS = path.join(ROOT, 'src/site/__goldens__')
 const UPDATE = process.env.UPDATE_GOLDENS === '1'
 
@@ -217,7 +217,8 @@ describe('style tokens: the link blocks use the design\'s own declarations', () 
     for (const m of html.matchAll(/\sstyle="([^"]*)"/g))
       for (const d of m[1]!.split(';')) {
         const x = d.trim()
-        if (x) out.push(x.replace(/\s*:\s*/, ':'))
+        // a bound style ({{ site.link.card.box }}) is the design's own style object (its terms box), written by the bridge
+        if (x && !/^\{\{ [a-zA-Z0-9_.]+ \}\}$/.test(x)) out.push(x.replace(/\s*:\s*/, ':'))
       }
     return out
   }

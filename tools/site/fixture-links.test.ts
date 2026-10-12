@@ -8,15 +8,24 @@ import {
   APPOINTMENT_KEYS,
   BOOKING_BODY_KEYS,
   BOOKING_RESULT_KEYS,
+  CARD_REMOVE_RESULT_KEYS,
+  CARD_SAVE_BODY_KEYS,
+  CARD_SAVE_RESULT_KEYS,
+  CARD_VIEW_KEYS,
   CODE_PURPOSES,
   CODE_REQUESTED_KEYS,
+  DEPOSIT_RESULT_KEYS,
+  ENROLLMENT_STATUS_KEYS,
   keyProblems,
   linkStateProblems,
+  MEMBERSHIP_BODY_KEYS,
   MEMBERSHIP_RESULT_KEYS,
   PAY_RESULT_KEYS,
+  PRICING_KEYS,
   RESCHEDULE_RESULT_KEYS,
+  SUBSCRIBE_BODY_KEYS,
 } from '../../src/site/link-contract.testkit'
-import { createLinkFixture, type IssueLinkInput } from './fixture-links'
+import { createLinkFixture, NONCE, squareStubJs, SQUARE_STUB_PATH, type IssueLinkInput } from './fixture-links'
 
 const BASE = '/api/v1/public/links'
 const today = new Date().toISOString().slice(0, 10)
@@ -50,7 +59,7 @@ beforeAll(async () => {
 })
 afterAll(() => new Promise<void>((r) => server.close(() => r())))
 
-async function call(method: 'GET' | 'POST', p: string, body?: unknown, session?: string, headers: Record<string, string> = {}) {
+async function call(method: 'GET' | 'POST' | 'DELETE', p: string, body?: unknown, session?: string, headers: Record<string, string> = {}) {
   const res = await fetch(origin + BASE + p, {
     method,
     headers: { 'content-type': 'application/json', ...(session ? { authorization: 'Bearer ' + session } : {}), ...headers },
@@ -105,12 +114,13 @@ describe('the fixture answers the API\'s shapes', () => {
     expect(linkStateProblems(pin.body, ['verified'])).toEqual([])
     expect(pin.body.stepUp.method).toBe('pin')
     // a strict booking body: the API's keys and nothing else
-    const full = { serviceKey: 'express-hand-wash', addonKeys: ['wax'], date: today, startMin: 1380, vehicle: { label: 'Sedan' }, name: 'X', email: 'x@example.com', smsConsent: true }
+    const full = { serviceKey: 'express-hand-wash', addonKeys: ['wax'], date: today, startMin: 1380, vehicle: { label: 'Sedan' }, vehicleClass: 'compact_car', name: 'X', email: 'x@example.com', smsConsent: true }
     expect(Object.keys(full).sort()).toEqual([...BOOKING_BODY_KEYS].sort())
     expect((await call('POST', '/bookings', { ...full, phone: '+12015550000' }, session, { 'idempotency-key': 'k0' })).status).toBe(422)
     const b = await call('POST', '/bookings', full, session, { 'idempotency-key': 'k1' })
     expect(b.status).toBe(201)
     expect(keyProblems('booking', b.body, BOOKING_RESULT_KEYS)).toEqual([])
+    expect(keyProblems('pricing', b.body.pricing, PRICING_KEYS)).toEqual([])
     const rs = await call('POST', `/appointments/${b.body.bookingRef}/reschedule`, { date: today, startMin: 1380 }, session)
     expect(keyProblems('reschedule', rs.body, RESCHEDULE_RESULT_KEYS)).toEqual([])
     const me2 = await call('GET', '/me', undefined, session)
@@ -146,7 +156,8 @@ describe('the fixture answers the API\'s shapes', () => {
   it('membership: the plan, then the start answer', async () => {
     const { session, state } = await open({ kind: 'membership', pin: '7391', plan: { tier: 'gold', planKey: 'gold', name: 'Gold', monthlyPriceCents: 9900, checkoutUrl: 'https://x.squarespace.com/c' } })
     expect(linkStateProblems(state, ['session'])).toEqual([])
-    expect(state.plan).toEqual({ tier: 'gold', planKey: 'gold', name: 'Gold', monthlyPriceCents: 9900, perks: [] })
+    expect(state.plan).toEqual({ tier: 'gold', planKey: 'gold', name: 'Gold', monthlyPriceCents: 9900, perks: [], billing: 'squarespace', prices: [{ class: 'compact_car', label: 'Compact car', monthlyCents: 9900, joinable: true }] })
+    expect(MEMBERSHIP_BODY_KEYS).toContain('planClass')
     expect((await call('POST', '/membership/start', { email: 'a@example.com' }, session)).body).toMatchObject({ code: 'IDENTITY_STEP_UP_REQUIRED', meta: { need: 'fresh' } })
     await call('POST', '/verify/pin', { pin: '7391' }, session)
     expect((await call('POST', '/membership/start', { email: 'a@example.com', plan: 'vip' }, session)).status).toBe(422)
@@ -175,5 +186,92 @@ describe('the fixture answers the API\'s shapes', () => {
   it('a page asking for another kind of link\'s action: 401 LINK_WRONG_PURPOSE', async () => {
     const { session } = await open({ kind: 'verify', trusted: true })
     expect((await call('POST', '/pay/start', {}, session)).body.code).toBe('LINK_WRONG_PURPOSE')
+  })
+
+  it('the card page (#/k): cardSetup with the stub SDK, save (the consent checked), decline and the daily lock, remove', async () => {
+    const { session, state } = await open({ kind: 'card', pin: '7391', cardsOn: true, cards: [{ last4: '0005', purposes: ['balance'] }] })
+    expect(linkStateProblems(state, ['session'])).toEqual([])
+    expect(state.cards).toBeNull() // not verified yet
+    expect(state.cardSetup.square.sdkUrl).toBe(SQUARE_STUB_PATH)
+    expect(state.cardSetup.consent.checkedByDefault).toBe(false)
+    const body = { sourceId: NONCE.ok, consentVersion: 'v1', purposes: ['no_show_fee', 'balance'] }
+    expect([...Object.keys(body), 'verificationToken', 'cardholderName', 'postalCode'].sort()).toEqual([...CARD_SAVE_BODY_KEYS].sort())
+    expect((await call('POST', '/cards', body, session, { 'idempotency-key': 'k1' })).body).toMatchObject({ code: 'IDENTITY_STEP_UP_REQUIRED', meta: { need: 'fresh' } })
+    const v = await call('POST', '/verify/pin', { pin: '7391' }, session)
+    expect(linkStateProblems(v.body, ['verified'])).toEqual([])
+    expect(v.body.cards.map((c: any) => c.last4)).toEqual(['0005'])
+    expect((await call('POST', '/cards', body, session)).status).toBe(400) // the Idempotency-Key is required
+    expect((await call('POST', '/cards', { ...body, consentVersion: 'v0' }, session, { 'idempotency-key': 'k2' })).body.code).toBe('CARD_CONSENT_OUTDATED')
+    expect((await call('POST', '/cards', { ...body, purposes: [] }, session, { 'idempotency-key': 'k3' })).body.code).toBe('CARD_CONSENT_INVALID')
+    expect((await call('POST', '/cards', { ...body, phone: '1' }, session, { 'idempotency-key': 'k4' })).status).toBe(422)
+    const saved = await call('POST', '/cards', body, session, { 'idempotency-key': 'k5' })
+    expect(saved.status).toBe(201)
+    expect(keyProblems('save', saved.body, CARD_SAVE_RESULT_KEYS)).toEqual([])
+    expect(keyProblems('card', saved.body.card, CARD_VIEW_KEYS)).toEqual([])
+    const me = await call('GET', '/me', undefined, session)
+    expect(linkStateProblems(me.body)).toEqual([])
+    expect(me.body.cards.map((c: any) => [c.last4, c.purposes])).toEqual([
+      ['1111', ['no_show_fee', 'balance']],
+      ['0005', ['balance']],
+    ])
+    expect(fx.snapshot().consents.at(-1)).toMatchObject({ version: 'v1', purposes: ['no_show_fee', 'balance'], text: expect.stringContaining('for: a no-show fee and a balance you owe.') })
+    const del = await call('DELETE', `/cards/${saved.body.card.id}`, undefined, session)
+    expect(keyProblems('remove', del.body, CARD_REMOVE_RESULT_KEYS)).toEqual([])
+    expect((await call('GET', '/me', undefined, session)).body.cards.map((c: any) => c.last4)).toEqual(['0005'])
+    // three declined cards lock the number for the day
+    for (const k of ['d1', 'd2', 'd3']) expect((await call('POST', '/cards', { ...body, sourceId: NONCE.declined }, session, { 'idempotency-key': k })).body.code).toBe('CARD_DECLINED')
+    expect((await call('POST', '/cards', body, session, { 'idempotency-key': 'd4' })).body.code).toBe('CARD_SAVE_LOCKED')
+  })
+
+  it('saved cards off: no cardSetup, and saving is not ready', async () => {
+    const { session, state } = await open({ kind: 'card', pin: '7391' })
+    expect(state.cardSetup).toBeNull()
+    await call('POST', '/verify/pin', { pin: '7391' }, session)
+    expect((await call('POST', '/cards', { sourceId: NONCE.ok, consentVersion: 'v1', purposes: ['balance'] }, session, { 'idempotency-key': 'n1' })).body.code).toBe('LINK_ACTION_NOT_READY')
+  })
+
+  it('a membership billed by Square: subscribe, then the status (pending, then active or failed)', async () => {
+    const plan = { tier: 'gold' as const, planKey: 'gold', name: 'Gold', monthlyPriceCents: 12900, checkoutUrl: null, billing: 'square' as const, prices: [{ class: 'compact_car', label: 'Compact car', monthlyCents: 12900, joinable: true }, { class: 'large_suv', label: 'Large SUV', monthlyCents: 15900, joinable: false }] }
+    const { session, state } = await open({ kind: 'membership', pin: '7391', cardsOn: true, plan })
+    expect(linkStateProblems(state, ['session'])).toEqual([])
+    expect(state.plan.billing).toBe('square')
+    await call('POST', '/verify/pin', { pin: '7391' }, session)
+    const body = { email: 'jo@gmail.com', planClass: 'compact_car', sourceId: NONCE.ok, consentVersion: 'v1' }
+    expect(Object.keys(body).every((k) => SUBSCRIBE_BODY_KEYS.includes(k))).toBe(true)
+    expect((await call('GET', '/membership/status', undefined, session)).body).toEqual({ status: 'none', membershipRef: null })
+    expect((await call('POST', '/membership/subscribe', { ...body, email: 'jo@example.com' }, session)).body.errors[0].path).toBe('body.email')
+    expect((await call('POST', '/membership/subscribe', { ...body, planClass: 'large_suv' }, session)).body.code).toBe('LINK_CHECKOUT_UNAVAILABLE')
+    expect((await call('POST', '/membership/subscribe', { ...body, planClass: 'truck' }, session)).body.code).toBe('TIER_CLASS_UNPRICED')
+    const sub = await call('POST', '/membership/subscribe', body, session)
+    expect(sub.status).toBe(202)
+    expect(keyProblems('subscribe', sub.body, ENROLLMENT_STATUS_KEYS)).toEqual([])
+    const s1 = await call('GET', '/membership/status', undefined, session)
+    expect(keyProblems('status', s1.body, ENROLLMENT_STATUS_KEYS)).toEqual([])
+    expect(s1.body.status).toBe('pending')
+    expect((await call('GET', '/membership/status', undefined, session)).body.status).toBe('active')
+    // a card whose first payment fails
+    const f = await open({ kind: 'membership', pin: '7391', cardsOn: true, plan })
+    await call('POST', '/verify/pin', { pin: '7391' }, f.session)
+    await call('POST', '/membership/subscribe', { ...body, sourceId: NONCE.chargeFails }, f.session)
+    await call('GET', '/membership/status', undefined, f.session)
+    expect((await call('GET', '/membership/status', undefined, f.session)).body.status).toBe('failed')
+  })
+
+  it('the booking deposit by link: deposit/start answers Square\'s checkout', async () => {
+    const { session } = await open({ kind: 'calendar', trusted: true, depositLink: true })
+    const b = await call('POST', '/bookings', { serviceKey: 'express-hand-wash', addonKeys: [], date: today, startMin: 1380, vehicleClass: 'compact_car' }, session, { 'idempotency-key': 'dep1' })
+    expect(b.body.deposit).toEqual({ dueCents: 2500, how: 'link' })
+    const d = await call('POST', '/deposit/start', { bookingRef: b.body.bookingRef }, session)
+    expect(keyProblems('deposit', d.body, DEPOSIT_RESULT_KEYS)).toEqual([])
+    expect(d.body).toMatchObject({ status: 'redirect', amountCents: 2500 })
+    expect(d.body.redirectUrl).toMatch(/^https:\/\/square\.link\//)
+    expect((await call('POST', '/deposit/start', { bookingRef: 'OAS-99999' }, session)).status).toBe(404)
+  })
+
+  it('the stub SDK is plain JavaScript that defines window.Square (never the real SDK)', () => {
+    const js = squareStubJs()
+    expect(js).toContain('window.Square')
+    expect(js).not.toMatch(/https?:\/\//)
+    expect(() => new Function(js)).not.toThrow()
   })
 })

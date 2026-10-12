@@ -1,6 +1,6 @@
 // Personal links (DEVIATIONS.md DV-LINK; backend design docs/design/ai-assistant-and-phone-identity.md section 5).
 //
-// A text from the shop carries https://oasisautospanj.com/#/c|m|p|pin|v/<token>: the token rides in the FRAGMENT,
+// A text from the shop carries https://oasisautospanj.com/#/c|m|p|pin|v|k/<token>: the token rides in the FRAGMENT,
 // which a browser never sends to a server, never puts in a Referer and a link preview never sees. This module takes it
 // out of the address bar before the page hydrates (the bridge module imports it, so the capture runs while the bundle is
 // evaluated, before boot() calls hydrateRoot), keeps it in memory only (never storage, never the DOM, never a log) and
@@ -11,10 +11,10 @@
 // `hashchange` listener installed here runs before the design's own (registered later, in componentDidMount), scrubs
 // that entry too and passes the new token on.
 
-export type LinkPath = 'c' | 'm' | 'p' | 'pin' | 'v'
+export type LinkPath = 'c' | 'm' | 'p' | 'pin' | 'v' | 'k'
 
 export interface CapturedLink {
-  /** the route letter(s) of the fragment: c calendar / book again, m membership, p payment, pin PIN, v verify */
+  /** the route letter(s) of the fragment: c calendar / book again, m membership, p payment, pin PIN, v verify, k card (DV-LINK-CARD) */
   path: LinkPath
   /** the token, as found (the server decides whether it is valid) */
   token: string
@@ -25,7 +25,7 @@ export interface CapturedLink {
  * that starts with another character (a trailing slash or period, `?utm=…` added by a messaging app or a shortener) is
  * not part of the token and is ignored; the whole fragment is scrubbed either way.
  */
-const LINK_RE = /^#\/?(c|m|p|pin|v)\/([A-Za-z0-9_-]{1,256})(?:[^A-Za-z0-9_-].*)?$/
+const LINK_RE = /^#\/?(c|m|p|pin|v|k)\/([A-Za-z0-9_-]{1,256})(?:[^A-Za-z0-9_-].*)?$/
 
 /** The link a fragment carries, or null (an ordinary hash route like #/membership is not a link). */
 export function parseLinkFragment(hash: string | null | undefined): CapturedLink | null {
@@ -36,7 +36,7 @@ export function parseLinkFragment(hash: string | null | undefined): CapturedLink
 }
 
 /** True when the fragment looks like a personal link at all (even a malformed one): it is scrubbed either way. */
-const LINKISH_RE = /^#\/?(c|m|p|pin|v)\//
+const LINKISH_RE = /^#\/?(c|m|p|pin|v|k)\//
 
 interface WinLike {
   location: { hash: string; pathname: string; search: string }

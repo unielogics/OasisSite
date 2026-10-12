@@ -353,6 +353,27 @@
       "expectTag": "div",
       "html": "<sc-if value=\"{{ site.joinSizes.show }}\"><div style=\"display:flex;flex-direction:column;gap:10px;margin-top:22px;\"><div style=\"font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:800;letter-spacing:.12em;color:var(--ink4);\">VEHICLE SIZE</div><div style=\"display:flex;gap:6px;flex-wrap:wrap;\"><sc-for list=\"{{ site.joinSizes.chips }}\" as=\"o\"><button onClick=\"{{ o.onClick }}\" style=\"{{ o.style }}\">{{ o.label }}</button></sc-for></div><sc-if value=\"{{ site.joinSizes.note }}\"><div style=\"font-size:12.5px;color:var(--ink3);\">{{ site.joinSizes.note }}</div></sc-if></div></sc-if>",
       "dv": "DV-CATALOG2"
+    },
+    {
+      "op": "insert-after",
+      "tpl": 762,
+      "expectTag": "sc-if",
+      "html": "<sc-if value=\"{{ site.link.card.show }}\"><sc-for list=\"{{ site.link.card.cards }}\" as=\"c\"><div style=\"display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:var(--inset);\"><div style=\"flex:1;min-width:0;\"><div style=\"font-weight:800;font-size:16px;\">{{ c.label }}</div><div style=\"font-size:13px;color:var(--ink3);margin-top:3px;\">{{ c.sub }}</div></div><button onClick=\"{{ c.remove }}\" style=\"font-size:13px;font-weight:700;color:var(--ink3);\">Remove</button></div></sc-for><sc-if value=\"{{ site.link.card.empty }}\"><div style=\"font-size:13.5px;color:var(--ink3);\">{{ site.link.card.empty }}</div></sc-if><sc-if value=\"{{ site.link.card.note }}\"><div style=\"padding:14px 16px;border-radius:16px;background:var(--cyanSoft);border:1px solid var(--cyanBrd);font-size:13.5px;line-height:1.45;color:var(--cyanInk);\">{{ site.link.card.note }}</div></sc-if><sc-if value=\"{{ site.link.card.form }}\"><div style=\"padding:18px;border-radius:20px;background:var(--card);border:1.5px solid var(--cyanBrd);\"><div style=\"font-weight:800;font-size:17px;\">Add a card</div><div style=\"font-size:13.5px;color:var(--ink3);margin-top:3px;\">{{ site.link.card.formSub }}</div><div id=\"oasis-card-form\" style=\"margin-top:14px;\"></div><button onClick=\"{{ site.link.card.toggle }}\" style=\"display:flex;gap:12px;align-items:flex-start;text-align:left;padding:8px 2px;\"><span style=\"{{ site.link.card.box }}\"><sc-if value=\"{{ site.link.card.agree }}\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M5 12.5l4.5 4.5L19 7\" stroke=\"#00131D\" stroke-width=\"3.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></sc-if></span><span style=\"font-size:13.5px;line-height:1.45;color:var(--ink2);\">{{ site.link.card.consent }}</span></button><sc-if value=\"{{ site.link.card.err }}\"><div style=\"font-size:12.5px;color:#E5533D;margin-top:8px;font-weight:700;\">{{ site.link.card.err }}</div></sc-if></div></sc-if><sc-if value=\"{{ site.link.card.closed }}\"><div style=\"padding:14px 16px;border-radius:16px;background:var(--inset);font-size:13.5px;line-height:1.5;color:var(--ink2);\">{{ site.link.card.closed }}</div></sc-if></sc-if>",
+      "dv": "DV-LINK-CARD"
+    },
+    {
+      "op": "insert-before",
+      "tpl": 607,
+      "expectTag": "button",
+      "html": "<sc-if value=\"{{ site.link.joinCard.show }}\"><div style=\"padding:18px;border-radius:20px;background:var(--card);border:1.5px solid var(--cyanBrd);\"><div style=\"font-weight:800;font-size:17px;\">Your card</div><div style=\"font-size:13.5px;color:var(--ink3);margin-top:3px;\">{{ site.link.joinCard.sub }}</div><sc-if value=\"{{ site.link.joinCard.form }}\"><div id=\"oasis-join-card\" style=\"margin-top:14px;\"></div><button onClick=\"{{ site.link.joinCard.toggle }}\" style=\"display:flex;gap:12px;align-items:flex-start;text-align:left;padding:8px 2px;\"><span style=\"{{ site.link.joinCard.box }}\"><sc-if value=\"{{ site.link.joinCard.agree }}\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M5 12.5l4.5 4.5L19 7\" stroke=\"#00131D\" stroke-width=\"3.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></sc-if></span><span style=\"font-size:13.5px;line-height:1.45;color:var(--ink2);\">{{ site.link.joinCard.consent }}</span></button></sc-if><sc-if value=\"{{ site.link.joinCard.wait }}\"><div style=\"padding:14px 16px;border-radius:16px;background:var(--cyanSoft);border:1px solid var(--cyanBrd);font-size:13.5px;line-height:1.45;color:var(--cyanInk);\">{{ site.link.joinCard.wait }}</div></sc-if><sc-if value=\"{{ site.link.joinCard.err }}\"><div style=\"font-size:12.5px;color:#E5533D;margin-top:8px;font-weight:700;\">{{ site.link.joinCard.err }}</div></sc-if><sc-if value=\"{{ site.link.joinCard.closed }}\"><div style=\"font-size:13.5px;color:var(--ink3);margin-top:3px;\">{{ site.link.joinCard.closed }}</div></sc-if></div></sc-if>",
+      "dv": "DV-LINK-JOIN"
+    },
+    {
+      "op": "insert-after",
+      "tpl": 770,
+      "expectTag": "div",
+      "html": "<sc-if value=\"{{ site.link.deposit.show }}\"><button onClick=\"{{ site.link.deposit.pay }}\" style=\"height:56px;display:flex;align-items:center;justify-content:center;border-radius:18px;border:1px solid var(--line);color:var(--ink);font-weight:700;font-size:15.5px;\">{{ site.link.deposit.label }}</button></sc-if>",
+      "dv": "DV-LINK-PAY"
     }
   ]
 }

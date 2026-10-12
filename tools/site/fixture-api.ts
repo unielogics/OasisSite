@@ -5,8 +5,11 @@
 // returned in a dev header and listed at GET /__fixture/texts), bookings (409 when a slot is taken, honeypot 202),
 // memberships (pending), and the personal-link API (tools/site/fixture-links.ts: issue links through POST
 // /__fixture/links, switch the PUBLIC_LINKS_ENABLED gate through POST /__fixture/links/enabled?on=0|1, read
-// /__fixture/links/state). In-memory; one process per run. Used by scripts/e2e-site.ts --api fixture and by
-// `pnpm serve:dist --api fixture`. Never part of the build.
+// /__fixture/links/state), the catalog v2 (DV-CATALOG2: GET /api/v1/public/catalog/v2, the design's numbers by default,
+// `state.catalogV2` can be swapped), the sizes on bookings and joins (ADR 0170: vehicleClass, planClass, `pricing`), and a
+// STUB of Square's Web Payments SDK (DV-LINK-CARD: GET /api/v1/public/__fixture/square.js, tools/site/fixture-links.ts
+// squareStubJs; never the real SDK in a test). In-memory; one process per run. Used by scripts/e2e-site.ts --api fixture
+// and by `pnpm serve:dist --api fixture`. Never part of the build.
 import http from 'node:http'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
@@ -17,8 +20,8 @@ import { validatePublicHours } from '../../src/hours/format'
 import type { PublicHours } from '../../src/hours/format'
 import { designAvailability, type Availability } from '../../src/site/availability'
 import { hoursTable, withToday } from '../../src/site/hours'
-import { designCatalog, type CatalogPayload } from './catalog-fixture'
-import { createLinkFixture, type LinkFixture } from './fixture-links'
+import { designCatalog, designCatalogV2, type CatalogPayload } from './catalog-fixture'
+import { createLinkFixture, SQUARE_STUB_PATH, squareStubJs, type LinkFixture } from './fixture-links'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -42,13 +45,17 @@ export interface FixtureState {
   texts: { to: string; body: string; klass: string; at: string }[]
   challenges: Map<string, { phone: string; code: string; tries: number; expiresAt: number; used: boolean }>
   tokens: Map<string, { phone: string; member: { firstName: string; tier: 'gold' | 'vip' | null; washesLeft: number | null; active: boolean } }>
-  bookings: { bookingRef: string; phone: string; name: string; date: string; startMin: number; serviceKey: string; addonKeys: string[]; member: boolean }[]
-  memberships: { memberRef: string; phone: string; tier: string; name: string }[]
+  bookings: { bookingRef: string; phone: string; name: string; date: string; startMin: number; serviceKey: string; addonKeys: string[]; member: boolean; vehicleClass: string | null; vehicleLabel: string | null }[]
+  memberships: { memberRef: string; phone: string; tier: string; name: string; planClass: string | null }[]
   idem: Map<string, { status: number; body: unknown; sig: string }>
   /** phones that are members (the seeded ones) */
   members: Map<string, { firstName: string; tier: 'gold' | 'vip'; washesLeft: number }>
   /** DV-CATALOG: what GET /api/v1/public/catalog answers (the design's content; a test may swap it) */
   catalog: CatalogPayload | Record<string, unknown>
+  /** DV-CATALOG2: what GET /api/v1/public/catalog/v2 answers (the design's numbers; a test may swap it) */
+  catalogV2: Record<string, unknown>
+  /** how many times the stub of Square's SDK was served */
+  squareStubLoads: number
 }
 
 const json = (res: http.ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -77,6 +84,8 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
     idem: new Map(),
     members: new Map([['+12015550199', { firstName: 'Dana', tier: 'vip', washesLeft: 3 }]]),
     catalog: designCatalog(),
+    catalogV2: designCatalogV2(),
+    squareStubLoads: 0,
   }
   let seq = 100
   // the bookable packages (availability and bookings know these keys whatever the catalog answer is swapped to)
@@ -134,10 +143,16 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
     const url = new URL(req.url ?? '/', 'http://localhost')
     const p = url.pathname
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type,idempotency-key,authorization', 'access-control-allow-methods': 'GET,POST' }).end()
+      res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type,idempotency-key,authorization', 'access-control-allow-methods': 'GET,POST,DELETE' }).end()
       return
     }
     if (p === '/__fixture/texts') return json(res, 200, { texts: state.texts })
+    // DV-LINK-CARD: the stub of Square's Web Payments SDK (same origin as the page through the site's proxy)
+    if (p === SQUARE_STUB_PATH) {
+      state.squareStubLoads++
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }).end(squareStubJs())
+      return
+    }
     // ---- links (W3f) ----
     if (p === '/__fixture/links' && req.method === 'POST') {
       const b = JSON.parse((await readBody(req)) || '{}')
@@ -159,6 +174,7 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
       return json(res, 200, availability(days, service), { 'cache-control': 'public, max-age=60' })
     }
     if (p === '/api/v1/public/catalog') return json(res, 200, { ...state.catalog, generatedAt: now().toISOString() })
+    if (p === '/api/v1/public/catalog/v2') return json(res, 200, { ...state.catalogV2, generatedAt: now().toISOString() }, { 'cache-control': 'public, max-age=60' })
     if (req.method !== 'POST') return problem(res, 404, 'NOT_FOUND', 'Not found')
     let body: Record<string, unknown>
     try {
@@ -230,7 +246,12 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
       if (slot.state === 'vip' && !member) return remember(409, { type: 'about:blank', status: 409, code: 'PUBLIC_SLOT_VIP', title: `${slot.start} is held for VIP members. Join to book it with no fee.` })
       if (slot.state === 'booked') return remember(409, { type: 'about:blank', status: 409, code: 'PUBLIC_SLOT_TAKEN', title: 'That time was just taken. Pick another.' })
       const bookingRef = `OAS-${String(++seq).padStart(5, '0')}`
-      state.bookings.push({ bookingRef, phone, name, date, startMin, serviceKey, addonKeys: Array.isArray(body.addonKeys) ? (body.addonKeys as string[]) : [], member })
+      // ADR 0170: the size chip (vehicleClass, a key of the shop's sizes), else a size named as the vehicle's label
+      const vehicleClass = typeof body.vehicleClass === 'string' ? body.vehicleClass : null
+      if (vehicleClass !== null && !/^[a-z][a-z0-9_]{0,31}$/.test(vehicleClass))
+        return problem(res, 422, 'VALIDATION_FAILED', 'Check the form', { detail: 'Pick one of the vehicle sizes.', errors: [{ path: 'body.vehicleClass', message: 'Pick one of the vehicle sizes.' }] })
+      const vehicleLabel = body.vehicle && typeof (body.vehicle as Record<string, unknown>).label === 'string' ? String((body.vehicle as Record<string, unknown>).label) : null
+      state.bookings.push({ bookingRef, phone, name, date, startMin, serviceKey, addonKeys: Array.isArray(body.addonKeys) ? (body.addonKeys as string[]) : [], member, vehicleClass, vehicleLabel })
       const when = `${day.label} · ${slot.start}`
       state.texts.push({ to: phone, body: `Booked: ${svc.name}, ${when.toLowerCase()}. ${member ? 'Members never pay a booking fee.' : '$25 booking fee due at the shop.'} Reply here to change it.`, klass: 'transactional', at: now().toISOString() })
       return remember(201, {
@@ -245,6 +266,7 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
         addons: [],
         when,
         member,
+        pricing: { vehicleClass, vehicleClassLabel: vehicleClass, confirmAtShop: vehicleClass === null, listCents: 0, discountCents: 0, coveredCents: 0, dueCents: 0 },
       })
     }
     if (p === '/api/v1/public/memberships') {
@@ -258,7 +280,8 @@ export async function startFixtureApi(o: FixtureApiOptions = {}): Promise<Fixtur
         return problem(res, 422, 'VALIDATION_FAILED', 'Check the form', { detail: 'Invalid email address', errors: [{ path: 'body.email', message: 'Invalid email address' }] })
       if (state.members.has(phone)) return remember(409, { type: 'about:blank', status: 409, code: 'PUBLIC_ALREADY_MEMBER', title: 'This number already has a membership. Text us to change your plan.' })
       const memberRef = `OAS-M-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
-      state.memberships.push({ memberRef, phone, tier, name: String(body.name) })
+      const planClass = typeof body.planClass === 'string' ? body.planClass : null
+      state.memberships.push({ memberRef, phone, tier, name: String(body.name), planClass })
       state.texts.push({ to: phone, body: `Hi ${String(body.name).split(' ')[0]}, thanks for joining Oasis Auto Spa ${tier === 'vip' ? 'VIP' : 'Gold'}. We’ll text your secure checkout link shortly; your membership starts once it’s paid.`, klass: 'transactional', at: now().toISOString() })
       return remember(201, { memberRef, status: 'pending_payment', next: 'checkout_link_by_sms', tier, plan: tier === 'vip' ? 'VIP' : 'Gold', confirmationBy: 'sms' })
     }

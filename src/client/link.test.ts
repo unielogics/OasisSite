@@ -14,13 +14,18 @@ beforeEach(() => {
 afterEach(() => resetLinkCapture())
 
 describe('parseLinkFragment', () => {
-  it('reads the five link routes and nothing else', () => {
+  it('reads the six link routes and nothing else', () => {
     expect(parseLinkFragment(`#/c/${TOKEN}`)).toEqual({ path: 'c', token: TOKEN })
     expect(parseLinkFragment(`#/m/${TOKEN}`)).toEqual({ path: 'm', token: TOKEN })
     expect(parseLinkFragment(`#/p/${TOKEN}/`)).toEqual({ path: 'p', token: TOKEN })
     expect(parseLinkFragment(`#/pin/${TOKEN}`)).toEqual({ path: 'pin', token: TOKEN })
     expect(parseLinkFragment(`#/v/${TOKEN}`)).toEqual({ path: 'v', token: TOKEN })
+    // DV-LINK-CARD: the card page
+    expect(parseLinkFragment(`#/k/${TOKEN}`)).toEqual({ path: 'k', token: TOKEN })
     expect(parseLinkFragment('#/membership')).toBeNull()
+    // the Square checkout's way back (DV-LINK-PAY) is a view, not a link
+    expect(parseLinkFragment('#/paid')).toBeNull()
+    expect(parseLinkFragment('#/paid?orderId=abc')).toBeNull()
     expect(parseLinkFragment('#/join?gold')).toBeNull()
     expect(parseLinkFragment('#/x/' + TOKEN)).toBeNull()
     expect(parseLinkFragment('#/c/')).toBeNull()

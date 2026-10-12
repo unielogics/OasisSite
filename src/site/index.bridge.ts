@@ -19,8 +19,10 @@
 //             after mount, src/site/catalog2.ts): the sizes as the vehicle chips, "from $X" and per-size tables, the
 //             booking sheet priced for the chosen size, the join flow's tiers and size picker; anything the catalog lacks
 //             keeps the interim words
-//   DV-LINK   personal links (#/c|m|p|pin|v/<token>): the token is scrubbed before hydration and exchanged for a session;
-//             DV-STEPUP (PIN / texted code / create PIN), DV-LINK-JOIN, DV-LINK-PAY, DV-LINK-DEAD: see the "links" section
+//   DV-LINK   personal links (#/c|m|p|pin|v|k/<token>): the token is scrubbed before hydration and exchanged for a session;
+//             DV-STEPUP (PIN / texted code / create PIN), DV-LINK-JOIN (with a card when Square bills the membership),
+//             DV-LINK-PAY (Square's checkout, the booking deposit, #/paid), DV-LINK-CARD (saved cards), DV-LINK-DEAD: see
+//             the "links" section
 import type { PublicHours } from '../hours/format'
 import { validatePublicHours } from '../hours/format'
 import { daysFromAvailability, daysFromHours, isoDate, validateAvailability, type Availability, type DesignDay } from './availability'
@@ -61,7 +63,29 @@ import {
   type LiveTier,
   type SizePrice,
 } from './catalog2'
-import { allowedRedirect, DEAD_COPY, deadReason, money, PIN_RE, planTier, shopDate, trustDate, validateExchange, validateState, whoLabel, whoText, type Exchanged, type LinkDeadReason, type StepUpPurpose } from './links'
+import {
+  allowedRedirect,
+  cardLabel,
+  checkoutName,
+  consentText,
+  DEAD_COPY,
+  deadReason,
+  listWords,
+  money,
+  PIN_RE,
+  planTier,
+  shopDate,
+  trustDate,
+  validateExchange,
+  validateState,
+  whoLabel,
+  whoText,
+  type CardPurpose,
+  type Exchanged,
+  type LinkDeadReason,
+  type StepUpPurpose,
+} from './links'
+import { CARD_WORDS, CardFormError, loadSquareSdk, mountCard, sdkUrlAllowed, type CardForm } from '../client/square'
 
 // DV-LINK: the token leaves the address bar while this module is evaluated, before boot() hydrates (src/client/link.ts)
 installLinkCapture()
@@ -115,6 +139,7 @@ const navigate = (url: string): void => {
 type LinkView =
   | { v: 'stepup' }
   | { v: 'pay' }
+  | { v: 'card' }
   | {
       v: 'notice'
       tone: 'ok' | 'warn'
@@ -137,7 +162,7 @@ interface StepUp {
   err: string
   /** the PIN is locked or disabled: no PIN input, only the reset by code */
   locked: boolean
-  then: 'book' | 'join' | 'join-start' | 'pay' | 'pay-review' | 'verified' | 'pinset'
+  then: 'book' | 'join' | 'join-start' | 'join-card' | 'pay' | 'pay-review' | 'verified' | 'pinset' | 'card'
   /** a PIN offered after a code ("Skip for now") */
   optional: boolean
 }
@@ -156,6 +181,24 @@ const STEP_UP_FRESH_MS = 4.5 * 60_000
 const PIN_AFTER_CODE_MS = 9 * 60_000
 /** The design's CTA button on (sheetVals ctaStyle(true)). */
 const CTA_STYLE = { width: '100%', height: '58px', borderRadius: '17px', fontWeight: 800, fontSize: '16.5px', background: '#1FB6FF', color: '#00131D', boxShadow: '0 10px 30px rgba(31,182,255,.3)' }
+/** The design's terms box (joinVM agreeBox), checked or not. */
+const checkBox = (on: boolean) => ({
+  flex: 'none',
+  width: '24px',
+  height: '24px',
+  borderRadius: '7px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: on ? '#1FB6FF' : 'transparent',
+  border: on ? 'none' : '2px solid var(--ink4)',
+  marginTop: '1px',
+})
+/** DV-LINK-CARD: the elements Square's card form is attached to (the card page's, the membership page's). */
+const CARD_FORM_ID = 'oasis-card-form'
+const JOIN_CARD_ID = 'oasis-join-card'
+/** DV-LINK-JOIN: how long the page waits for Square's first membership payment, and how often it asks. */
+const MEMBERSHIP_WAIT_MS = 2 * 60_000
 // ---- end links types ----
 
 export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
@@ -257,6 +300,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       this.__followDevice()
       this.__refreshAll()
       this.__lkMount() // links (W3f)
+      this.__paidMount() // DV-LINK-PAY: back from Square's checkout
       // the hours' state and the board are snapshots: fetched again while the page stays open, and when it comes back
       if (typeof setInterval === 'function') this.__refreshTimer = setInterval(() => this.__refreshAll(), REFRESH_MS)
       if (typeof document !== 'undefined') {
@@ -275,6 +319,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
 
     componentWillUnmount(): void {
       this.__lkOff?.() // links (W3f)
+      void this.__sqDrop() // DV-LINK-CARD
       if (this.__refreshTimer) clearInterval(this.__refreshTimer)
       if (this.__onVisible && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.__onVisible)
       const mq = this.__schemeMq as any
@@ -290,6 +335,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       this.__syncPick()
       this.__lkJoinSync() // links (W3f)
       this.__liveJoinSync() // DV-CATALOG2
+      this.__sqSync() // DV-LINK-CARD: Square's card form follows the page
       // <html data-oasis-theme> (set by the head script, DV-THEME) follows the page's theme
       if (themeCfg && typeof document !== 'undefined') {
         const t = this.theme()
@@ -1391,7 +1437,8 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         sheetSummary: this.state.sheet !== 'link',
       }
       v.site.cat = this.__catalogTexts() // DV-CATALOG: the template's static price texts
-      v.site.joinSizes = liveMode && this.__live ? this.__liveJoinSizes() : { show: false } // DV-CATALOG2
+      // DV-CATALOG2 (the website's join) and DV-LINK-JOIN (a membership page billed by Square): the size picker
+      v.site.joinSizes = this.__lkJoining() && this.__lkSquare() ? this.__lkJoinSizesVals() : liveMode && this.__live ? this.__liveJoinSizes() : { show: false }
       if (themeCfg) {
         // the visitor's own choice (header toggle, menu Dark/Light) is remembered on the device (DV-THEME); the design's
         // handlers set state synchronously, so this.theme() already reads the new theme
@@ -1767,6 +1814,12 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       this.__lkJoinInit = false
       this.__lkIdem = null
       this.__lkAvailOff = false
+      this.__lkDeposit = null
+      this.__lkJoinClass = null
+      this.__lkJoinWait = null
+      this.__cardAgree = false
+      this.__cardErr = ''
+      this.__cardNote = ''
       if (was) {
         this.__booking = null
         if (this.state.sheet) this.setState({ sheet: null })
@@ -1814,11 +1867,14 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         case 'pay':
           this.__lkOpenPay()
           return
+        case 'card':
+          this.__lkOpenCard()
+          return
       }
     }
 
     // ---- transport: every call but the exchange carries the session; a session that ended is exchanged again once ----
-    async __lkRaw(method: 'GET' | 'POST', path: string, body: unknown, session: string | null, idem?: string): Promise<LinkAnswer> {
+    async __lkRaw(method: 'GET' | 'POST' | 'DELETE', path: string, body: unknown, session: string | null, idem?: string): Promise<LinkAnswer> {
       try {
         const ctl = new AbortController()
         const t = setTimeout(() => ctl.abort(), env.timeouts.api)
@@ -1850,7 +1906,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
     }
 
     /** One call with the session. null = handled here (the link died, no connection, busy). */
-    async __lkCall(method: 'GET' | 'POST', path: string, body: unknown, idem?: string): Promise<LinkAnswer | null> {
+    async __lkCall(method: 'GET' | 'POST' | 'DELETE', path: string, body: unknown, idem?: string): Promise<LinkAnswer | null> {
       const lk = this.__lk
       if (!lk || this.__busy) return null
       this.__busy = true
@@ -2044,6 +2100,10 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       if (r.ok) {
         this.__lkIdem = null
         this.__booking = { bookingRef: String(r.body?.bookingRef ?? ''), confirmationBy: String(r.body?.confirmationBy ?? 'sms'), deposit: r.body?.deposit }
+        // DV-LINK-PAY: a deposit the shop takes by link can be paid from here (Square's checkout)
+        const dep = r.body?.deposit
+        const ref = String(r.body?.bookingRef ?? '')
+        this.__lkDeposit = dep && dep.how === 'link' && Number.isInteger(dep.dueCents) && dep.dueCents > 0 && /^OAS-\d{1,9}$/.test(ref) ? { bookingRef: ref, cents: dep.dueCents } : null
         this.setState({ step: 'done' })
         void this.__refreshAvailability()
         return
@@ -2074,7 +2134,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const mode = o.mode ?? (purpose === 'verify' && lk.stepUp.method === 'pin' ? 'pin' : 'send')
       this.__su = { mode, purpose, challengeId: null, value: '', err: '', locked: false, then, optional: !!o.optional }
       if (then === 'book') this.setState({ step: 'verify' })
-      else if (then === 'join' || then === 'join-start') {
+      else if (then === 'join' || then === 'join-start' || then === 'join-card') {
         this.__lkJoinVerify = true
         this.forceUpdate()
         if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -2195,8 +2255,14 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         return false
       }
       if (x.kind !== lk.kind) return false
-      Object.assign(lk, { client: x.client, trust: x.trust, stepUp: x.stepUp, invoice: x.invoice, plan: x.plan, expiresAt: x.expiresAt })
+      Object.assign(lk, { client: x.client, trust: x.trust, stepUp: x.stepUp, invoice: x.invoice, plan: x.plan, cards: x.cards, cardSetup: x.cardSetup, expiresAt: x.expiresAt })
       return true
+    }
+
+    /** GET me: the page's state again (the saved cards after a change, a new consent wording). */
+    async __lkRefresh(): Promise<void> {
+      const r = await this.__lkCall('GET', '/me', undefined)
+      if (r?.ok) this.__lkState(r.body)
     }
 
     /** The page is verified (PIN or code): the number is trusted (30 days) and a fresh step-up is on record. */
@@ -2227,6 +2293,14 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
           this.__lkJoinVerify = false
           this.setJn({ step: 3, err: '' })
           void this.__lkJoinStart()
+          return
+        case 'join-card':
+          // Square's card form is on the next step: the client enters the card after the step-up (never before it)
+          this.__lkJoinVerify = false
+          this.setJn({ step: 3, err: '' })
+          return
+        case 'card':
+          this.__lkOpenCard()
           return
         case 'pay':
           void this.__lkPayStart()
@@ -2349,7 +2423,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         }
         const url = r.body?.redirectUrl
         if (allowedRedirect(url, env.links?.redirectHosts ?? [])) {
-          this.__lkNotice({ tone: 'ok', eyebrow, title: 'Opening checkout', text: 'Taking you to Squarespace’s secure checkout to pay.' })
+          this.__lkNotice({ tone: 'ok', eyebrow, title: 'Opening checkout', text: `Taking you to ${checkoutName(url) || 'a'} secure checkout to pay.` })
           navigate(String(url))
           return
         }
@@ -2428,6 +2502,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         }
       }
       const st = j.step
+      if (this.__lkSquare()) return this.__lkSquareJoinVM(r, jv, toPlan, top)
       if (st <= 1) {
         jv.next = () => {
           if (this.__lkFresh()) {
@@ -2469,7 +2544,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       if (r.ok) {
         const url = r.body?.redirectUrl
         if (allowedRedirect(url, env.links?.redirectHosts ?? [])) {
-          this.flash('Opening Squarespace’s secure checkout…')
+          this.flash(`Opening ${checkoutName(url) || 'the'} secure checkout…`)
           navigate(String(url))
           return
         }
@@ -2498,6 +2573,19 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       const lk = this.__lk
       if (!v) return { ...base, eyebrow: '', title: '', progress: '20%' }
       if (v.v === 'notice') return { ...base, eyebrow: v.eyebrow, title: v.title, progress: '100%' }
+      if (v.v === 'card') {
+        const form = !!lk?.cardSetup?.square
+        return {
+          ...base,
+          eyebrow: 'SAVED CARDS · ' + this.__lkWho(),
+          title: 'Your cards',
+          progress: '60%',
+          hasCta: form,
+          ctaLabel: this.__busy ? 'Saving…' : 'Save card',
+          ctaStyle: CTA_STYLE,
+          cta: () => void this.__cardSave(),
+        }
+      }
       if (v.v === 'stepup') {
         const kind = lk?.kind
         const who = this.__lkWho()
@@ -2558,14 +2646,489 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
                 ].map((l) => ({ ...l, lc: 'var(--ink2)', vc: 'var(--ink)' })),
                 dueLabel: 'Balance due',
                 due: money(inv.balanceCents),
-                dueSub: inv.paidCents > 0 ? `${money(inv.paidCents)} already paid. You’ll pay the rest on Squarespace’s secure checkout.` : 'You’ll pay on Squarespace’s secure checkout.',
+                dueSub: inv.paidCents > 0 ? `${money(inv.paidCents)} already paid. You’ll pay the rest on a secure checkout page.` : 'You’ll pay on a secure checkout page.',
               }
             : { show: false },
         joinEmail: joining && !this.__lkJoinVerify && s.jn?.step === 2,
+        // DV-LINK-CARD: the card page and the membership page's card step (Square)
+        card: linkSheet && view?.v === 'card' && lk ? this.__cardVals() : { show: false },
+        joinCard: joining && !this.__lkJoinVerify && s.jn?.step === 3 && this.__lkSquare() ? this.__joinCardVals() : { show: false },
+        // DV-LINK-PAY: the deposit of the visit just booked, payable on Square's checkout
+        deposit:
+          s.sheet === 'book' && s.step === 'done' && this.__lkDeposit
+            ? { show: true, label: `Pay the ${money(this.__lkDeposit.cents)} deposit now`, pay: () => void this.__lkPayDeposit() }
+            : { show: false },
         joinAs: lk ? whoLabel(lk.client) : '',
         whoText: lk ? whoText(lk.client) : '',
       }
     }
+    // ---- DV-LINK-CARD and DV-LINK-JOIN with Square: the card form (src/client/square.ts) --------------------------------------
+    // Square's Web Payments SDK is loaded the first time a card form shows (never in the build, never on another page), its
+    // card form is attached to the block's own element after the render that shows it, and destroyed when it goes. The
+    // consent box starts unchecked and carries the API's wording (cardSetup.consent) with the purposes the page asks for.
+    /** the visit just booked on a calendar link whose deposit can be paid by link (Square's checkout) */
+    __lkDeposit: { bookingRef: string; cents: number } | null = null
+    /** the membership page's size (Square billing; null: the first size open online) */
+    __lkJoinClass: string | null = null
+    /** the membership page waits for Square's first payment (the enrollment's reference) */
+    __lkJoinWait: { ref: string; failed: boolean } | null = null
+    /** how often the membership page asks whether Square took the first payment (tests set it lower) */
+    __pollMs = 2000
+    /** the consent box (unchecked until the client ticks it), the card block's error and its last note */
+    __cardAgree = false
+    __cardErr = ''
+    __cardNote = ''
+    /** Square's card form on the page: the element it is attached to, the form once attached, a load error */
+    __sq: { id: string; el: HTMLElement; form: CardForm | null; err: string; seq: number } | null = null
+    __sqSeq = 0
+
+    /** The membership page joins with a card here (the API's plan.billing square), not on Squarespace's checkout. */
+    __lkSquare(): boolean {
+      return this.__lk?.kind === 'membership' && this.__lk.plan?.billing === 'square'
+    }
+
+    /** Where Square's card form belongs now: the card page's block, the membership page's card step, or nowhere. */
+    __sqWant(): string | null {
+      const lk = this.__lk
+      if (!lk?.cardSetup?.square) return null
+      if (this.state.sheet === 'link' && this.__lkView?.v === 'card') return CARD_FORM_ID
+      if (this.__lkJoining() && !this.__lkJoinVerify && this.state.jn?.step === 3 && this.__lkSquare() && !this.__lkJoinWait) return JOIN_CARD_ID
+      return null
+    }
+
+    /** After each update: attach the card form where it belongs (lazily loading the SDK), drop it where it went. */
+    __sqSync(): void {
+      if (typeof document === 'undefined') return
+      const want = this.__sqWant()
+      const cur = this.__sq
+      const el = want ? document.getElementById(want) : null
+      if (cur && (cur.id !== want || cur.el !== el || !cur.el.isConnected)) void this.__sqDrop()
+      if (!want || !el || this.__sq) return
+      const setup = this.__lk!.cardSetup!.square!
+      const seq = ++this.__sqSeq
+      const sq = { id: want, el, form: null as CardForm | null, err: '', seq }
+      this.__sq = sq
+      const origin = typeof location !== 'undefined' ? location.origin : ''
+      if (!sdkUrlAllowed(setup.sdkUrl, env.links?.squareSdkHosts ?? [], origin)) {
+        sq.err = CARD_WORDS.blocked
+        this.forceUpdate()
+        return
+      }
+      void (async () => {
+        try {
+          const sdk = await loadSquareSdk(setup.sdkUrl)
+          if (this.__sq !== sq) return
+          const form = await mountCard(sdk, setup, el)
+          if (this.__sq !== sq) {
+            await form.destroy()
+            return
+          }
+          sq.form = form
+        } catch (e) {
+          if (this.__sq === sq) sq.err = e instanceof CardFormError ? e.message : CARD_WORDS.load
+        }
+        this.forceUpdate()
+      })()
+    }
+
+    /** Destroys the card form (a new one is attached the next time a form shows). */
+    async __sqDrop(): Promise<void> {
+      const cur = this.__sq
+      this.__sq = null
+      if (cur?.form) await cur.form.destroy()
+    }
+
+    /** What Square gets as the billing contact: the name the page knows (nothing else is sent). */
+    __billingContact(): { givenName?: string } {
+      const n = this.__lk?.client.firstName
+      return n ? { givenName: n } : {}
+    }
+
+    /** The card page's purposes: the shop's fees and a balance, and membership billing for a member. */
+    __cardPurposes(): CardPurpose[] {
+      const lk = this.__lk
+      const set = lk?.cardSetup
+      if (!lk || !set) return []
+      const want: CardPurpose[] = lk.kind === 'membership' ? ['membership_billing'] : [...(lk.client.tier ? (['membership_billing'] as CardPurpose[]) : []), 'no_show_fee', 'late_cancel_fee', 'balance']
+      return set.consent.purposes.map((p) => p.key).filter((k) => want.includes(k))
+    }
+
+    /** The card page (#/k): a fresh PIN or code first (saving and removing a card need one), then the cards and the form. */
+    __lkOpenCard(): void {
+      if (!this.__lkFresh()) {
+        this.__lkStepUp('card')
+        return
+      }
+      this.__cardErr = ''
+      this.__lkView = { v: 'card' }
+      this.setState({ menu: false, sheet: 'link' })
+    }
+
+    /** Tokenizes the card in Square's form; null (and the block's error) when it cannot. */
+    async __cardToken(): Promise<{ sourceId: string; verificationToken?: string } | null> {
+      const form = this.__sq?.form
+      if (!form) {
+        this.__cardErr = this.__sq?.err || 'The card form is still loading. Try again in a moment.'
+        this.forceUpdate()
+        return null
+      }
+      try {
+        return await form.tokenize(this.__billingContact())
+      } catch (e) {
+        this.__cardErr = e instanceof CardFormError ? e.message : CARD_WORDS.input
+        this.forceUpdate()
+        return null
+      }
+    }
+
+    /** Save card: the consent ticked, a fresh step-up, Square's one-time token, then POST /cards (Idempotency-Key). */
+    async __cardSave(): Promise<void> {
+      const lk = this.__lk
+      const set = lk?.cardSetup
+      if (!lk || !set || this.__busy) return
+      if (!this.__cardAgree) {
+        this.__cardErr = 'Tick the box to agree, then save the card.'
+        this.forceUpdate()
+        return
+      }
+      if (!this.__lkFresh()) {
+        this.__lkStepUp('card')
+        return
+      }
+      this.__cardErr = ''
+      this.__cardNote = ''
+      const tok = await this.__cardToken()
+      if (!tok) return
+      const body = { sourceId: tok.sourceId, ...(tok.verificationToken ? { verificationToken: tok.verificationToken } : {}), consentVersion: set.consent.version, purposes: this.__cardPurposes() }
+      const r = await this.__lkCall('POST', '/cards', body, randomId())
+      if (!r) return
+      if (r.ok) {
+        this.__cardAgree = false
+        const c = r.body?.card
+        this.__cardNote = `${cardLabel({ brand: typeof c?.brand === 'string' ? c.brand : null, last4: typeof c?.last4 === 'string' ? c.last4 : null })} is saved. You can remove it here any time.`
+        await this.__sqDrop() // a clean form for another card
+        await this.__lkRefresh()
+        this.forceUpdate()
+        return
+      }
+      this.__cardProblem(r, 'card')
+    }
+
+    /** Remove: DELETE /cards/:id (a fresh step-up), then the list again. */
+    async __cardRemove(id: string): Promise<void> {
+      if (!this.__lkFresh()) {
+        this.__lkStepUp('card')
+        return
+      }
+      this.__cardErr = ''
+      this.__cardNote = ''
+      const r = await this.__lkCall('DELETE', '/cards/' + encodeURIComponent(id), undefined)
+      if (!r) return
+      if (r.ok) {
+        this.__cardNote = 'The card is removed.'
+        await this.__lkRefresh()
+        this.forceUpdate()
+        return
+      }
+      this.__cardProblem(r, 'card')
+    }
+
+    /** A refused card action in the client's words; a stale step-up asks again, a new consent wording is loaded. */
+    __cardProblem(r: LinkAnswer, then: 'card' | 'join-card'): void {
+      const code = String(r.problem?.code ?? '')
+      if (code === 'IDENTITY_STEP_UP_REQUIRED') {
+        this.__lk!.stepUpAt = null
+        this.__lkStepUp(then)
+        return
+      }
+      if (code === 'CARD_CONSENT_OUTDATED') {
+        this.__cardAgree = false
+        void this.__lkRefresh()
+      }
+      this.__cardErr =
+        r.status === 503 ? 'Square didn’t answer. Try again in a minute.' : code === 'SQUARE_WRITES_OFF' ? 'Saving a card isn’t open right now. Text us and we’ll help.' : this.__lkProblemText(r)
+      this.forceUpdate()
+    }
+
+    __cardVals(): Record<string, any> {
+      const lk = this.__lk!
+      const set = lk.cardSetup
+      const words = (p: CardPurpose) => set?.consent.purposes.find((x) => x.key === p)?.words ?? p.replace(/_/g, ' ')
+      const cards = (lk.cards ?? []).map((c) => ({
+        label: cardLabel(c),
+        sub: [
+          c.expMonth && c.expYear ? `Expires ${String(c.expMonth).padStart(2, '0')}/${String(c.expYear).slice(-2)}` : '',
+          c.purposes.length ? 'For ' + listWords(c.purposes.map(words)) : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        remove: () => void this.__cardRemove(c.id),
+      }))
+      const form = !!set?.square
+      return {
+        show: true,
+        cards,
+        empty: cards.length ? '' : 'No saved cards yet.',
+        note: this.__cardNote,
+        form,
+        formSub: 'Square keeps your card details. Oasis never sees the card number.',
+        consent: set ? consentText(set, this.__cardPurposes()) : '',
+        agree: this.__cardAgree,
+        box: checkBox(this.__cardAgree),
+        toggle: () => {
+          this.__cardAgree = !this.__cardAgree
+          this.__cardErr = ''
+          this.forceUpdate()
+        },
+        err: this.__cardErr || this.__sq?.err || '',
+        closed: form ? '' : `Saving a card online isn’t open yet. Text us at ${env.contact.smsDisplay} and we’ll help.`,
+      }
+    }
+
+    // ---- DV-LINK-JOIN billed by Square: plan and size -> verify -> e-mail -> card + consent -> subscribe -> wait --------------
+    /** The membership page's price rows open online (joinable) and the one chosen. */
+    __lkJoinPrice(): { class: string; label: string; monthlyCents: number } | null {
+      const prices = this.__lk?.plan?.prices.filter((p) => p.joinable) ?? []
+      return prices.find((p) => p.class === this.__lkJoinClass) ?? prices[0] ?? null
+    }
+
+    /** The size picker of a membership page billed by Square (site.joinSizes): every size the tier is sold at. */
+    __lkJoinSizesVals(): Record<string, any> {
+      const plan = this.__lk?.plan
+      if (!plan || this.state.jn?.step !== 0 || this.__lkJoinVerify || plan.prices.length < 2) return { show: false }
+      const cur = this.__lkJoinPrice()
+      return {
+        show: true,
+        chips: plan.prices.map((p) => ({
+          label: p.joinable ? `${p.label} · ${money(p.monthlyCents)}/mo` : `${p.label} · ask us`,
+          onClick: () => {
+            if (!p.joinable) {
+              this.flash(`${p.label} isn’t open online yet. Text us and we’ll help you join.`)
+              return
+            }
+            this.__lkJoinClass = p.class
+            this.forceUpdate()
+          },
+          style: this.chip(!!cur && p.class === cur.class),
+        })),
+        note: '',
+      }
+    }
+
+    __joinCardVals(): Record<string, any> {
+      const lk = this.__lk!
+      const set = lk.cardSetup
+      const price = this.__lkJoinPrice()
+      const waiting = this.__lkJoinWait && !this.__lkJoinWait.failed
+      return {
+        show: true,
+        form: !!set?.square && !waiting,
+        sub: price ? `Saved with Square for your membership’s monthly payment of ${money(price.monthlyCents)}.` : 'Saved with Square for your membership’s monthly payment.',
+        consent: set ? consentText(set, ['membership_billing']) : '',
+        agree: this.__cardAgree,
+        box: checkBox(this.__cardAgree),
+        toggle: () => {
+          this.__cardAgree = !this.__cardAgree
+          this.__cardErr = ''
+          this.forceUpdate()
+        },
+        err: this.__cardErr || this.__sq?.err || '',
+        wait: waiting ? 'Setting up your membership with Square. This takes a few seconds…' : '',
+        closed: set?.square ? '' : `Joining with a card online isn’t open yet. Text us at ${env.contact.smsDisplay} and we’ll help.`,
+      }
+    }
+
+    /** The join steps when Square bills the membership: the chosen size's price everywhere, the card step, the wait. */
+    __lkSquareJoinVM(r: any, jv: any, toPlan: () => void, top: () => void): any {
+      const j = this.state.jn
+      const st = j.step
+      const lk = this.__lk!
+      const price = this.__lkJoinPrice()
+      const amount = price ? money(price.monthlyCents) : ''
+      const name = lk.plan?.name || 'your plan'
+      if (price) {
+        jv.tiers = (jv.tiers || []).map((t: any) => (String(t.name).toLowerCase() === this.__lkTier() ? tierWith(t, amount, '/mo') : t))
+        jv.lines = (jv.lines || []).map((l: any, n: number) => (n === 0 ? { ...l, value: amount + '/mo' } : l))
+        if ((lk.plan?.prices.length ?? 0) > 1) jv.lines.splice(1, 0, { label: 'Priced for', value: price.label, col: 'var(--ink)' })
+        jv.due = amount
+        jv.agreeText = `I agree to be billed ${amount} a month for ${name} until I cancel. Unused washes don’t roll over.`
+      }
+      if (st <= 1) {
+        jv.next = () => {
+          if (!price) {
+            this.setJn({ err: 'Joining online isn’t open for this plan yet. Text us and we’ll help you join.' })
+            return
+          }
+          if (this.__lkFresh()) {
+            this.setJn({ step: 2, err: '' })
+            top()
+          } else this.__lkStepUp('join')
+        }
+      } else if (st === 2) {
+        Object.assign(jv, { s2: false, eyebrow: 'STEP 3 OF 4 · EMAIL', t1: 'Your', t2: 'email.', sub: 'Square emails your receipts there every month. Use an email you check.', progress: '60%', canBack: true, back: toPlan })
+        jv.next = () => {
+          if (!EMAIL.test(String(j.email || '').trim())) {
+            this.setJn({ err: 'Add your email for the receipts.' })
+            return
+          }
+          // the card goes in after a fresh PIN or code: the form is never shown to a page that may not use it
+          if (!this.__lkFresh()) {
+            this.__lkStepUp('join-card')
+            return
+          }
+          this.setJn({ step: 3, err: '' })
+          top()
+        }
+      } else if (st === 3) {
+        const waiting = !!this.__lkJoinWait && !this.__lkJoinWait.failed
+        Object.assign(jv, {
+          eyebrow: 'STEP 4 OF 4 · CARD',
+          sub: `Your card is saved with Square and charged ${amount || 'the monthly price'} now, then every month. Your membership starts once the first payment goes through.`,
+          progress: '80%',
+          ctaLabel: waiting ? 'Waiting for Square…' : `Join · ${amount}/mo`,
+          back: () => this.setJn({ step: 2, err: '' }),
+        })
+        jv.next = () => {
+          if (waiting) return
+          if (!j.agree) {
+            this.setJn({ err: 'Please accept the membership terms.' })
+            return
+          }
+          void this.__lkJoinSubscribe()
+        }
+      } else if (st === 4) {
+        Object.assign(jv, { sub: `Your ${name} membership is active. Square emails your receipts every month.` })
+      }
+      return { ...r, jv }
+    }
+
+    /** POST membership/subscribe with the card's one-time token, then wait for Square's first payment. */
+    async __lkJoinSubscribe(): Promise<void> {
+      const lk = this.__lk
+      const set = lk?.cardSetup
+      const price = this.__lkJoinPrice()
+      if (!lk || !set || !price || this.__busy) return
+      if (!this.__cardAgree) {
+        this.__cardErr = 'Tick the box to agree to the card being saved, then join.'
+        this.forceUpdate()
+        return
+      }
+      if (!this.__lkFresh()) {
+        this.__lkStepUp('join-card')
+        return
+      }
+      this.__cardErr = ''
+      const tok = await this.__cardToken()
+      if (!tok) return
+      const body = {
+        email: String(this.state.jn.email || '').trim(),
+        planClass: price.class,
+        sourceId: tok.sourceId,
+        ...(tok.verificationToken ? { verificationToken: tok.verificationToken } : {}),
+        consentVersion: set.consent.version,
+      }
+      const r = await this.__lkCall('POST', '/membership/subscribe', body, randomId())
+      if (!r) return
+      if (r.ok) {
+        this.__lkJoinWait = { ref: String(r.body?.membershipRef ?? ''), failed: false }
+        await this.__sqDrop()
+        this.forceUpdate()
+        void this.__lkJoinPoll(lk)
+        return
+      }
+      const code = String(r.problem?.code ?? '')
+      const field = r.problem?.errors?.find((e) => /email/.test(String(e.path ?? '')))
+      if (r.status === 422 && field) {
+        this.setJn({ step: 2, err: String(field.message || r.problem?.detail || r.problem?.title) })
+        return
+      }
+      if (code === 'TIER_CLASS_UNPRICED' || code === 'LINK_CHECKOUT_UNAVAILABLE') {
+        this.setJn({ step: 0, err: `${price.label} isn’t open online right now. Pick another size, or text us and we’ll help you join.` })
+        return
+      }
+      this.__cardProblem(r, 'join-card')
+    }
+
+    /** Asks GET membership/status until Square took the first payment (active), refused it (failed), or the wait ran out. */
+    async __lkJoinPoll(lk: NonNullable<SiteComponent['__lk']>): Promise<void> {
+      const until = realNow() + MEMBERSHIP_WAIT_MS
+      while (this.__lk === lk && this.__lkJoinWait && !this.__lkJoinWait.failed) {
+        if (realNow() > until) {
+          this.__lkJoinWait = null
+          this.__lkNotice({
+            tone: 'ok',
+            eyebrow: 'MEMBERSHIP · ' + this.__lkWho(),
+            title: 'Almost there',
+            text: 'Square is still taking your first payment. We’ll text you as soon as your membership is active.',
+          })
+          return
+        }
+        await new Promise((res) => setTimeout(res, this.__pollMs))
+        if (this.__lk !== lk) return
+        const r = await this.__lkCall('GET', '/membership/status', undefined)
+        if (!r) {
+          if (this.__lk !== lk) return
+          continue
+        }
+        const status = r.ok ? String(r.body?.status ?? '') : ''
+        if (status === 'active') {
+          this.__lkJoinWait = null
+          this.__cardAgree = false
+          this.setJn({ step: 4, err: '' })
+          if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') window.scrollTo({ top: 0, behavior: 'smooth' })
+          return
+        }
+        if (status === 'failed') {
+          this.__lkJoinWait = null
+          this.__cardAgree = false
+          this.__cardErr = 'Square couldn’t take the first payment. Check the card or use another one, then try again.'
+          this.forceUpdate()
+          return
+        }
+      }
+    }
+
+    // ---- DV-LINK-PAY: the booking deposit on Square's checkout, and the way back from it ----------------------------------------
+    async __lkPayDeposit(): Promise<void> {
+      const dep = this.__lkDeposit
+      if (!dep) return
+      const r = await this.__lkCall('POST', '/deposit/start', { bookingRef: dep.bookingRef })
+      if (!r) return
+      if (!r.ok) {
+        this.flash(this.__lkProblemText(r))
+        return
+      }
+      const status = String(r.body?.status ?? '')
+      const url = r.body?.redirectUrl
+      if (status === 'redirect' && allowedRedirect(url, env.links?.redirectHosts ?? [])) {
+        this.flash(`Opening ${checkoutName(url) || 'the'} secure checkout…`)
+        navigate(String(url))
+        return
+      }
+      if (status === 'paid') {
+        this.__lkDeposit = null
+        this.flash('Your deposit is paid. Thank you!')
+        return
+      }
+      if (status === 'link_pending') {
+        this.flash('We’ll text you a payment link shortly.')
+        return
+      }
+      this.__lkDeposit = null
+      this.flash(status === 'none' ? 'There’s no deposit to pay online for this visit. Pay at the counter.' : `We couldn’t open the payment page. Text us at ${env.contact.smsDisplay}.`)
+    }
+
+    /** #/paid: Square's checkout sends the client back here after paying (the payment link's redirect_url). */
+    __paidMount(): void {
+      if (typeof location === 'undefined' || !/^#\/?paid(?:$|[?&/])/.test(location.hash)) return
+      try {
+        history.replaceState(history.state, '', location.pathname + location.search)
+      } catch {
+        /* the notice shows anyway */
+      }
+      this.__lkNotice({ tone: 'ok', eyebrow: 'PAYMENT', title: 'Thank you', text: 'Square is confirming your payment now. Your receipt comes by email or text.' })
+    }
+
     // ==== end links (W3f) =====================================================================================================
 
     // ---- transport ----------------------------------------------------------------------------------------------------------

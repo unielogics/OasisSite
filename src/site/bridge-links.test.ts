@@ -615,7 +615,7 @@ describe('DV-LINK-PAY: review -> verify -> Squarespace', () => {
       sub: 'Fri, Oct 9',
       due: '$54',
       dueLabel: 'Balance due',
-      dueSub: 'You’ll pay on Squarespace’s secure checkout.',
+      dueSub: 'You’ll pay on a secure checkout page.',
       lines: [
         { label: 'Signature Hand Wash', value: '$50' },
         { label: 'Tax', value: '$4' },
@@ -675,7 +675,7 @@ describe('DV-LINK-PAY: review -> verify -> Squarespace', () => {
         { label: 'Tip', value: '$20' },
       ],
       due: '$150',
-      dueSub: '$50 already paid. You’ll pay the rest on Squarespace’s secure checkout.',
+      dueSub: '$50 already paid. You’ll pay the rest on a secure checkout page.',
     })
     expect(sh(t.c).ctaLabel).toBe('Verify & pay $150')
   })
@@ -725,7 +725,16 @@ describe('helpers', () => {
     expect(x.client).toEqual({ firstName: 'Maria', last2: '51', tier: null })
     expect(x.stepUp).toEqual({ method: 'pin', freshUntil: '2026-10-10T14:05:00.000Z', canSetPinUntil: null })
     expect(x.invoice).toEqual({ number: 20611, date: '2026-10-09', items: [{ name: 'Signature Hand Wash', priceCents: 5400 }], subtotalCents: 5400, taxCents: 300, tipCents: 0, totalCents: 5700, paidCents: 0, balanceCents: 5700 })
-    expect(validateExchange(exchanged({ kind: 'membership', plan: planAnswer('gold') })).plan).toEqual({ tier: 'gold', planKey: 'gold', name: 'Gold', monthlyPriceCents: 9900, perks: ['Unlimited washes'] })
+    expect(validateExchange(exchanged({ kind: 'membership', plan: planAnswer('gold') })).plan).toEqual({
+      tier: 'gold',
+      planKey: 'gold',
+      name: 'Gold',
+      monthlyPriceCents: 9900,
+      perks: ['Unlimited washes'],
+      billing: 'squarespace',
+      prices: [{ class: 'compact_car', label: 'Compact car', monthlyCents: 9900, joinable: true }],
+    })
+    expect([x.cards, x.cardSetup]).toEqual([null, null])
     expect(validateExchange(exchanged({ firstName: null })).client.firstName).toBeNull() // '' from the API
     expect(validateExchange(exchanged()).stepUp.method).toBe('code')
     expect(() => validateExchange({ ...linkState(), kind: 'admin', session: 's' })).toThrow()
