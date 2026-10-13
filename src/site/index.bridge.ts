@@ -1322,12 +1322,15 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         if (it && incl(it.key)) return { included: true, amount: 0, diff: sizeDifferenceCents(it, size, planClass, l.sizes) }
         return { included: false, amount: p ? memberAt(p, bp, l.discountBp) : null, diff: 0 }
       }
-      const addonOf = (a: any): { included: boolean; amount: number | null } => {
+      /** an included add-on is covered up to its plan-size price like the wash: the size difference is due at the shop (review Q4 F4) */
+      const addonOf = (a: any): { included: boolean; amount: number | null; diff: number | null } => {
         const it = addonItem(a.id)
-        if (!isG && it && incl(it.key)) return { included: true, amount: 0 }
+        if (!isG && it && incl(it.key)) return { included: true, amount: 0, diff: sizeDifferenceCents(it, size, planClass, l.sizes) }
         const p = at(it)
-        return { included: false, amount: p ? (isG ? p.gc : memberAt(p, bp, l.discountBp)) : null }
+        return { included: false, amount: p ? (isG ? p.gc : memberAt(p, bp, l.discountBp)) : null, diff: 0 }
       }
+      /** "Included" with its size difference, as the wash line says it */
+      const includedText = (diff: number | null): string => (diff === null ? 'Included · size difference, if any, at the shop' : diff > 0 ? `Included +$${dollarsOf(diff)} at the shop` : 'Included')
       const money = (x: number | null) => (x === null ? SHOP : '$' + dollarsOf(x))
       const wash = this.WASH.find((w: any) => w.id === b.svc) || this.WASH[0]
       const ads = this.DURING.filter((a: any) => b.addons.includes(a.id))
@@ -1351,7 +1354,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
           const a = this.DURING[n]
           if (!a) return o
           const x = addonOf(a)
-          return x.included ? { ...o, price: 'Included', priceCol: 'var(--accentText)' } : { ...o, price: x.amount === null ? SHOP : '+$' + dollarsOf(x.amount), priceCol: 'var(--ink3)' }
+          return x.included ? { ...o, price: includedText(x.diff), priceCol: 'var(--accentText)' } : { ...o, price: x.amount === null ? SHOP : '+$' + dollarsOf(x.amount), priceCol: 'var(--ink3)' }
         })
       const w = washOf(wash)
       if (Array.isArray(sh.lines)) {
@@ -1362,7 +1365,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
         else if (w.diff > 0) lines.push({ label: 'Size difference · at the shop', value: '+$' + dollarsOf(w.diff), lc: 'var(--ink2)', vc: 'var(--ink)' })
         ads.forEach((a: any, k: number) => {
           const x = addonOf(a)
-          lines.push({ ...sh.lines[k + 1], value: x.included ? 'Included' : money(x.amount), vc: x.included ? 'var(--accentText)' : 'var(--ink)' })
+          lines.push({ ...sh.lines[k + 1], value: x.included ? includedText(x.diff) : money(x.amount), vc: x.included ? 'var(--accentText)' : 'var(--ink)' })
         })
         for (const o of sh.lines.slice(1 + ads.length)) lines.push(o.label === 'Booking fee · non-refundable' ? { ...o, value: '$' + l.fee } : o)
         out.lines = lines
@@ -1372,12 +1375,15 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
           if (n === 1 && (b.who === 'guest' || b.who === 'member')) return isG || !w.included ? { ...o, value: money(w.amount), col: '#F2F5F7' } : o
           if (n >= 2 && n < 2 + ads.length) {
             const x = addonOf(ads[n - 2])
-            return { ...o, value: x.included ? 'Included' : money(x.amount), col: x.included ? '#7FD6FF' : '#F2F5F7' }
+            return { ...o, value: x.included ? includedText(x.diff) : money(x.amount), col: x.included ? '#7FD6FF' : '#F2F5F7' }
           }
           return o.label === 'Booking fee' ? { ...o, value: '$' + l.fee } : o
         })
       if (sh.bReview) {
-        const parts = [w.included ? w.diff : w.amount, ...ads.map((a: any) => addonOf(a).amount)]
+        const parts = [w.included ? w.diff : w.amount, ...ads.map((a: any) => {
+          const x = addonOf(a)
+          return x.included ? x.diff : x.amount
+        })]
         const unknown = parts.some((x) => x === null)
         const sum = dollarsOf(parts.reduce((a: number, x) => a + (x ?? 0), 0))
         if (sh.isGuest) {
@@ -1407,7 +1413,7 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
      * What the same visit would cost a VIP member (cents), for the guest review's "As VIP" line; null when the site cannot
      * know it. The wash: nothing when VIP includes it and is sold at the car's size, else the size difference from the best
      * size VIP is sold at (a household plan is priced at a chosen size); its member price at VIP's % off when VIP does not
-     * include it. Each add-on: nothing when VIP includes it, else its member price at VIP's % off.
+     * include it. Each add-on: its size difference when VIP includes it (as the wash), else its member price at VIP's % off.
      */
     __vipVisitCents(vip: LiveTier, wash: any, ads: any[], size: string): number | null {
       const l = this.__live!
@@ -1423,7 +1429,13 @@ export function bridge(Base: AnyLogic | undefined, env: SiteEnv): AnyLogic {
       } else cost = memberAt(p, vip.memberDiscountBp, l.discountBp)
       for (const a of ads) {
         const ai = l.during?.find((d) => d.id === a.id) ?? null
-        if (ai && vip.inclusions.some((x) => x.serviceKey === ai.key)) continue
+        if (ai && vip.inclusions.some((x) => x.serviceKey === ai.key)) {
+          // covered up to VIP's plan-size price like the wash (review Q4 F4); an unknown difference is left out of this estimate
+          const plans = vip.prices.some((x) => x.class === size) ? [size] : vip.prices.map((x) => x.class)
+          const diffs = plans.map((pc) => sizeDifferenceCents(ai, size, pc, l.sizes)).filter((x): x is number => x !== null)
+          if (diffs.length) cost += Math.min(...diffs)
+          continue
+        }
         const ap = ai ? priceAt(ai, size) : null
         if (!ap) return null
         cost += memberAt(ap, vip.memberDiscountBp, l.discountBp)

@@ -257,6 +257,33 @@ describe('a filled grid', () => {
     expect(sh.due).toBe('$5')
   })
 
+  it('an add-on the plan includes on a larger car: "Included" with its size difference, counted in what is due (review Q4 F4)', async () => {
+    // VIP includes Hand wax every visit; Hand wax costs $20 at Compact car (the plan size) and $30 at Large SUV
+    const cat = sizedCatalogV2()
+    cat.addons = cat.addons.map((a) =>
+      a.key === 'hand-wax'
+        ? { ...a, prices: a.prices.map((p) => ({ ...p, cents: p.class === 'large_suv' ? 3000 : 2000, memberCents: p.class === 'large_suv' ? 2700 : 1800 })), fromCents: 2000, memberFromCents: 1800 }
+        : a,
+    )
+    const t = await verified(cat, { tier: 'vip', plan: 'VIP', tierName: 'VIP', planClass: 'compact_car', memberDiscountBp: 1500 }, 'large_suv')
+    expect(t.c.state.tier).toBe('vip')
+    let sh = t.vals().sh
+    expect(sh.addons.find((a: any) => a.name === 'Hand wax')).toMatchObject({ price: 'Included +$10 at the shop' })
+    t.c.setState({ step: 'review', bk: { ...t.c.state.bk, svc: 'signature', addons: ['wax'], day: 1, slot: 540 } })
+    sh = t.vals().sh
+    expect(sh.lines.map((l: any) => [l.label, l.value])).toEqual([
+      ['Signature Hand Wash', 'Included'],
+      ['Size difference · at the shop', '+$30'],
+      ['Hand wax', 'Included +$10 at the shop'],
+    ])
+    expect(sh.due).toBe('$40')
+    // on the plan's own size nothing is added
+    t.c.setState({ bk: { ...t.c.state.bk, vehicle: 'compact_car' } })
+    sh = t.vals().sh
+    expect(sh.lines.find((l: any) => l.label === 'Hand wax')).toMatchObject({ value: 'Included' })
+    expect(sh.due).toBe('$0')
+  })
+
   it('a verified member pays their own tier\'s % off on what the plan does not include', async () => {
     // VIP is 15% off while the catalog shows 10% (the lowest): tire shine $14 -> $11.90 -> $12 for VIP, not $13
     const t = await verified(sizedCatalogV2(), { tier: 'vip', plan: 'VIP', tierName: 'VIP', planClass: 'compact_car', memberDiscountBp: 1500 }, 'compact_car')

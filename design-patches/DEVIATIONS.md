@@ -180,10 +180,13 @@ of every entry below.
     plan decision 2; the cents difference rounded half up once) with a "Size difference · at the shop" review line;
     when the site cannot know the difference (no price at the chosen size, or an unknown plan size on a car above the
     starting price) the wash reads "Included · size difference, if any, at the shop", the review line "if any" and
-    what is due "At the shop", never "$0"; add-ons a member's tier includes read "Included", others the member price at
+    what is due "At the shop", never "$0"; add-ons a member's tier includes are covered up to their plan-size price like
+    the wash (review Q4 F4): "Included" on the plan's size, "Included +$N at the shop" on a larger car (counted in what
+    is due), "Included · size difference, if any, at the shop" when the site cannot know it; others the member price at
     the size at the member's own tier's % off; the review's due amounts follow. The guest upsell's "As VIP: $X" counts
     the wash too (nothing when VIP includes it at the car's size, else the size difference from the best size VIP is
-    sold at, or VIP's member price when VIP does not include it) and the add-ons VIP does not include, at VIP's % off;
+    sold at, or VIP's member price when VIP does not include it), the size difference of the add-ons VIP includes, and
+    the add-ons VIP does not include, at VIP's % off;
     anything unpriced keeps the interim words. The request sends `vehicleClass` (the size key) and no made-up
     `vehicle.label`.
   - **Join flow**: the plan cards are the design's tiers the catalog sells ("from $129" when the price depends on the
@@ -299,7 +302,9 @@ test (every declaration of the new blocks is one the design itself uses) and the
   couldn't open the payment page. Text us at 862-388-5827 …" and navigates nowhere.
   **Square** (ADR 0171 D3, wave Q2b): the review reads "You'll pay on a secure checkout page." and the redirect
   "Taking you to Square's secure checkout to pay." (or Squarespace's, by the URL's host); `links.redirectHosts` carries
-  `square.link` and `square.site` beside `squarespace.com`. **Deposit**: after a booking on a calendar link whose deposit
+  `=square.link` and `=checkout.square.site` beside `squarespace.com`: an entry written `=host` allows that host only
+  (review Q4 SEC-3: never another seller's `*.square.site` store, never the sandbox's `sandbox.square.link`), a plain
+  entry the host and its subdomains. **Deposit**: after a booking on a calendar link whose deposit
   the shop takes by link (the answer's `deposit.how` `link`), the done step has a button "Pay the $25 deposit now" (the
   design's secondary button) → `POST /links/deposit/start {bookingRef}` → Square's checkout (allowlist), "Your deposit is
   paid", "We'll text you a payment link shortly", or "There's no deposit to pay online for this visit. Pay at the
