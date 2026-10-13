@@ -717,6 +717,16 @@ describe('helpers', () => {
     expect(allowedRedirect(null, hosts)).toBe(false)
   })
 
+  it('allowedRedirect: Square hosts are exact (review Q4 SEC-3): never another seller’s square.site store or the sandbox', () => {
+    const hosts = ['squarespace.com', '=square.link', '=checkout.square.site']
+    expect(allowedRedirect('https://square.link/u/AbC123', hosts)).toBe(true)
+    expect(allowedRedirect('https://checkout.square.site/merchant/M1/checkout/C1', hosts)).toBe(true)
+    expect(allowedRedirect('https://some-other-seller.square.site/product/gift-card/1', hosts)).toBe(false)
+    expect(allowedRedirect('https://square.site/x', hosts)).toBe(false)
+    expect(allowedRedirect('https://sandbox.square.link/u/AbC123', hosts)).toBe(false)
+    expect(allowedRedirect('https://oasis.squarespace.com/checkout', hosts)).toBe(true)
+  })
+
   it('validateExchange reads the API\'s LinkState and refuses an unknown kind or no session', () => {
     const x = validateExchange({
       ...exchanged({ kind: 'pay', pin: 'set', fresh: true, invoice: invoiceAnswer({ taxCents: 300 }) }),

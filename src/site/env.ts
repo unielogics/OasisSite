@@ -83,7 +83,7 @@ export interface SiteEnv {
 export interface LinksConfig {
   /** '/api/v1/public/links' */
   base: string
-  /** squarespace.com, square.link, square.site: a redirect must be https to one of these hosts or a subdomain of one */
+  /** squarespace.com (and its subdomains), =square.link and =checkout.square.site (exactly): the hosts a redirect may go to */
   redirectHosts: string[]
   /**
    * DV-LINK-CARD: the hosts Square's Web Payments SDK may be loaded from (the URL itself comes from the link API's

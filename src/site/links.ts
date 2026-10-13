@@ -263,9 +263,10 @@ export function whoText(c: LinkClient): string {
 }
 
 /**
- * A redirect the page may follow: https, no credentials, and a host that is one of `hosts` or a subdomain of one
- * (squarespace.com: the membership checkouts and the invoice payment links; square.link and square.site: Square's
- * payment links, ADR 0171). Anything else is refused on the page, whatever the server answered.
+ * A redirect the page may follow: https, no credentials, and a host that `hosts` allows: an entry allows that host and its
+ * subdomains (squarespace.com: the membership checkouts and the invoice payment links); an entry written `=host` allows that
+ * host only (Square's square.link and checkout.square.site, ADR 0171: never another seller's *.square.site store, never the
+ * sandbox's sandbox.square.link; review Q4 SEC-3). Anything else is refused on the page, whatever the server answered.
  */
 export function allowedRedirect(url: unknown, hosts: string[]): boolean {
   if (typeof url !== 'string' || url.length > 2048) return false
@@ -279,6 +280,7 @@ export function allowedRedirect(url: unknown, hosts: string[]): boolean {
   const h = u.hostname.toLowerCase().replace(/\.$/, '')
   return hosts.some((x) => {
     const want = x.toLowerCase()
+    if (want.startsWith('=')) return h === want.slice(1)
     return h === want || h.endsWith('.' + want)
   })
 }

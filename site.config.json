@@ -87,7 +87,7 @@
   },
   "links": {
     "base": "/api/v1/public/links",
-    "redirectHosts": ["squarespace.com", "square.link", "square.site"],
+    "redirectHosts": ["squarespace.com", "=square.link", "=checkout.square.site"],
     "squareSdkHosts": ["web.squarecdn.com", "sandbox.web.squarecdn.com"],
     "newLinkText": "Hi, my Oasis link isn't working. Can you send me a new one?"
   },
