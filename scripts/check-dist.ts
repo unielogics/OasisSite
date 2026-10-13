@@ -127,7 +127,9 @@ export function checkDist(dist: string, marker: string): CheckResult {
   }
   for (const f of files.filter((x) => x.endsWith('.css') || x.endsWith('.js'))) {
     const text = fs.readFileSync(path.join(dist, f), 'utf8')
-    if (/https?:\/\/(localhost|127\.0\.0\.1)/.test(text)) problems.push(`${f}: contains localhost`)
+    // the deploy kit's own rule (backend deploy/scripts/site-deploy.sh): no development host or port anywhere a browser runs
+    if (/localhost|127\.0\.0\.1|0\.0\.0\.0/.test(text) || /\/\/[A-Za-z0-9.-]+:(3000|4000|4321)([^0-9]|$)/m.test(text))
+      problems.push(`${f}: contains a development address or port`)
     if (SQUARE_BAKED.test(text)) problems.push(`${f}: Square's SDK URL or an application id is baked into the build`)
     if (UUID.test(text) && f.endsWith('.css')) problems.push(`${f}: contains a bundle uuid`)
     for (const m of text.matchAll(/url\(["']?(\/(?:assets|fonts)\/[^"')]+)["']?\)/g))

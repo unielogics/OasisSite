@@ -272,9 +272,11 @@ describe('DV-LINK-JOIN billed by Square: size, verify, e-mail, card + consent, s
     expect(c.state.jn.step).toBe(2)
     expect(c.joinVM().jv.sub).toBe('Square emails your receipts there every month. Use an email you check.')
     // an address that never receives mail is refused before the card (Square ends a subscription whose receipts bounce)
-    c.setJn({ email: 'jo@example.com' })
-    c.joinVM().jv.next()
-    expect(c.state.jn).toMatchObject({ step: 2, err: 'Use an email you check: Square sends your membership receipts there.' })
+    for (const email of ['jo@example.com', 'jo@shop.test', 'jo@mail.invalid', 'jo@box.localhost']) {
+      c.setJn({ email })
+      c.joinVM().jv.next()
+      expect(c.state.jn, email).toMatchObject({ step: 2, err: 'Use an email you check: Square sends your membership receipts there.' })
+    }
     c.setJn({ email: 'jo@gmail.com' })
     c.joinVM().jv.next()
     expect(c.state.jn.step).toBe(3)

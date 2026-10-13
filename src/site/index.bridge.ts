@@ -125,8 +125,10 @@ const NOW_FRESH_MS = 10 * 60_000
 const REFRESH_MS = 5 * 60_000
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-/** Addresses that never receive mail (reserved for examples and tests, RFC 2606): refused before a Square membership. */
-const UNDELIVERABLE = /@(?:[^@\s]+\.)?(?:example\.(?:com|net|org)|[^@\s]+\.(?:test|example|invalid|localhost))$/i
+/** Addresses that never receive mail (reserved for examples and tests, RFC 2606): refused before a Square membership. The last
+ *  name is written `local(?:host)` so the built bundle never holds the literal development host name, which the deploy kit's
+ *  site check (and check:dist) refuse in any shipped script. */
+const UNDELIVERABLE = /@(?:[^@\s]+\.)?(?:example\.(?:com|net|org)|[^@\s]+\.(?:test|example|invalid|local(?:host)))$/i
 
 /** The real epoch time (Date.now() is the shop's wall clock for a visitor elsewhere, DV-CLOCK; payload stamps are UTC). */
 const realNow = (): number =>

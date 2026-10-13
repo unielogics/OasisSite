@@ -263,6 +263,11 @@ describe('build on the configured page (design/pages.json: the raw Oasis Site v2
     fs.writeFileSync(bundlePath, original + '\n//https://web.squarecdn.com/v1/square.js')
     expect(checkDist(out, site.marker).problems).toEqual([`assets/${bundle}: Square's SDK URL or an application id is baked into the build`])
     fs.writeFileSync(bundlePath, original)
+    // the deploy kit refuses a development host or port in a shipped script: check:dist refuses it first
+    expect(original).not.toMatch(/localhost|127\.0\.0\.1|0\.0\.0\.0/)
+    fs.writeFileSync(bundlePath, original + '\n//"localhost"')
+    expect(checkDist(out, site.marker).problems).toEqual([`assets/${bundle}: contains a development address or port`])
+    fs.writeFileSync(bundlePath, original)
     const files = fs.readdirSync(path.join(out, 'assets'))
     expect(files.every((f) => /\.[0-9a-f]{8}\.[a-z0-9]+$/.test(f))).toBe(true)
     // the hydration bundle and the pre-hydration theme script (DV-THEME: the device or the stored choice decides)
